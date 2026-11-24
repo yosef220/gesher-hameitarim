@@ -515,6 +515,8 @@ public final class PackageInstallerService extends IPackageInstaller.Default {
         });
     }
     private static void result(IntentSender receiver, int id, String pkg, int status, String message) {
+        SystemServer.log("package install result: id=" + id + " pkg=" + pkg
+                + " status=" + status + " message=" + message);
         if (receiver == null) return;
         Intent intent = new Intent().putExtra(PackageInstaller.EXTRA_SESSION_ID, id)
                 .putExtra(PackageInstaller.EXTRA_STATUS, status)
@@ -835,7 +837,11 @@ public final class PackageInstallerService extends IPackageInstaller.Default {
             } catch (IOException e) {
                 status = PackageInstaller.STATUS_FAILURE_STORAGE; message = "Installation storage failure";
             } catch (Exception e) {
-                status = PackageInstaller.STATUS_FAILURE_INVALID; message = "Installation failed: " + e.getClass().getSimpleName();
+                status = PackageInstaller.STATUS_FAILURE_INVALID;
+                String detail = e.getMessage();
+                message = "Installation failed: " + e.getClass().getSimpleName()
+                        + (detail != null && !detail.isEmpty() ? ": " + detail : "");
+                SystemServer.log("package install exception for " + pkg + ": " + e);
             } finally {
                 boolean success = status == PackageInstaller.STATUS_SUCCESS;
                 result(receiver, id, pkg, status, message);
