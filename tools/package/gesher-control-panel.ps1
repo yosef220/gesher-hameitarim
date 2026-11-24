@@ -549,11 +549,11 @@ function Update-AppsFilter {
         $view.Filter = $null
     } else {
         $needle = $q.ToLowerInvariant()
-        $view.Filter = [Predicate[object]]{
+        $view.Filter = [Predicate[object]]({
             param($o)
             if (-not $o) { return $false }
             return ([string]$o.Label).ToLowerInvariant().Contains($needle) -or ([string]$o.Package).ToLowerInvariant().Contains($needle)
-        }
+        }.GetNewClosure())
     }
 }
 if ($appSearchBox) { $appSearchBox.Add_TextChanged({ Update-AppsFilter }) }

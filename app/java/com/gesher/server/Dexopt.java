@@ -558,11 +558,12 @@ final class Dexopt {
     private static String toolPath(File file) {
         String raw = file.getPath();
         try {
-            String dataCanon = Device.dataDir().getCanonicalPath();
+            String dataDir = Device.dataDir();
+            String dataCanon = new File(dataDir).getCanonicalPath();
             String fileCanon = file.getCanonicalPath();
-            if (fileCanon.equals(dataCanon)) return Device.dataDir().getPath();
+            if (fileCanon.equals(dataCanon)) return dataDir;
             if (fileCanon.startsWith(dataCanon + File.separator)) {
-                return Device.dataDir().getPath() + fileCanon.substring(dataCanon.length());
+                return dataDir + fileCanon.substring(dataCanon.length());
             }
         } catch (IOException ignored) {
         }
