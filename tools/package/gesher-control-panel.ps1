@@ -1906,9 +1906,37 @@ $window.Add_Drop({
 
 # Per-app Launch and Uninstall handlers (invoked via event binding or code behind)
 $script:OnAppLaunch = {
-    param($pkg)
+    param($pkg, $btn = $null)
     if ($script:IsBusy) { return }
+    $item = $appsList.ItemsSource | Where-Object { $_.Package -eq $pkg } | Select-Object -First 1
+    $label = if ($item -and $item.Label) { [string]$item.Label } else { [string]$pkg }
+    $origContent = if ($btn) { $btn.Content } else { $null }
+    if ($btn) {
+        $btn.IsEnabled = $false
+        $btn.Content = if ($isHe) { 'מפעיל...' } else { 'Launching...' }
+    }
+    $statusMessage.Text = if ($isHe) { "מפעיל את $label..." } else { "Launching $label..." }
+    $activityBar.Visibility = [System.Windows.Visibility]::Visible
+    $activityBar.IsIndeterminate = $true
     Start-Process -FilePath (Join-Path $here 'gesher-launch.exe') -ArgumentList 'launch', $pkg -WindowStyle Hidden
+    $launchTimer = [System.Windows.Threading.DispatcherTimer]::new()
+    $launchTimer.Interval = [TimeSpan]::FromMilliseconds(3500)
+    $launchTimer.Tag = @{ Button = $btn; OrigContent = $origContent; Timer = $launchTimer }
+    $launchTimer.Add_Tick({
+        param($s, $e)
+        $info = $s.Tag
+        $s.Stop()
+        if ($info.Button) {
+            $info.Button.Content = $info.OrigContent
+            $info.Button.IsEnabled = $true
+        }
+        if (-not $script:IsBusy) {
+            $activityBar.Visibility = [System.Windows.Visibility]::Hidden
+            $activityBar.IsIndeterminate = $false
+            $statusMessage.Text = Get-GesherText 'cp_status_ready'
+        }
+    })
+    $launchTimer.Start()
 }
 
 $script:OnAppUninstall = {
@@ -1937,7 +1965,7 @@ $appsList.AddHandler([System.Windows.Controls.Button]::ClickEvent, [System.Windo
     if ($btn -and $btn.Tag) {
         $pkg = [string]$btn.Tag
         if ($btn.Content -eq (Get-GesherText 'cp_btn_launch')) {
-            & $script:OnAppLaunch $pkg
+            & $script:OnAppLaunch $pkg $btn
         } elseif ($btn.Content -eq (Get-GesherText 'cp_btn_uninstall')) {
             & $script:OnAppUninstall $pkg
         }

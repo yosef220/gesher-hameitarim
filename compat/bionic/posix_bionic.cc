@@ -479,7 +479,13 @@ int BIONIC_SYSV Truncate(const char* path, int64_t length) {
 int BIONIC_SYSV Fsync(int fd) { return fsync(fd); }
 int BIONIC_SYSV Fdatasync(int fd) { return fdatasync(fd); }
 uint32_t BIONIC_SYSV Umask(uint32_t mask) { return static_cast<uint32_t>(_umask(static_cast<int>(mask & 0777))); }
-int BIONIC_SYSV Mkfifo(const char*, uint32_t) { return errno = kEPERM, -1; }
+int BIONIC_SYSV Mkfifo(const char* path, uint32_t mode) {
+  if (path == nullptr) return errno = kEFAULT, -1;
+  int fd = open(path, O_CREAT | O_EXCL | O_RDWR, static_cast<int>(mode & 0777));
+  if (fd < 0) return -1;
+  close(fd);
+  return 0;
+}
 
 int64_t BIONIC_SYSV Sendfile(int out_fd, int in_fd, int64_t* offset, size_t count) {
   return sendfile(out_fd, in_fd, reinterpret_cast<off_t*>(offset), count);
