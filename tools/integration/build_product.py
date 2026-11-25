@@ -36,6 +36,8 @@ upstream ועוד מה שאנחנו כתבנו, וה-PRs הפתוחים נכנס
   --onto-candidate עם --topic: ממזג לענף הנושא את product-candidate במקום את upstream,
                    כשההתנגשות היא מול PR אחר בתור ולא מול upstream
   --trailers FILE  שורות שנוספות לסוף כל הודעת קומיט שהכלי יוצר
+  --skip-conflicts בבנייה: פריט שמתנגש מדולג ומסומן "ממתין", במקום לעצור את הבנייה.
+                   מתאים לפריט שהתורם עוד לא עדכן על upstream העדכני
 """
 import argparse
 import re
@@ -238,29 +240,30 @@ def do_check(items, base, upstream):
         r = git("merge-tree", "--write-tree", "--name-only", "--no-messages", head, item["sha"], check=False)
         lines = r.stdout.split()
         tree = lines[0]
+        note = stale_note(item)
         if r.returncode == 0:
             print(f"  {item['id']}: נכנס נקי")
+            head = out("commit-tree", tree, "-p", head, "-p", item["sha"], "-m", "סימולציה")
         else:
             files = lines[1:]
-            print(f"  {item['id']}: התנגשות ב-{len(files)} קבצים:")
+            print(f"  {item['id']}: התנגשות ב-{len(files)} קבצים (הפריטים הבאים נבדקים בלעדיו):")
             for f in files:
                 print(f"      {f}")
             clean = False
-        note = stale_note(item)
         if note:
             print(f"      {note}")
-        head = out("commit-tree", tree, "-p", head, "-p", item["sha"], "-m", "סימולציה")
     print("הסימולציה נקייה." if clean else "יש פריטים שדורשים טיפול (ענף נושא, ‏--topic).")
     return clean
 
 
-def do_build(root, items, base, upstream, trailers):
+def do_build(root, items, base, upstream, trailers, skip_conflicts=False):
     merged = merged_prs(upstream)
     if not all(has_commit(i["sha"]) for i in items):
         raise Failure("חסרים קומיטים נעוצים. הריצו קודם --fetch")
     wt = Path(tempfile.mkdtemp(prefix="gesher-product-"))
     git("worktree", "add", "-q", "-B", CANDIDATE, str(wt), base)
     report = []
+    waiting = []
     try:
         for item in items:
             head = out("rev-parse", "HEAD", cwd=wt)
@@ -289,6 +292,10 @@ def do_build(root, items, base, upstream, trailers):
                     report.append(f"נכנס: {item['id']} (התנגשות בקבצים מופקים נפתרה בהפקה מחדש)")
                     continue
                 git("merge", "--abort", cwd=wt, check=False)
+                if skip_conflicts and conflicts:
+                    waiting.append(item["id"])
+                    report.append(f"ממתין: {item['id']} מתנגש ב-{len(conflicts)} קבצים, ולא נכנס לבנייה הזו")
+                    continue
                 lines = [f"  {f}" for f in sorted(conflicts)] or ["  " + r.stderr.strip()]
                 raise Failure(f"{item['id']} מתנגש בבנייה:\n" + "\n".join(lines) +
                               f"\nפתרון: python3 {QUEUE.parent}/build_product.py --topic {item['id']}")
@@ -311,6 +318,9 @@ def do_build(root, items, base, upstream, trailers):
     print(f"נבנה {CANDIDATE} ({out('rev-parse', '--short', CANDIDATE)}) על {base}:")
     for line in report:
         print("  " + line)
+    if waiting:
+        print(f"ממתינים ({len(waiting)}): " + ", ".join(waiting) +
+              ". כשהתורם יעדכן: --fetch ונעיצה מחדש. אחרת: --topic.")
 
 
 def do_topic(items, item_id, upstream, onto_candidate):
@@ -380,6 +390,7 @@ def main():
     p.add_argument("--pin")
     p.add_argument("--promote", action="store_true")
     p.add_argument("--onto-candidate", action="store_true")
+    p.add_argument("--skip-conflicts", action="store_true")
     p.add_argument("--base", default="main")
     p.add_argument("--upstream", default="upstream/main")
     p.add_argument("--trailers")
@@ -399,7 +410,7 @@ def main():
         elif a.promote:
             do_promote(trailers)
         else:
-            do_build(root, items, a.base, a.upstream, trailers)
+            do_build(root, items, a.base, a.upstream, trailers, a.skip_conflicts)
     except Failure as e:
         print(f"שגיאה: {e}", file=sys.stderr)
         sys.exit(2)

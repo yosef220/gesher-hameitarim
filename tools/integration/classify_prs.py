@@ -11,7 +11,7 @@ for line in git("for-each-ref","refs/pr","--format=%(refname) %(objectname)").sp
     ref, sha = line.split(); heads[int(ref.rsplit("/",1)[1])] = sha
 merges = set(int(l.rsplit("/",1)[1]) for l in git("for-each-ref","refs/prmerge","--format=%(refname)").splitlines())
 # קומיטים ב-main שמזכירים (#N): מיזוג squash או merge
-main_log = git("log","origin/main","--format=%H%x09%s")
+main_log = git("log","upstream/main","--format=%H%x09%s")
 squash = {}
 for line in main_log.splitlines():
     h, s = line.split("\t",1)
@@ -19,7 +19,7 @@ for line in main_log.splitlines():
     m = re.match(r"Merge pull request #(\d+)", s)
     if m: squash.setdefault(int(m.group(1)), (h, s))
 # אילו ראשי PR נגישים מ-main
-reach = set(git("rev-list","origin/main").split())
+reach = set(git("rev-list","upstream/main").split())
 lev = set(git("rev-list","lev/main","lev/v0.2.0-lev1").split())
 rows = []
 for n in sorted(heads):
@@ -28,7 +28,7 @@ for n in sorted(heads):
     subj = git("log","-1","--format=%s",sha).strip()
     date = git("log","-1","--format=%cs",sha).strip()
     author = git("log","-1","--format=%an",sha).strip()
-    mb = git("merge-base",sha,"origin/main").strip()
+    mb = git("merge-base",sha,"upstream/main").strip()
     ahead = int(git("rev-list","--count",f"{mb}..{sha}").strip() or 0) if mb else -1
     stat = git("diff","--shortstat",mb,sha).strip() if mb else ""
     files = int(re.search(r"(\d+) files? changed", stat).group(1)) if "changed" in stat else 0
