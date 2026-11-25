@@ -15,6 +15,9 @@ fork-diagnostic. רק פרסום גרסה רשמית, ומקור העדכוני�
 ב-upstream. הקבצים האלה מוגנים בבדיקות השוואה בייט-לבייט, ובריפו שלנו
 הם רצים במצב fork-diagnostic, כמו שתוכנן.
 
+הסקריפט מחליף גם זהויות קודמות של הריפו שלנו (PREVIOUS), כדי שמעבר
+לריפו חדש ייעשה בפקודה אחת.
+
 הסקריפט אידמפוטנטי: מריצים אותו שוב אחרי כל סנכרון עם upstream.
 
 שימוש:
@@ -28,10 +31,21 @@ from pathlib import Path
 
 UPSTREAM_SLUG = "gesher-runtime/gesher"
 UPSTREAM_ID = "1426153186"
-OURS_SLUG = "yosef220/APK"   # האותיות הקנוניות, כפי ש-GitHub מחזיר (חשוב להשוואות רגישות לאותיות)
-OURS_ID = "1471037894"
+# האותיות הקנוניות, כפי ש-GitHub מחזיר (חשוב להשוואות רגישות לאותיות)
+OURS_SLUG = "yosef220/gesher-hameitarim"
+OURS_ID = "1471523850"
+# זהויות קודמות שלנו. yosef220/APK היה ריפו רגיל ולא Fork אמיתי, ולכן
+# ה-CI של upstream לא הריץ בו את כל הבדיקות. עברנו ממנו ל-gesher-hameitarim.
+PREVIOUS = [("yosef220/APK", "1471037894")]
 
-ID_PATTERN = re.compile(r"(?<![0-9])" + UPSTREAM_ID + r"(?![0-9])")
+REPLACED = [(UPSTREAM_SLUG, UPSTREAM_ID)] + PREVIOUS
+
+
+def id_pattern(value):
+    return re.compile(r"(?<![0-9])" + value + r"(?![0-9])")
+
+
+ID_PATTERNS = [id_pattern(value) for _, value in REPLACED]
 
 # כל כלל: נתיב, ואם יש — ביטוי רגולרי שמגביל את ההחלפה לשורות שתואמות לו
 RULES = [
@@ -50,19 +64,30 @@ RULES = [
 ]
 
 
+def retarget_line(line):
+    for slug, _ in REPLACED:
+        line = line.replace(slug, OURS_SLUG)
+    for pattern in ID_PATTERNS:
+        line = pattern.sub(OURS_ID, line)
+    return line
+
+
 def retarget_text(text, line_filter):
-    def sub(s):
-        return ID_PATTERN.sub(OURS_ID, s.replace(UPSTREAM_SLUG, OURS_SLUG))
     if line_filter is None:
-        return sub(text)
+        return retarget_line(text)
     lines = text.splitlines(keepends=True)
-    return "".join(sub(l) if line_filter.search(l) else l for l in lines)
+    return "".join(retarget_line(l) if line_filter.search(l) else l for l in lines)
 
 
 def count_refs(text, line_filter):
     lines = text.splitlines() if line_filter is not None else [text]
-    return sum(l.count(UPSTREAM_SLUG) + len(ID_PATTERN.findall(l))
-               for l in lines if line_filter is None or line_filter.search(l))
+    total = 0
+    for l in lines:
+        if line_filter is not None and not line_filter.search(l):
+            continue
+        total += sum(l.count(slug) for slug, _ in REPLACED)
+        total += sum(len(p.findall(l)) for p in ID_PATTERNS)
+    return total
 
 
 def main():
@@ -89,11 +114,11 @@ def main():
     total = sum(n for _, n in pending)
     if check:
         if pending:
-            print(f"נמצאו {total} הפניות ל-upstream ב-{len(pending)} קבצים של מסלול המוצר:")
+            print(f"נמצאו {total} הפניות לזהות אחרת ב-{len(pending)} קבצים של מסלול המוצר:")
             for rel, n in pending:
                 print(f"  {n:4d}  {rel}")
             sys.exit(1)
-        print("מסלול המוצר (פרסום ועדכונים) מכוון לריפו שלנו.")
+        print(f"מסלול המוצר (פרסום ועדכונים) מכוון ל-{OURS_SLUG}.")
         sys.exit(1 if missing else 0)
     print(f"הוחלפו {total} הפניות ב-{len(pending)} קבצים.")
     for rel, n in pending:

@@ -16,6 +16,7 @@
 #include "memmem_search.h"
 
 #include <gesher/bionic_shim.h>
+#include <gesher/art_shim.h>
 #include <gesher/elf_loader.h>
 #include <gesher/clocks.h>
 #include <gesher/environment.h>
@@ -1649,9 +1650,11 @@ SymbolTable& Table() {
     RegisterPosix(*table);
     RegisterSocket(*table);
     RegisterDnsWire(*table);
+    RegisterCxx(*table);
     RegisterSignal(*table);
     RegisterTime(*table);
     RegisterSyscall(*table);
+    RegisterPtrace(*table);
     RegisterProcess(*table);  // last: it wraps entries already there
     return table;
   }();
@@ -1669,7 +1672,11 @@ void AddBionicSymbol(const char* name, void* address) { Table()[name] = address;
 
 void InstallBionicShim() {
   Table();
-  gesher::elf::SetBionicResolver([](const char* name) { return LookupBionicSymbol(name); });
+  gesher::elf::SetBionicResolver([](const char* name) {
+    // The arm64 stand-in libart.so's imports, only while it loads (ADR 0086).
+    if (void* p = ResolveArtShimImport(name)) return p;
+    return LookupBionicSymbol(name);
+  });
   gesher::elf::SetUnresolvedHandler(ReportUnresolved);
   gesher::elf::SetRawSyscallHandler(RawSyscallX64);
   InstallSignalHook(false);

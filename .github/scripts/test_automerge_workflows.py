@@ -50,7 +50,7 @@ class QueueWorkflows(unittest.TestCase):
         self.assertFalse(any('write' in job.get('permissions', {}).values() for job in ci['jobs'].values()))
         identity = ci['jobs']['source-identity']['steps'][1]
         self.assertEqual(identity['name'], 'Validate pushed version tag')
-        self.assertEqual(identity['if'], "${{ github.repository == 'yosef220/APK' && "
+        self.assertEqual(identity['if'], "${{ github.repository == 'yosef220/gesher-hameitarim' && "
                          "github.event_name == 'push' && github.ref_type == 'tag' }}")
         publisher = yaml.safe_load((ROOT / '.github/workflows/publish-release.yml').read_text(encoding='utf-8'))
         self.assertEqual(publisher[True], {'workflow_run': {'workflows': ['ci'], 'types': ['completed']}})

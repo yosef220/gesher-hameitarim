@@ -114,8 +114,8 @@ try {
     [IO.File]::WriteAllText($payload, 'verified fixture bytes; never executed')
     $release = [pscustomobject]@{
         Version = '0.2.0'; Tag = 'v0.2.0'; AssetName = 'gesher-setup-0.2.0.exe'
-        Url = 'https://github.com/yosef220/APK/releases/tag/v0.2.0'
-        DownloadUrl = 'https://github.com/yosef220/APK/releases/download/v0.2.0/gesher-setup-0.2.0.exe'
+        Url = 'https://github.com/yosef220/gesher-hameitarim/releases/tag/v0.2.0'
+        DownloadUrl = 'https://github.com/yosef220/gesher-hameitarim/releases/download/v0.2.0/gesher-setup-0.2.0.exe'
         Size = (Get-Item -LiteralPath $payload).Length
         Sha256 = (Get-FileHash -LiteralPath $payload -Algorithm SHA256).Hash
     }
