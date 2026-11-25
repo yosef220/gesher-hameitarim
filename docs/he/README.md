@@ -8,6 +8,7 @@
 | [04 — מרשם ה-PRs](04-pr-register.md) | כל 165 ה-PRs שלא מוזגו ב-upstream: תוצאת סימולציית המיזוג וגל האינטגרציה. נוצר אוטומטית |
 | [05 — היתרונות שלנו](05-advantages.md) | השוואה מדויקת מול upstream 0.2.0, ‏upstream main והפורק של Lev-Good |
 | [07 — סנכרון עם upstream](07-upstream-sync.md) | איך קולטים את השינויים של upstream, מבנה הענפים (`main` ו-`product`), התור של ה-PRs והמדידות מ-25.11 |
+| [08 — מדריך התקנה](08-install-guide.md) | למשתמשים: הורדה, אזהרת SmartScreen, בדיקת הקובץ, התקנה במקום Gesher, עדכונים, רשת מסוננת והסרה |
 | [תוכנית העיצוב](design/01-design-plan.md) | צבעים, גופנים, שרטוטי מסכים ובדיקה מול התדריך (בענף `design/foundation`) |
 
 **הכלים שמפיקים את הנתונים:** [`tools/integration/`](../../tools/integration/README.md).
