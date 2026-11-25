@@ -82,6 +82,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "splash_preview נכשל בקוד $LASTEXITCODE" }
           $files = @(Get-ChildItem $screens -Filter *.png)
           if ($files.Count -lt 12) { throw "נוצרו רק $($files.Count) צילומים" }
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem screens -Filter *.png | Sort-Object Name) {
+            "SPLASH-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'SPLASH-PNG-END'
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: splash-screens
