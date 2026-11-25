@@ -38,6 +38,9 @@ class Art {
   // false: אין GDI+, והקורא נשאר עם הציור הקודם
   bool Start(const wchar_t* fonts_dir);
 
+  // כמה משפחות גופנים נטענו מ-ui-fonts (לבדיקות; 0: הציור ב-Segoe UI)
+  int FontFamiliesLoaded() const;
+
   // מצייר את כל המסך ל-dc (מומלץ: dc של bitmap בזיכרון), ברגע elapsed_ms מתחילת התנועה
   void Paint(HDC dc, const RECT& client, const Look& look, HICON icon, int icon_size, const wchar_t* label,
              const wchar_t* status, bool rtl, unsigned long long elapsed_ms) const;

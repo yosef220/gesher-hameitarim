@@ -247,6 +247,11 @@ bool Art::Start(const wchar_t* fonts_dir) {
   return true;
 }
 
+int Art::FontFamiliesLoaded() const {
+  auto* fonts = static_cast<Gdiplus::PrivateFontCollection*>(fonts_);
+  return fonts == nullptr ? 0 : fonts->GetFamilyCount();
+}
+
 void Art::Paint(HDC dc, const RECT& client, const Look& look, HICON icon, int icon_size, const wchar_t* label,
                 const wchar_t* status, bool rtl, unsigned long long elapsed_ms) const {
   const int w = client.right - client.left, h = client.bottom - client.top;
