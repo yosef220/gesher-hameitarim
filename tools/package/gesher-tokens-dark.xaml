@@ -6,8 +6,8 @@
   <SolidColorBrush x:Key="GesherSurfaceBrush" Color="#0F1A2B"/>
   <Color x:Key="GesherSurfaceRaisedColor">#16243A</Color>
   <SolidColorBrush x:Key="GesherSurfaceRaisedBrush" Color="#16243A"/>
-  <Color x:Key="GesherSelectionColor">#3A3427</Color>
-  <SolidColorBrush x:Key="GesherSelectionBrush" Color="#3A3427"/>
+  <Color x:Key="GesherSelectionColor">#42392A</Color>
+  <SolidColorBrush x:Key="GesherSelectionBrush" Color="#42392A"/>
   <Color x:Key="GesherInkColor">#EAF0F7</Color>
   <SolidColorBrush x:Key="GesherInkBrush" Color="#EAF0F7"/>
   <Color x:Key="GesherInkMutedColor">#9DAABD</Color>

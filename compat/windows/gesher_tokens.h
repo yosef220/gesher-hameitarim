@@ -11,7 +11,7 @@
 #define GESHER_SURFACE_RAISED_DARK RGB(0x16, 0x24, 0x3A)
 /* שורה נבחרת ברשימה */
 #define GESHER_SELECTION_LIGHT RGB(0xED, 0xE4, 0xD3)
-#define GESHER_SELECTION_DARK RGB(0x3A, 0x34, 0x27)
+#define GESHER_SELECTION_DARK RGB(0x42, 0x39, 0x2A)
 /* טקסט ראשי */
 #define GESHER_INK_LIGHT RGB(0x14, 0x23, 0x38)
 #define GESHER_INK_DARK RGB(0xEA, 0xF0, 0xF7)

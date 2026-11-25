@@ -5,7 +5,7 @@
 #define GesherSurfaceRaisedLight "$00FFFFFF"
 #define GesherSurfaceRaisedDark "$003A2416"
 #define GesherSelectionLight "$00D3E4ED"
-#define GesherSelectionDark "$0027343A"
+#define GesherSelectionDark "$002A3942"
 #define GesherInkLight "$00382314"
 #define GesherInkDark "$00F7F0EA"
 #define GesherInkMutedLight "$007B6555"
