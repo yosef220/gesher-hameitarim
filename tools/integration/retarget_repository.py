@@ -52,7 +52,7 @@ RULES = [
     ("tools/ci/release_version.py", None),
     (".github/workflows/publish-release.yml", None),
     # רק שלב אימות התג (שחרור גרסה), לא שורות הראיות של TCP שרצות במצב פורק
-    (".github/workflows/ci.yml", re.compile(r"github\.event_name == 'push' && github\.ref_type == 'tag'")),
+    (".github/workflows/ci.yml", re.compile(r"github\.ref_type == 'tag'")),
     ("tools/package/gesher-update.ps1", None),
     ("tests/windows/shell/UpdateChecks.ps1", None),
     ("tests/windows/shell/UpdateTransportChecks.ps1", None),

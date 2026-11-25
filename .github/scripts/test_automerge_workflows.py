@@ -51,14 +51,16 @@ class QueueWorkflows(unittest.TestCase):
         identity = ci['jobs']['source-identity']['steps'][1]
         self.assertEqual(identity['name'], 'Validate pushed version tag')
         self.assertEqual(identity['if'], "${{ github.repository == 'yosef220/gesher-hameitarim' && "
-                         "github.event_name == 'push' && github.ref_type == 'tag' }}")
+                         "(github.event_name == 'push' || github.event_name == 'workflow_dispatch') && "
+                         "github.ref_type == 'tag' }}")
         publisher = yaml.safe_load((ROOT / '.github/workflows/publish-release.yml').read_text(encoding='utf-8'))
         self.assertEqual(publisher[True], {'workflow_run': {'workflows': ['ci'], 'types': ['completed']}})
         self.assertEqual(publisher['permissions'], {})
         job = publisher['jobs']['publish']
         self.assertEqual(set(publisher['jobs']), {'publish'})
         self.assertIn("publish-release.yml@refs/heads/main'", job['if'])
-        self.assertIn("github.event.workflow_run.event == 'push'", job['if'])
+        self.assertIn("(github.event.workflow_run.event == 'push' || "
+                      "github.event.workflow_run.event == 'workflow_dispatch')", job['if'])
         self.assertIn("github.event.workflow_run.conclusion == 'success'", job['if'])
         self.assertEqual(job['permissions'], {'actions': 'read', 'contents': 'write'})
         checkout, invocation = job['steps']

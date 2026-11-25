@@ -3,9 +3,9 @@ name: ci
 on:
   push:
     branches: [main]
-    # Canonical tag pushes build and test a release. The protected default
-    # branch publisher is separate from this read-only workflow.
-    tags: ['v[0-9]*.[0-9]*.[0-9]*']
+    # גשר המיתרים: גרסה נבנית בהפעלה ידנית על התג (gh workflow run ci.yml --ref vX.Y.Z), ולא
+    # בדחיפה שלו. בפורק, בדיקות הראיות של upstream עוברות רק בהפעלה ידנית, ודחיפה של תג
+    # הייתה מריצה CI שנכשל בהן (docs/he/07-upstream-sync.md). הפרסום עצמו נפרד, מ-main.
   pull_request:
   workflow_dispatch:
 
@@ -39,7 +39,7 @@ jobs:
       # The tag filter's * also matches e.g. v1.2.3-rc1. Stop such a run here,
       # before every build job (they all depend on this one), not hours later.
       - name: Validate pushed version tag
-        if: ${{ github.repository == 'yosef220/gesher-hameitarim' && github.event_name == 'push' && github.ref_type == 'tag' }}
+        if: ${{ github.repository == 'yosef220/gesher-hameitarim' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_type == 'tag' }}
         env:
           TAG: ${{ github.ref_name }}
         run: |
