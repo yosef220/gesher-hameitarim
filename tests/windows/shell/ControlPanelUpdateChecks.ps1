@@ -93,7 +93,7 @@ function Get-GesherUpdate($InstallDirectory, [Threading.CancellationToken] $Canc
     Wait-Fixture $config.CheckDelay $CancellationToken
     if ($config.CheckFailure) { throw 'Fixture network failure' }
     $release = if ($config.CheckStatus -in 'Available', 'Current') {
-        [pscustomobject]@{ Version = '0.2.0'; Tag = 'v0.2.0'; Url = 'https://github.com/yosef220/APK/releases/tag/v0.2.0' }
+        [pscustomobject]@{ Version = '0.2.0'; Tag = 'v0.2.0'; Url = 'https://github.com/yosef220/gesher-hameitarim/releases/tag/v0.2.0' }
     } else { $null }
     [pscustomobject]@{ Status = $config.CheckStatus; CurrentVersion = (Get-GesherInstalledVersion $InstallDirectory); Release = $release }
 }
