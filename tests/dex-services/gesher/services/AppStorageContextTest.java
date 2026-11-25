@@ -166,20 +166,22 @@ public final class AppStorageContextTest {
     }
 
     /**
-     * A package Gesher describes without an APK (Play services' stand-in, the Windows
-     * browser) has its data areas where an installed package of that name has them,
-     * under $ANDROID_DATA, and they are never created. Another app opening its
-     * context (AdvertisingIdClient: createPackageContext(gms).getSharedPreferences)
+     * A package Gesher describes without an APK (the Windows browser; since #335 Play
+     * services are described only when microG is installed) has its data areas where an
+     * installed package of that name has them, under $ANDROID_DATA, and they are never
+     * created. Another app opening its context (createPackageContext(...).getSharedPreferences)
      * cannot write there, as it cannot on Android, and nothing is created outside the
      * device's data root ("/data/data/..." is the root of the current Windows drive).
      */
     private static void describedPackages(Context client, File data) throws Exception {
-        String gms = "com.google.android.gms";
-        File rootLegacy = new File("/data/data/" + gms);
+        // גשר המיתרים: אחרי #464 שירותי Play מתוארים רק כש-microG מותקן, ולכן הבדיקה
+        // בודקת את אותה התנהגות על החבילה המתוארת שנשארת, הדפדפן של Windows
+        String described = "com.gesher.browser";  // BrowserPackageSupport.PACKAGE
+        File rootLegacy = new File("/data/data/" + described);
         boolean legacyExisted = rootLegacy.exists();
-        ApplicationInfo info = client.getPackageManager().getApplicationInfo(gms, 0);
-        File credential = new File(new File(data, "data"), gms);
-        File device = new File(new File(data, "user_de/0"), gms);
+        ApplicationInfo info = client.getPackageManager().getApplicationInfo(described, 0);
+        File credential = new File(new File(data, "data"), described);
+        File device = new File(new File(data, "user_de/0"), described);
         check(new File(info.dataDir).getCanonicalFile().equals(credential.getCanonicalFile())
                         && info.dataDir.equals(info.credentialProtectedDataDir)
                         && new File(info.deviceProtectedDataDir).getCanonicalFile()
@@ -191,7 +193,7 @@ public final class AppStorageContextTest {
         check(!credential.exists() && !device.exists(),
                 "describing the stand-in package created its data areas");
 
-        Context other = client.createPackageContext(gms, 0);
+        Context other = client.createPackageContext(described, 0);
         check(other.getDataDir().getCanonicalFile().equals(credential.getCanonicalFile()),
                 "another package's context does not use its described data area");
         android.content.SharedPreferences flags = other.getSharedPreferences("google_ads_flags", 0);
