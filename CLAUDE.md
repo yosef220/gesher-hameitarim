@@ -24,7 +24,8 @@
 - **הריפו הראשי:** `yosef220/gesher-hameitarim`, ‏Fork אמיתי של upstream. ‏`yosef220/APK` הוא גיבוי ישן.
 - **`main`** הוא upstream ועוד מה שאנחנו כתבנו. PR שעוד לא אושר ב-upstream לא נכנס אליו.
 - **`product`** נבנה מ-`main` ומהתור `tools/integration/product-queue.tsv`, עם `tools/integration/build_product.py`. ממנו יוצאות הגרסאות. מוסיפים PR לתור, ולא ממזגים אותו ביד. התנגשות נפתרת בענף נושא `topic/<מזהה>`.
-- **סנכרון עם upstream:** לפי `docs/he/07-upstream-sync.md`.
+- **upstream קפוא (פרויקט עצמאי, הוחלט ב-25.11):** ‏upstream עבר לרישיון קנייני ב-25.11.2026 ב-11:39 לפי UTC (#503). **אסור למזג ממנו שום דבר אחרי `303bb835d`**, ולא ללחוץ על "Sync fork". מ-PRs משתמשים רק בגרסה מלפני השינוי (`refs/apache-snapshot/pr/*`). ‏`build_product.py` דוחה קוד מאחרי השינוי. פירוט ב-`NOTICE.md` וב-`docs/he/07-upstream-sync.md`.
+- **לפני כל דחיפה:** לוודא ש-`git remote get-url origin` הוא `https://github.com/yosef220/gesher-hameitarim`. הפעלה מחדש של הסשן מחזירה אותו לפעמים ל-APK.
 - **קרדיט:** הקומיטים נרשמים על שם `yosef220` בכתובת החסויה של GitHub, ו-Claude מופיע בשורת `Co-Authored-By`.
 
 ## אינטגרציה של PRs
