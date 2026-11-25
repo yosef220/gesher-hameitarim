@@ -48,6 +48,15 @@ import tempfile
 from pathlib import Path
 
 QUEUE = Path("tools/integration/product-queue.tsv")
+# גבול הרישיון: ב-25.11.2026 ב-11:39 לפי UTC עבר upstream לרישיון קנייני (#503), שאוסר
+# הפצה ו-Fork לצורך הפצה. מה שפורסם או הוגש לפני כן נשאר תחת Apache 2.0 (סעיף 3 ברישיון
+# החדש). לכן: (1) הענף הראשי מסונכרן רק עד APACHE_UPSTREAM; (2) פריט שמכיל את קומיט
+# השינוי, או קומיט שנוצר אחריו, נדחה. פירוט ב-docs/he/07-upstream-sync.md
+LICENSE_CHANGE = "52aa3980f9c109b35085528f8c52d1f752fcf845"
+LICENSE_CHANGE_TIME = 1795606780
+# הכותבים שלנו: קומיטים שלהם הם עבודה שלנו, ולא קוד של upstream, גם אם נוצרו אחרי השינוי
+OUR_AUTHORS = {"140768348+yosef220@users.noreply.github.com", "noreply@anthropic.com"}
+APACHE_UPSTREAM = "303bb835d46ed4837a8a6f55c045bc8f47aa6149"
 CANDIDATE = "product-candidate"
 PRODUCT = "product"
 COLUMNS = ("id", "source", "sha", "prs", "wave", "desc")
@@ -94,6 +103,11 @@ def load_queue(root):
             raise Failure(f"{QUEUE}:{n}: המקור של {item['id']} צריך להיות remote:ref")
         item["pr_list"] = [] if item["prs"] == "-" else [int(p) for p in item["prs"].split(",")]
         items.append(item)
+    for item in items:
+        if has_commit(item["sha"]):
+            problem = license_problem(item["sha"])
+            if problem:
+                raise Failure(f"{item['id']}: {problem}. מותר לנעוץ רק גרסה מלפני השינוי")
     ids = [i["id"] for i in items]
     if len(ids) != len(set(ids)):
         raise Failure(f"{QUEUE}: יש מזהה שמופיע יותר מפעם אחת")
@@ -132,6 +146,20 @@ def has_commit(sha):
     return git("cat-file", "-e", sha + "^{commit}", check=False).returncode == 0
 
 
+def license_problem(sha, base=APACHE_UPSTREAM):
+    """הסבר אם הקומיט מכיל קוד מאחרי המעבר של upstream לרישיון קנייני, אחרת None."""
+    if is_ancestor(LICENSE_CHANGE, sha):
+        return "מכיל את המעבר של upstream לרישיון קנייני (#503)"
+    late = []
+    for line in out("log", "--format=%ct %ae %h", f"{base}..{sha}").splitlines():
+        when, author, short = line.split(" ", 2)
+        if int(when) > LICENSE_CHANGE_TIME and author not in OUR_AUTHORS:
+            late.append(short)
+    if late:
+        return f"{len(late)} קומיטים נוצרו אחרי המעבר לרישיון קנייני (למשל {late[0]})"
+    return None
+
+
 def classify(item, merged, head, cwd=None):
     """מחזיר (מצב, הסבר). מצב: skip, warn או merge."""
     prs = item["pr_list"]
@@ -152,7 +180,11 @@ def stale_note(item):
     local = f"refs/product-sources/{item['id']}"
     r = git("rev-parse", "--verify", "-q", local, check=False)
     if r.returncode == 0 and r.stdout.strip() != item["sha"]:
-        return f"למקור יש גרסה חדשה יותר ({r.stdout.strip()[:12]}) מהנעוצה. כדאי לבדוק ולנעוץ מחדש"
+        newer = r.stdout.strip()
+        problem = license_problem(newer)
+        if problem:
+            return f"למקור יש גרסה חדשה יותר ({newer[:12]}), אבל אסור להשתמש בה: {problem}"
+        return f"למקור יש גרסה חדשה יותר ({newer[:12]}) מהנעוצה. כדאי לבדוק ולנעוץ מחדש"
     return ""
 
 
@@ -346,6 +378,9 @@ def do_pin(root, header, items, item_id):
     item = find(items, item_id)
     branch = f"topic/{item_id}"
     sha = out("rev-parse", branch)
+    problem = license_problem(sha)
+    if problem:
+        raise Failure(f"{branch} לא נועץ: {problem}")
     if not is_ancestor(item["sha"], sha):
         raise Failure(f"{branch} לא מכיל את הקומיט הנעוץ הקודם של {item_id}")
     item["source"] = f"origin:refs/heads/{branch}"
@@ -392,7 +427,8 @@ def main():
     p.add_argument("--onto-candidate", action="store_true")
     p.add_argument("--skip-conflicts", action="store_true")
     p.add_argument("--base", default="main")
-    p.add_argument("--upstream", default="upstream/main")
+    # ‏PR ש-upstream מיזג רק אחרי השינוי ברישיון לא מדולג: הגרסה שלו ב-upstream אסורה לנו
+    p.add_argument("--upstream", default=APACHE_UPSTREAM)
     p.add_argument("--trailers")
     a = p.parse_args()
     trailers = Path(a.trailers).read_text(encoding="utf-8").strip() if a.trailers else ""
