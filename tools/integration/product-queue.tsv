@@ -3,4 +3,4 @@
 # עמודות מופרדות בטאב: מזהה, מקור (remote:ref), ‏SHA נעוץ, ‏PRs ב-upstream, גל, תיאור
 pr-464	upstream:refs/pull/464/head	f78819068c6b892e68c6ea7d13123c6fdae34a5e	464	1	לא לדווח על Play services, חשבון Google או טוקן דחיפה שלא קיימים (issue #335)
 pr-491	upstream:refs/pull/491/head	d38b9ee9e8a6443800ed7ac2d7eb9ec2670aff06	491	1	דיאלוג מידע על האפליקציה במקום בקשת הסרה (issue #472)
-lev-app-compat	origin:refs/heads/topic/lev-app-compat	e4e91635181a6b7f3b1f492dd8827b29e0afa061	454,455,493	1	הענף fix/app-compat של Lev-Good ‏(v0.2.0-lev3): ‏SOCKS5, נתיבי profman, ספקי תוכן מתנגשים, mkfifo ורישום התקנה
+lev-app-compat	origin:refs/heads/topic/lev-app-compat	8a7345faa2d5411d744f9e4a4f6d06fa06feac0a	454,455,493	1	הענף fix/app-compat של Lev-Good ‏(v0.2.0-lev3): ‏SOCKS5, נתיבי profman, ספקי תוכן מתנגשים, mkfifo ורישום התקנה
