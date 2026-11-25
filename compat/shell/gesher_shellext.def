@@ -1,4 +1,0 @@
-LIBRARY gesher_shellext.dll
-EXPORTS
-  DllGetClassObject PRIVATE
-  DllCanUnloadNow PRIVATE

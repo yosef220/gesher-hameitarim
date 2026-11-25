@@ -1,2 +1,0 @@
-# Values for ART's aconfig flags (art/build/flags/*.aconfig) in Gesher builds.
-# Format: <flag name>=true|false. Unlisted flags are false.
