@@ -160,6 +160,8 @@ Source: "gesher-panel-confirm.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-message.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-native.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-update.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; גשר המיתרים: סוכן העדכונים, ש-gesher-app מפעיל ברקע כשפותחים אפליקציה.
+Source: "gesher-update-agent.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-runtime-files.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-ui.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ui-messages.json"; DestDir: "{app}"; Flags: ignoreversion

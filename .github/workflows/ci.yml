@@ -268,6 +268,7 @@ jobs:
           tests/windows/shell/UpdateChecks.ps1
           tests/windows/shell/UpdateTransportChecks.ps1
           tests/windows/shell/ControlPanelUpdateChecks.ps1
+          tests/windows/shell/UpdateAgentChecks.ps1
           tests/windows/shell/RuntimeFileChecks.ps1
           tests/windows/shell/InstallErrorChecks.ps1
           tests/windows/shell/NativeStderrChecks.ps1
@@ -1258,6 +1259,7 @@ jobs:
           tests/windows/shell/UpdateChecks.ps1
           tests/windows/shell/UpdateTransportChecks.ps1
           tests/windows/shell/ControlPanelUpdateChecks.ps1
+          tests/windows/shell/UpdateAgentChecks.ps1
           tests/windows/shell/RuntimeFileChecks.ps1
           tests/windows/shell/InstallErrorChecks.ps1
           tests/windows/shell/NativeStderrChecks.ps1
@@ -1336,7 +1338,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Crash dialog host/Windows checks failed' }
           python tools/test_app_crash_runtime.py --runtime "$app" --fixture dist/crashnotice.apk --output out/crash-notice-art
           if ($LASTEXITCODE -ne 0) { throw 'Crash notice Windows/ART checks failed' }
-          foreach ($file in 'gesher-update.ps1', 'gesher-version.ini', 'gesher-runtime-files.ps1', 'gesher-panel-actions.ps1', 'gesher-panel-view.ps1', 'gesher-panel-dashboard.xaml', 'gesher-panel-confirm.xaml', 'gesher-panel-message.xaml') {
+          foreach ($file in 'gesher-update.ps1', 'gesher-update-agent.ps1', 'gesher-version.ini', 'gesher-runtime-files.ps1', 'gesher-panel-actions.ps1', 'gesher-panel-view.ps1', 'gesher-panel-dashboard.xaml', 'gesher-panel-confirm.xaml', 'gesher-panel-message.xaml') {
             if (-not (Test-Path -LiteralPath (Join-Path $app $file) -PathType Leaf)) { throw "The installer left out $file" }
           }
           powershell -NoProfile -STA -ExecutionPolicy Bypass -File tests/windows/shell/ControlPanelPresentationChecks.ps1 -PackageDirectory $app

@@ -118,6 +118,16 @@ if ($command -in 'control-panel', 'settings', 'dashboard', 'gui') {
   exit $LASTEXITCODE
 }
 
+# גשר המיתרים: העדכון האוטומטי בזמן פתיחה של אפליקציה (gesher-runtime-files.ps1).
+if (($command -in 'launch', 'view', 'toast-activated') -or ($commands -notcontains $command)) {
+  if (Wait-GesherUpdateInstall -ProfileDirectory $root -InstallDirectory $here) {
+    # עדכון הותקן בזמן ההמתנה: הגרסה החדשה של gesher-app מריצה את אותה פקודה.
+    & ([Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'gesher-app.ps1') @Arguments
+    exit $LASTEXITCODE
+  }
+  $null = Start-GesherUpdateAgentIfDue -ProfileDirectory $root -InstallDirectory $here
+}
+
 # Reads the device's state file (Java properties: key=value, '\' escapes).
 function DeviceState {
   $file = Join-Path $root 'data\system\gesher-device'
