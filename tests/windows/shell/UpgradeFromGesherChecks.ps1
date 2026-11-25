@@ -2,7 +2,10 @@
     [Parameter(Mandatory = $true)][string] $InstallerPath,
     [Parameter(Mandatory = $true)][string] $Version,
     [string] $UpstreamTag = 'v0.2.0',
-    [string] $UpstreamRepository = 'gesher-runtime/gesher'
+    [string] $UpstreamRepository = 'gesher-runtime/gesher',
+    # עותק של אותו מתקין בריפו שלנו, כ-pre-release שהמעדכן מתעלם ממנו. ‏upstream כבר לא ציבורי.
+    [string] $FixtureRepository = 'yosef220/gesher-hameitarim',
+    [string] $FixtureTag = 'fixture-gesher-0.2.0'
 )
 
 # גשר המיתרים: התקנה במקום Gesher. מתקינים את Gesher 0.2.0, הגרסה שפורסמה תחת
@@ -37,28 +40,42 @@ function Wait-Uninstalled {
 
 if ((Test-Path $app) -or (Test-Path $profileRoot)) { throw "המכונה לא נקייה: $app או $profileRoot כבר קיימים" }
 
-# 1. המתקין של Gesher 0.2.0, מדף הגרסאות של upstream, מאומת מול ה-SHA-256 שמפורסם שם.
+# 1. המתקין של Gesher 0.2.0, מדף הגרסאות של upstream, ואם הוא כבר לא זמין, מהעותק בריפו שלנו.
+# הוא מאומת מול ה-SHA-256 שמפורסם באותו דף. בלי אף מקור, השלב לא נכשל, אבל גם לא מדווח
+# שהשדרוג נבדק: הוא מסמן אזהרה ואומר במפורש שהשדרוג לא נבדק.
 $work = Join-Path ([IO.Path]::GetTempPath()) ('gesher-upgrade-' + [guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $work
-$release = $null
-for ($attempt = 1; $attempt -le 4 -and -not $release; $attempt++) {
-    $json = gh api "repos/$UpstreamRepository/releases/tags/$UpstreamTag" 2>&1 | Out-String
-    if ($LASTEXITCODE -eq 0) { $release = $json | ConvertFrom-Json } else { Start-Sleep ([Math]::Pow(2, $attempt)) }
+$release = $null; $sourceRepository = $null; $sourceTag = $null; $reasons = @()
+foreach ($candidate in @(@($UpstreamRepository, $UpstreamTag), @($FixtureRepository, $FixtureTag))) {
+    for ($attempt = 1; $attempt -le 3 -and -not $release; $attempt++) {
+        $json = gh api "repos/$($candidate[0])/releases/tags/$($candidate[1])" 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0) { $release = $json | ConvertFrom-Json; $sourceRepository = $candidate[0]; $sourceTag = $candidate[1] }
+        elseif ($json -match 'HTTP 404|Not Found') { break }
+        else { Start-Sleep ([Math]::Pow(2, $attempt)) }
+    }
+    if ($release) { break }
+    $reasons += "$($candidate[0])@$($candidate[1]): $($json.Trim())"
 }
-if (-not $release) { throw "לא נמצאה הגרסה $UpstreamTag של $UpstreamRepository. השדרוג מ-Gesher לא נבדק: $json" }
+if (-not $release) {
+    $message = "השדרוג מ-Gesher 0.2.0 לא נבדק: אין מתקין של Gesher 0.2.0 באף מקור (" + ($reasons -join ' | ') + ")"
+    "::warning::$message"
+    $line = "SKIP  שדרוג מ-Gesher: $message"
+    if ($summary) { $line | Tee-Object -Append $summary } else { $line }
+    exit 0
+}
 $assets = @($release.assets | Where-Object { $_.name -cmatch '\Agesher-setup-[0-9.]+\.exe\z' })
-if ($assets.Count -ne 1) { throw "בגרסה $UpstreamTag אין מתקין אחד בדיוק (נמצאו $($assets.Count))" }
+if ($assets.Count -ne 1) { throw "ב-$sourceRepository@$sourceTag אין מתקין אחד בדיוק (נמצאו $($assets.Count))" }
 $asset = $assets[0]
 $old = Join-Path $work $asset.name
 for ($attempt = 1; $attempt -le 4; $attempt++) {
-    gh release download $UpstreamTag --repo $UpstreamRepository --pattern $asset.name --dir $work --clobber 2>&1 | Out-Host
+    gh release download $sourceTag --repo $sourceRepository --pattern $asset.name --dir $work --clobber 2>&1 | Out-Host
     if ($LASTEXITCODE -eq 0 -and (Test-Path $old)) { break }
     Start-Sleep ([Math]::Pow(2, $attempt))
 }
 if (-not (Test-Path $old)) { throw "ההורדה של $($asset.name) נכשלה" }
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $old).Hash.ToLowerInvariant()
 if ([string] $asset.digest -cne "sha256:$hash") { throw "ה-SHA-256 של $($asset.name) ($hash) שונה מזה שבדף הגרסה ($($asset.digest))" }
-Pass "המתקין של Gesher $UpstreamTag ירד ואומת (sha256:$hash)"
+Pass "המתקין של Gesher $UpstreamTag ירד מ-$sourceRepository@$sourceTag ואומת (sha256:$hash)"
 
 # 2. ההתקנה הקיימת: Gesher 0.2.0 עם אפליקציה, נתונים והגדרת עדכונים של המשתמש.
 $p = Start-Process $old -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru

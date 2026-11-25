@@ -404,7 +404,8 @@ try {
     $null = New-Item -ItemType Directory -Force -Path $stubInstall
     $marker = Join-Path $script:TestRoot 'agent-started.txt'
     $stub = "param([int] `$LauncherProcessId, [string] `$LauncherStart)`n[IO.File]::WriteAllText('" + $marker.Replace("'", "''") + "', ([string] `$LauncherProcessId + ' ' + `$LauncherStart + ' ' + [string] `$env:GESHER_LAUNCH_DETACH + '|' + [string] `$env:GESHER_LAUNCH_ERROR_FILE))`n"
-    [IO.File]::WriteAllText((Join-Path $stubInstall 'gesher-update-agent.ps1'), $stub)
+    # עם BOM: ‏Windows PowerShell 5.1 קורא קובץ בלי BOM בקידוד של המערכת, והנתיב העברי שבתוכו היה משתבש.
+    [IO.File]::WriteAllText((Join-Path $stubInstall 'gesher-update-agent.ps1'), $stub, (New-Object Text.UTF8Encoding $true))
     $hostPath = if ($onWindows) { '' } else { [string] (Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source) }
     $savedDetach = $env:GESHER_LAUNCH_DETACH
     $savedAgent = $env:GESHER_UPDATE_AGENT

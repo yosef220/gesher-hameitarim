@@ -210,6 +210,25 @@ class ContextTest(unittest.TestCase):
                 with self.subTest(target=target, index=index), self.assertRaises(RuntimeError):
                     identity.validate(env, e, p, r, env['GITHUB_SHA'], 'compile')
 
+    def test_product_repository_after_upstream_left_the_network(self):
+        # גשר המיתרים: upstream כבר לא ציבורי, ומקור הרשת של הפורק שלנו הוא עכשיו ztcebuck/gesher.
+        # הריפו של גשר המיתרים מתקבל לפי השם ומספר הזהות שלו. פורק אחר עם אותו מקור נדחה.
+        def attempt(full_name, number):
+            env, event, repo, run = fixture()
+            for record in (event['repository'], repo, run['repository'], run['head_repository']):
+                record.update(id=number, full_name=full_name)
+            repo['source'] = dict(id=1435000001, full_name='ztcebuck/gesher')
+            env.update(GITHUB_REPOSITORY=full_name, GITHUB_REPOSITORY_ID=str(number),
+                       GITHUB_WORKFLOW_REF=full_name + '/.github/workflows/ci.yml@refs/heads/diagnostic/tcp',
+                       GESHER_COHERENT_TCP_POLICY_REF=full_name + '/.github/workflows/ci.yml@' + env['GITHUB_SHA'])
+            return identity.validate(env, event, repo, run, env['GITHUB_SHA'], 'compile')
+        value = attempt(identity.PRODUCT_REPOSITORY, int(identity.PRODUCT_REPOSITORY_ID))
+        self.assertEqual(value['context']['GITHUB_REPOSITORY'], 'yosef220/gesher-hameitarim')
+        for full_name, number in (('another-owner/another-name', 17), (identity.PRODUCT_REPOSITORY, 17),
+                                  ('someone/gesher-hameitarim', int(identity.PRODUCT_REPOSITORY_ID))):
+            with self.subTest(full_name=full_name, number=number), self.assertRaises(RuntimeError):
+                attempt(full_name, number)
+
     def test_dynamic_fork_owner_and_live_api_bridge_without_identity_rewrite(self):
         env, event, repo, run = fixture()
         for record in (event['repository'], repo, run['repository'], run['head_repository']):

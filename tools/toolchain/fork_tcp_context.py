@@ -16,6 +16,11 @@ from receipt_identity import exact_run
 
 CANONICAL = 'gesher-runtime/gesher'
 CANONICAL_ID = '1426153186'
+# גשר המיתרים: ‏upstream (gesher-runtime/gesher) כבר לא ציבורי, ו-GitHub העביר את רשת הפורקים
+# לשורש אחר. מאז אף פורק כבר לא נראה "פורק של upstream". הריפו של גשר המיתרים, לפי השם ומספר
+# הזהות שלו, מתקבל גם כשהמקור של הרשת שלו השתנה. כל שאר הבדיקות לא השתנו.
+PRODUCT_REPOSITORY = 'yosef220/gesher-hameitarim'
+PRODUCT_REPOSITORY_ID = '1471523850'
 WORKFLOW = 'ci'
 WORKFLOW_PATH = '.github/workflows/ci.yml'
 SCHEMA = 'gesher-tcp-fork-context-v1'
@@ -83,8 +88,10 @@ def validate(env, event, repository, run, checkout, job):
                 record.get('full_name') == context['GITHUB_REPOSITORY'] and record.get('fork') is True,
                 'Fork TCP event/API repository differs')
     source = repository.get('source', {})
-    require(type(source.get('id')) is int and str(source['id']) == CANONICAL_ID and
-            source.get('full_name') == CANONICAL, 'Fork TCP repository has a different upstream')
+    product = (context['GITHUB_REPOSITORY'] == PRODUCT_REPOSITORY and
+               context['GITHUB_REPOSITORY_ID'] == PRODUCT_REPOSITORY_ID)
+    require(product or (type(source.get('id')) is int and str(source['id']) == CANONICAL_ID and
+                        source.get('full_name') == CANONICAL), 'Fork TCP repository has a different upstream')
     require(exact_run(run, context['GITHUB_RUN_ID'], context['GITHUB_RUN_ATTEMPT'], context['GITHUB_SHA'],
                       context['GITHUB_REPOSITORY_ID'], context['GITHUB_REPOSITORY_ID'],
                       context['GITHUB_REPOSITORY'], WORKFLOW), 'Fork TCP API run identity differs')

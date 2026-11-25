@@ -18,6 +18,11 @@ from receipt_identity import exact_run
 ROOT = Path(__file__).resolve().parents[2]
 CANONICAL = 'gesher-runtime/gesher'
 CANONICAL_ID = '1426153186'
+# גשר המיתרים: ‏upstream (gesher-runtime/gesher) כבר לא ציבורי, ו-GitHub העביר את רשת הפורקים
+# לשורש אחר. מאז אף פורק כבר לא נראה "פורק של upstream". הריפו של גשר המיתרים, לפי השם ומספר
+# הזהות שלו, מתקבל גם כשהמקור של הרשת שלו השתנה. כל שאר הבדיקות לא השתנו.
+PRODUCT_REPOSITORY = 'yosef220/gesher-hameitarim'
+PRODUCT_REPOSITORY_ID = '1471523850'
 SCOPE = 'fork-diagnostic'
 WORKFLOWS = {'ci': '.github/workflows/ci.yml', 'native2': '.github/workflows/native2.yml'}
 ENV_FIELDS = {
@@ -69,8 +74,9 @@ def validate(env, event, repository, run, checkout, *, producer=False):
                 observed.get('full_name') == value['repository'] and observed.get('fork') is True,
                 'Event/API fork repository identity mismatch')
     upstream = repository.get('source', {})
-    require(type(upstream.get('id')) is int and str(upstream['id']) == CANONICAL_ID and
-            upstream.get('full_name') == CANONICAL,
+    product = value['repository'] == PRODUCT_REPOSITORY and value['repository_id'] == PRODUCT_REPOSITORY_ID
+    require(product or (type(upstream.get('id')) is int and str(upstream['id']) == CANONICAL_ID and
+                        upstream.get('full_name') == CANONICAL),
             'Repository is not a fork of the canonical source')
     require(exact_run(run, value['run'], value['attempt'], value['source'], value['repository_id'],
                       value['repository_id'], value['repository'], value['workflow']),
