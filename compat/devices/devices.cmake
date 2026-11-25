@@ -20,6 +20,8 @@ target_sources(framework_runtime PRIVATE
   ${CMAKE_SOURCE_DIR}/compat/devices/sensors_jni.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/speech_recognition_jni.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/speech_recognition_win.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/speech_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/speech_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/webauthn_jni.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/webauthn_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/winrt.cc)
@@ -32,6 +34,8 @@ target_link_libraries(framework_runtime PUBLIC cfgmgr32)
 # RFCOMM; IID_IUnknown. BluetoothApis.dll and the WinRT classes are found at run time.
 # Speech recognition (docs/speech-recognition.md): IID_IStream; SAPI's classes are
 # created through COM (sapi.dll), so nothing more is linked.
+# Speech synthesis (docs/tts.md): IID_IStream; shcore.dll's
+# CreateStreamOverRandomAccessStream is found at run time.
 target_link_libraries(framework_runtime PUBLIC ws2_32 uuid)
 
 # libcamera_metadata (system/media/camera/Android.bp): the metadata buffers

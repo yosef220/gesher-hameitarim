@@ -219,6 +219,15 @@ public final class Services {
         // Construct the network provider before jobs subscribe to its changes.
         ConnectivityService connectivity = new ConnectivityService(pm, atm);
         services.put(Context.CONNECTIVITY_SERVICE, connectivity);  // docs/network.md
+        // content://downloads: DownloadManager's provider and downloader (docs/downloads.md).
+        try {
+            DownloadProvider.create(am, pm, connectivity, persistentAccounts
+                    ? new java.io.File(android.os.Environment.getDataDirectory(), "system/downloads")
+                    : null);
+        } catch (RuntimeException | LinkageError e) {
+            // Without it the authority stays unknown, as before; nothing pretends to download.
+            SystemServer.log("downloads: provider unavailable: " + e);
+        }
         // Device state from Windows (devsvc track, ADR 0038): jobs, the battery.
         services.put(Context.JOB_SCHEDULER_SERVICE, StandIn.of(android.app.job.IJobScheduler.class,
                 new JobSchedulerService(am, atm, pm, connectivity)).asBinder());
@@ -283,10 +292,12 @@ public final class Services {
                         user(userId); return Configuration.GRAMMATICAL_GENDER_NOT_SPECIFIED;
                     }
                 }).asBinder());
-        // Accounts: a dummy Google account (microG / GMS compat) and apps' own, through
-        // their authenticators.
+        // Accounts: those an installed authenticator added (apps' own, microG's Google
+        // accounts), through their authenticators. Sync settings left for the Google
+        // account Gesher once reported without an authenticator are retired (#335).
         AccountManagerService accounts = new AccountManagerService(am, pm, persistentAccounts);
         accounts.setSyncRetirement(sync::accountsRemoved);
+        accounts.retireSyntheticAccountResidue();
         services.put(Context.ACCOUNT_SERVICE, StandIn.of(android.accounts.IAccountManager.class,
                 accounts).asBinder());
         sync.start(accounts::syncableAccounts, accounts::canAccessAccount);

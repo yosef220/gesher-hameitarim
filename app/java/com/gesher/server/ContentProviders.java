@@ -204,6 +204,17 @@ final class ContentProviders {
 
     PackageManagerService packageManager() { return mPm; }
     UriGrants uriGrants() { return mUriGrants; }
+
+    /** The system server's {@code downloads} provider, once it is registered. */
+    private volatile DownloadProvider mDownloads;
+
+    void setDownloads(DownloadProvider downloads) {
+        RegisteredProvider registration = registeredProvider(DownloadProvider.AUTHORITY);
+        if (downloads == null || registration != downloads.registration) {
+            throw new IllegalArgumentException("Downloads provider is not registered");
+        }
+        mDownloads = downloads;
+    }
     DocumentsStorageProvider documents() { return mDocumentsStorage; }
     CallLogProvider callLog() { return mCallLog; }
     ContactsProvider contacts() { return mContacts; }
@@ -234,6 +245,9 @@ final class ContentProviders {
                         | PackageManager.GET_SHARED_LIBRARY_FILES);
                 if (info == null) continue;
                 if (found != null) {
+                    android.util.Log.w("GesherProviders", "Conflicting authority " + authority
+                            + " declared by " + found.packageName + "/" + found.name
+                            + " and " + info.packageName + "/" + info.name);
                     throw new SecurityException("Conflicting content provider authority");
                 }
                 found = info;
@@ -366,6 +380,15 @@ final class ContentProviders {
             }
             enforceAccess(actualPackage, registration.info);
             return mDocumentsStorage.holder();
+        }
+        DownloadProvider downloads = mDownloads;
+        if (downloads != null && DownloadProvider.AUTHORITY.equals(name)) {
+            // As Android's DownloadProvider, the system's provider owns the authority;
+            // ContentProvider.Transport enforces its path permissions and URI grants.
+            if (registeredProvider(name) != downloads.registration || declaredProvider(mPm, name) != null) {
+                throw new SecurityException("Downloads authority is not uniquely registered");
+            }
+            return downloads.holder();
         }
         if (ContactsProviderSupport.CONTACTS_AUTHORITY.equals(name)) {
             RegisteredProvider registration = registeredProvider(name);
@@ -593,10 +616,18 @@ final class ContentProviders {
             }
             for (String authority : declared.authority.split(";")) {
                 if (authority.isEmpty() || SettingsProvider.AUTHORITY.equals(authority)
+                        || (mDownloads != null && DownloadProvider.AUTHORITY.equals(authority))
                         || registeredProvider(authority) != null
                         || ContactsProviderSupport.isSystemAuthority(authority)
                         || !batch.add(authority)) throw new SecurityException("Invalid published authority");
-                ProviderInfo canonical = declaredProvider(mPm, authority);
+                ProviderInfo canonical;
+                try {
+                    canonical = declaredProvider(mPm, authority);
+                } catch (SecurityException conflict) {
+                    SystemServer.log("publishContentProviders: skipping conflicting authority "
+                            + authority + " for " + pkg.packageName + "/" + declared.name);
+                    continue publication;
+                }
                 if (canonical == null || !pkg.packageName.equals(canonical.packageName)
                         || !declared.name.equals(canonical.name)) {
                     if (!current(admission)) continue publication;
