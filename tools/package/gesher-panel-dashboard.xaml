@@ -154,6 +154,7 @@
                     <TextBlock Name="UpdateVersionText" FontSize="12" Foreground="#667085" Margin="0,4,0,0"/>
                     <TextBlock Name="UpdateStatusText" TextWrapping="Wrap" FontSize="12" Foreground="#475467" Margin="0,5,0,0"/>
                     <CheckBox Name="AutomaticUpdateChecks" Content="{DynamicResource Text_cp_update_automatic}" ToolTip="{DynamicResource Text_cp_update_automatic_hint}" FontSize="12" Foreground="#475467" Margin="0,9,0,0"/>
+                    <CheckBox Name="AutomaticUpdateInstall" Content="{DynamicResource Text_cp_update_auto_install}" ToolTip="{DynamicResource Text_cp_update_auto_install_hint}" FontSize="12" Foreground="#475467" Margin="0,6,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <WrapPanel HorizontalAlignment="Right" MaxWidth="330">

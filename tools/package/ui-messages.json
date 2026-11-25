@@ -949,8 +949,24 @@
       "he": "בדיקת עדכונים אוטומטית"
     },
     "cp_update_automatic_hint": {
-      "en": "Check when the control center opens, at most once a day. Installation requires your approval.",
-      "he": "בודק בעת פתיחת לוח הבקרה, לכל היותר פעם ביום. התקנה דורשת את אישורך."
+      "en": "Check when the control center opens, at most once a day.",
+      "he": "בודק בעת פתיחת לוח הבקרה, לכל היותר פעם ביום."
+    },
+    "cp_update_auto_install": {
+      "en": "Install updates automatically",
+      "he": "התקנת עדכונים אוטומטית"
+    },
+    "cp_update_auto_install_hint": {
+      "en": "Downloads a verified update and installs it when no apps are open, without asking. Turn this off to approve each update yourself.",
+      "he": "מוריד עדכון מאומת ומתקין אותו כשאין אפליקציה פתוחה, בלי לשאול. כבה כדי לאשר כל עדכון בעצמך."
+    },
+    "cp_update_waiting_for_apps": {
+      "en": "Version ⁨{0}⁩ is ready and will be installed when all apps are closed.",
+      "he": "גרסה ⁨{0}⁩ מוכנה, ותותקן כשכל האפליקציות ייסגרו."
+    },
+    "cp_update_installing_silent": {
+      "en": "Installing version ⁨{0}⁩…",
+      "he": "מתקין את גרסה ⁨{0}⁩…"
     },
     "cp_update_check": {
       "en": "Check for updates",

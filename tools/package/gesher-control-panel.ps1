@@ -663,6 +663,7 @@ $btnProxyAll = $window.FindName('BtnProxyAll')
 $updateVersionText = $window.FindName('UpdateVersionText')
 $updateStatusText = $window.FindName('UpdateStatusText')
 $automaticUpdateChecks = $window.FindName('AutomaticUpdateChecks')
+$automaticUpdateInstall = $window.FindName('AutomaticUpdateInstall')
 $cameraImagePickerFallback = $window.FindName('CameraImagePickerFallback')
 $btnCheckUpdate = $window.FindName('BtnCheckUpdate')
 $btnInstallUpdate = $window.FindName('BtnInstallUpdate')
@@ -1368,6 +1369,8 @@ function New-PanelUpdateState($currentVersion, $preferences) {
         Preferences = $preferences; ChangingPreference = $false
         Release = $null; Download = $null; Worker = $null; Installer = $null
         PromptPending = $false; StatusKey = 'cp_update_ready'; StatusValues = @(); Detail = ''
+        # גשר המיתרים: עדכון שהורד ויותקן לבד כשאין אפליקציה פתוחה
+        AutoInstallPending = $false
     }
 }
 
@@ -1397,9 +1400,12 @@ function Update-PanelUpdateView {
     $btnReopenPanel.Visibility = if ($state.Phase -eq 'Completed') { 'Visible' } else { 'Collapsed' }
     $updateProgress.Visibility = if ($working -or $state.Phase -eq 'Installing') { 'Visible' } else { 'Collapsed' }
     $automaticUpdateChecks.IsEnabled = -not $installing
+    $automaticUpdateInstall.IsEnabled = -not $installing
     $state.ChangingPreference = $true
-    try { $automaticUpdateChecks.IsChecked = [bool]$state.Preferences.AutomaticChecks }
-    finally { $state.ChangingPreference = $false }
+    try {
+        $automaticUpdateChecks.IsChecked = [bool]$state.Preferences.AutomaticChecks
+        $automaticUpdateInstall.IsChecked = [bool]$state.Preferences.AutomaticInstall
+    } finally { $state.ChangingPreference = $false }
 }
 
 function New-PanelUpdateWorker([string] $operation, $release, [bool] $automatic = $false) {
@@ -1409,7 +1415,7 @@ function New-PanelUpdateWorker([string] $operation, $release, [bool] $automatic 
         # AddArgument passes data, including paths and release metadata, without
         # interpreting it as PowerShell source. The runspace never sees WPF objects.
         $work = {
-            param($helper, $operation, $installDirectory, $destination, $release, $token)
+            param($helper, $operation, $installDirectory, $destination, $release, $token, $silent)
             $ErrorActionPreference = 'Stop'
             . $helper
             if ($operation -eq 'Check') {
@@ -1417,14 +1423,14 @@ function New-PanelUpdateWorker([string] $operation, $release, [bool] $automatic 
             } elseif ($operation -eq 'Download') {
                 Receive-GesherUpdate -Release $release -DestinationDirectory $destination -CancellationToken $token
             } elseif ($operation -eq 'Install') {
-                Start-GesherUpdateInstaller -Download $release -InstallDirectory $installDirectory -CancellationToken $token
+                Start-GesherUpdateInstaller -Download $release -InstallDirectory $installDirectory -CancellationToken $token -Silent:$silent
             } else {
                 throw 'Unknown update operation.'
             }
         }
         $null = $powerShell.AddScript($work.ToString()).AddArgument((Join-Path $here 'gesher-update.ps1')).
             AddArgument($operation).AddArgument($here).AddArgument((Join-Path $script:UpdateDirectory 'downloads')).
-            AddArgument($release).AddArgument($cancellation.Token)
+            AddArgument($release).AddArgument($cancellation.Token).AddArgument(($operation -eq 'Install' -and $automatic))
         $handle = $powerShell.BeginInvoke()
         return [PSCustomObject]@{
             PowerShell = $powerShell; Handle = $handle; Cancellation = $cancellation
@@ -1465,6 +1471,7 @@ function Start-PanelUpdateCheck([switch] $Automatic) {
     try {
         $preferences = [PSCustomObject]@{
             AutomaticChecks = [bool]$state.Preferences.AutomaticChecks
+            AutomaticInstall = [bool]$state.Preferences.AutomaticInstall
             LastCheckUtc = $now.ToString('o')
         }
         # Record attempts before network work, including failed attempts. Manual
@@ -1534,7 +1541,8 @@ function Complete-PanelUpdateWorker([switch] $Wait) {
             # approved and started. Never kill setup or delete its running image.
             $state.Installer = $result[0]
             $state.Phase = 'Installing'
-            Set-PanelUpdateStatus 'cp_update_installing'
+            if ($worker.Automatic) { Set-PanelUpdateStatus 'cp_update_installing_silent' @($state.Release.Version) }
+            else { Set-PanelUpdateStatus 'cp_update_installing' }
         } else {
             if ($state.Closed -or $cancelled) {
                 Remove-PanelUpdateDownload $state.Download
@@ -1585,11 +1593,17 @@ function Complete-PanelUpdateWorker([switch] $Wait) {
             $state.Phase = 'Available'; Set-PanelUpdateStatus 'cp_update_download_failed'
         } else {
             $state.Download = $download
-            $state.Phase = 'Ready'; $state.PromptPending = $true
+            $state.Phase = 'Ready'
+            # גשר המיתרים: בהתקנה אוטומטית אין חלון אישור. הטיק מתקין כשאין אפליקציה פתוחה
+            if ($state.Preferences.AutomaticInstall) { $state.AutoInstallPending = $true } else { $state.PromptPending = $true }
             Set-PanelUpdateStatus 'cp_update_download_ready' @($state.Release.Version)
         }
     }
     Update-PanelUpdateView
+    # גשר המיתרים: בהתקנה אוטומטית ההורדה מתחילה לבד כשנמצא עדכון
+    if ($worker.Operation -eq 'Check' -and $state.Phase -eq 'Available' -and $state.Preferences.AutomaticInstall -and -not $state.Closed) {
+        Start-PanelUpdateDownload
+    }
 }
 
 function Set-PanelInstallationBusy([bool] $busy) {
@@ -1847,25 +1861,28 @@ function Confirm-PanelUpdateInstallation {
         -IsWarning
 }
 
-function Start-PanelUpdateInstallation {
+function Start-PanelUpdateInstallation([switch] $Automatic) {
     $state = $script:UpdateState
     if ($state.Closed -or $script:IsBusy -or $state.Worker -or $state.Installer -or
         $state.Phase -ne 'Ready' -or -not $state.Download) { return }
     $state.PromptPending = $false
+    $state.AutoInstallPending = $false
     $state.Phase = 'Confirming'
     Update-PanelUpdateView
     try {
-        if (-not (Confirm-PanelUpdateInstallation) -or $state.Closed) {
+        # גשר המיתרים: התקנה אוטומטית לא שואלת. היא מתחילה רק כשאין אפליקציה פתוחה (הטיק)
+        if ((-not $Automatic -and -not (Confirm-PanelUpdateInstallation)) -or $state.Closed) {
             $state.Phase = 'Ready'
             Update-PanelUpdateView
             return
         }
         $state.Phase = 'Installing'
         Set-PanelInstallationBusy $true
-        Set-PanelUpdateStatus 'cp_update_installing'
+        if ($Automatic) { Set-PanelUpdateStatus 'cp_update_installing_silent' @($state.Release.Version) }
+        else { Set-PanelUpdateStatus 'cp_update_installing' }
         # Revalidating a large downloaded installer can take time on slow disks.
         # Validation and process creation run off the dispatcher as well.
-        $state.Worker = New-PanelUpdateWorker -operation Install -release $state.Download
+        $state.Worker = New-PanelUpdateWorker -operation Install -release $state.Download -automatic ([bool]$Automatic)
     } catch {
         $state.Phase = 'Ready'
         Set-PanelInstallationBusy $false
@@ -1916,6 +1933,35 @@ function Invoke-PanelUpdateTick {
     # before some dashboard actions take IsBusy. Their inactive owner must not
     # start setup; it may resume an application operation after the dialog closes.
     if ($state.PromptPending -and -not $script:IsBusy -and $window.IsActive) { Start-PanelUpdateInstallation }
+    # גשר המיתרים: עדכון שהורד מותקן לבד, אבל רק כשהמכשיר לא פועל, כלומר אין אפליקציה
+    # פתוחה. ההתקנה לא סוגרת אפליקציות של המשתמש.
+    if ($state.AutoInstallPending -and $state.Phase -eq 'Ready' -and -not $script:IsBusy -and
+        -not $state.Worker -and -not $state.Installer) {
+        if ($script:ViewState -and $script:ViewState.Device) {
+            if ($state.StatusKey -ne 'cp_update_waiting_for_apps') {
+                Set-PanelUpdateStatus 'cp_update_waiting_for_apps' @($state.Release.Version)
+                Update-PanelUpdateView
+            }
+        } else { Start-PanelUpdateInstallation -Automatic }
+    }
+}
+
+# גשר המיתרים: ההגדרה "להתקין עדכונים לבד"
+function Set-PanelAutomaticUpdateInstall([bool] $enabled) {
+    $state = $script:UpdateState
+    if ($state.Closed -or $state.ChangingPreference) { return }
+    try {
+        $preferences = [PSCustomObject]@{
+            AutomaticChecks = [bool]$state.Preferences.AutomaticChecks; AutomaticInstall = $enabled
+            LastCheckUtc = $state.Preferences.LastCheckUtc
+        }
+        Save-GesherUpdatePreferences -StateDirectory $script:UpdateDirectory -Preferences $preferences
+        $state.Preferences = $preferences
+        if ($enabled -and $state.Phase -eq 'Available' -and -not $state.Worker) { Start-PanelUpdateDownload }
+        elseif ($enabled -and $state.Phase -eq 'Ready') { $state.PromptPending = $false; $state.AutoInstallPending = $true }
+        elseif (-not $enabled) { $state.AutoInstallPending = $false }
+    } catch { Set-PanelUpdateStatus 'cp_update_preferences_failed' @() $_.Exception.Message }
+    Update-PanelUpdateView
 }
 
 function Set-PanelAutomaticUpdateChecks([bool] $enabled) {
@@ -1923,7 +1969,8 @@ function Set-PanelAutomaticUpdateChecks([bool] $enabled) {
     if ($state.Closed -or $state.ChangingPreference) { return }
     try {
         $preferences = [PSCustomObject]@{
-            AutomaticChecks = $enabled; LastCheckUtc = $state.Preferences.LastCheckUtc
+            AutomaticChecks = $enabled; AutomaticInstall = [bool]$state.Preferences.AutomaticInstall
+            LastCheckUtc = $state.Preferences.LastCheckUtc
         }
         Save-GesherUpdatePreferences -StateDirectory $script:UpdateDirectory -Preferences $preferences
         $state.Preferences = $preferences
@@ -1959,6 +2006,8 @@ $btnInstallUpdate.Add_Click({
 $btnCancelUpdate.Add_Click({ Request-PanelUpdateCancellation })
 $automaticUpdateChecks.Add_Checked({ Set-PanelAutomaticUpdateChecks $true })
 $automaticUpdateChecks.Add_Unchecked({ Set-PanelAutomaticUpdateChecks $false })
+$automaticUpdateInstall.Add_Checked({ Set-PanelAutomaticUpdateInstall $true })
+$automaticUpdateInstall.Add_Unchecked({ Set-PanelAutomaticUpdateInstall $false })
 
 function Update-CameraView {
     if ($null -eq $cameraImagePickerFallback) { return }

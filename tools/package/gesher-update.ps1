@@ -338,8 +338,10 @@ function Start-GesherUpdateProcess([string] $Path, [string] $Arguments, [string]
     return [Diagnostics.Process]::Start($info)
 }
 
+# גשר המיתרים: -Silent מריץ את המתקין בלי חלונות (/VERYSILENT /SUPPRESSMSGBOXES), להתקנה
+# אוטומטית כשאין אפליקציה פתוחה. בלעדיו הפרמטרים זהים לקודם.
 function Start-GesherUpdateInstaller([object] $Download, [string] $InstallDirectory,
-    [Threading.CancellationToken] $CancellationToken = [Threading.CancellationToken]::None) {
+    [Threading.CancellationToken] $CancellationToken = [Threading.CancellationToken]::None, [switch] $Silent) {
     $CancellationToken.ThrowIfCancellationRequested()
     $releaseInfo = Assert-GesherUpdateRelease $Download.Release
     $installPath = [IO.Path]::GetFullPath($InstallDirectory)
@@ -362,12 +364,15 @@ function Start-GesherUpdateInstaller([object] $Download, [string] $InstallDirect
         # replace or modify the verified bytes between validation and launch.
         Assert-GesherUpdateInstaller -Path $path -Release $releaseInfo -Stream $installerStream -CancellationToken $CancellationToken
         $CancellationToken.ThrowIfCancellationRequested()
-        return Start-GesherUpdateProcess -Path $path -Arguments ('/NORESTART' + $mode + ' /DIR=' + $quotedDirectory) -WorkingDirectory $directory
+        $quiet = if ($Silent) { '/VERYSILENT /SUPPRESSMSGBOXES ' } else { '' }
+        return Start-GesherUpdateProcess -Path $path -Arguments ($quiet + '/NORESTART' + $mode + ' /DIR=' + $quotedDirectory) -WorkingDirectory $directory
     } finally { $installerStream.Dispose() }
 }
 
 function Get-GesherUpdatePreferences([string] $StateDirectory) {
-    $defaults = [pscustomobject]@{ AutomaticChecks = $true; LastCheckUtc = $null }
+    # גשר המיתרים: AutomaticInstall (התקנה בלי לשאול כשאין אפליקציה פתוחה) פעילה כברירת מחדל.
+    # קובץ הגדרות ישן בלי השדה נשאר עם ברירת המחדל.
+    $defaults = [pscustomobject]@{ AutomaticChecks = $true; AutomaticInstall = $true; LastCheckUtc = $null }
     try {
         $path = Join-Path $StateDirectory 'update-settings.json'
         $file = Get-Item -LiteralPath $path -Force -ErrorAction Stop
@@ -378,18 +383,20 @@ function Get-GesherUpdatePreferences([string] $StateDirectory) {
             elseif ($saved.LastCheckUtc -is [DateTime]) { $saved.LastCheckUtc.ToUniversalTime().ToString('o') }
             elseif ($saved.LastCheckUtc -is [DateTimeOffset]) { $saved.LastCheckUtc.UtcDateTime.ToString('o') }
             else { $null }
-        return [pscustomobject]@{ AutomaticChecks = $saved.AutomaticChecks; LastCheckUtc = $last }
+        $install = if ($saved.PSObject.Properties['AutomaticInstall'] -and $saved.AutomaticInstall -is [bool]) { $saved.AutomaticInstall } else { $true }
+        return [pscustomobject]@{ AutomaticChecks = $saved.AutomaticChecks; AutomaticInstall = $install; LastCheckUtc = $last }
     } catch { return $defaults }
 }
 
 function Save-GesherUpdatePreferences([string] $StateDirectory, [object] $Preferences) {
-    if ($Preferences.AutomaticChecks -isnot [bool] -or
+    $install = if ($Preferences.PSObject.Properties['AutomaticInstall']) { $Preferences.AutomaticInstall } else { $true }
+    if ($Preferences.AutomaticChecks -isnot [bool] -or $install -isnot [bool] -or
         ($null -ne $Preferences.LastCheckUtc -and $Preferences.LastCheckUtc -isnot [string])) { throw 'Invalid update preferences.' }
     $directory = [IO.Path]::GetFullPath($StateDirectory)
     $null = [IO.Directory]::CreateDirectory($directory)
     $path = Join-Path $directory 'update-settings.json'
     $temporary = Join-Path $directory ('update-settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
-    $json = [pscustomobject]@{ AutomaticChecks = $Preferences.AutomaticChecks; LastCheckUtc = $Preferences.LastCheckUtc } | ConvertTo-Json -Compress
+    $json = [pscustomobject]@{ AutomaticChecks = $Preferences.AutomaticChecks; AutomaticInstall = $install; LastCheckUtc = $Preferences.LastCheckUtc } | ConvertTo-Json -Compress
     try {
         [IO.File]::WriteAllText($temporary, $json, (New-Object Text.UTF8Encoding $false))
         if ([IO.File]::Exists($path)) { [IO.File]::Replace($temporary, $path, [NullString]::Value) }
