@@ -1,8 +1,8 @@
-﻿אבטחה: יישומי Android בגשר אינם מבודדים מ-Windows
-=================================================
+﻿אבטחה: יישומי Android בגשר המיתרים אינם מבודדים מ-Windows
+=========================================================
 
-גשר מריץ כל יישום Android כתוכנה רגילה של Windows, עם ההרשאות של חשבון
-ה-Windows שלך.
+גשר המיתרים מריץ כל יישום Android כתוכנה רגילה של Windows, עם ההרשאות של
+חשבון ה-Windows שלך.
 
 בקשות ההרשאה של Android (מצלמה, מיקום, אנשי קשר וכדומה) קובעות מה יישום
 יכול לעשות דרך הממשקים של Android. הן אינן מבודדות את היישום מ-Windows:
@@ -13,4 +13,4 @@
 מהימנים, ממקורות מהימנים.
 
 בידוד לכל יישום (Windows AppContainer) נמצא בפיתוח ואינו מופעל. פרטים:
-https://github.com/gesher-runtime/gesher/blob/main/docs/sandbox.md
+https://github.com/yosef220/gesher-hameitarim/blob/main/docs/sandbox.md
