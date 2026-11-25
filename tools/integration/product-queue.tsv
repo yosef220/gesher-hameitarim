@@ -16,6 +16,9 @@ pr-473	origin:refs/heads/topic/pr-473	bd4cd8e8848cc74a0db243eb11c1eab30dc4583a	4
 pr-450	origin:refs/heads/topic/pr-450	fb68a625170435cabef7f7b9ecc0afca66ac48ef	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-468	origin:refs/heads/topic/pr-468	91a8ebb33d66ad83979febddb2a632df2109493b	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-256	origin:refs/heads/topic/pr-256	0aa2b1c40fd00c2beb943ce5dcfd19c69e9344a2	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
+# ‏pr-256 ממתין: ההתנגשויות שלו כוללות את הנעיצות בהכשרת המקורות (ofd-stream-source.json ו-OFD_QUALIFICATION_SHA256
+# ב-test-selected-policy.py). אחרי פתרון pipe_io.cc ו-pipe_io_host_test.cc.in צריך להפיק מחדש את שרשרת הנעיצות
+# (OFD, ‏memfd-lease, ‏shared-stdio), כמו ש-upstream עשה ב-303bb835d, ולוודא ש-test-selected-policy.py עובר.
 # מושבת ב-25.11: הגרסה של #500 מלפני המעבר של upstream לרישיון קנייני משנה שישה קבצים נעוצים בהכשרת
 # המקורות (internal.h, ‏socket.cc, ‏system.cc, ‏unistd.cc, ‏fsops.cc, ‏posix.cmake) בלי לעדכן את הנעיצות, והעדכון
 # שלהן ב-PR הגיע רק אחרי השינוי. כדי להחזיר: ענף נושא שמפיק מחדש את הנעיצות. ‏#312 מטופל חלקית ע"י #332.
