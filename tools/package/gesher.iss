@@ -20,12 +20,17 @@
 
 [Setup]
 AppId={{6A1F3C2E-5B7D-4E8A-9C0F-1D2E3F4A5B6C}
-AppName=Gesher
+; גשר המיתרים: השם שמוצג באשף ובהוספה/הסרה של תוכניות, לפי שפת ההתקנה (tools/i18n/messages.json).
+; ה-AppId, תיקיית ההתקנה ותיקיית הפרופיל נשארים של Gesher, כדי שההתקנה תחליף את Gesher במקומו.
+AppName={cm:setup_app_name}
 AppVersion={#AppVersion}
 VersionInfoVersion={#AppVersion}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoProductTextVersion={#AppVersion}
-AppPublisher=Gesher
+AppPublisher=Gesher HaMeitarim
+; AppName מכיל קבוע, ולכן פרטי הגרסה של קובץ ההתקנה נקבעים כאן במפורש.
+VersionInfoProductName=Gesher HaMeitarim
+VersionInfoDescription=Gesher HaMeitarim Setup
 DefaultDirName={localappdata}\Programs\Gesher
 DisableDirPage=no
 DefaultGroupName=Gesher
@@ -43,7 +48,7 @@ OutputBaseFilename=gesher-setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayName=Gesher {#AppVersion}
+UninstallDisplayName={cm:setup_app_name} {#AppVersion}
 ; Gesher's icon (tools/icons/make-icons.py): Setup, Add/Remove Programs, the
 ; Start menu entries and the .apk file type.
 SetupIconFile=gesher.ico
@@ -197,6 +202,11 @@ Name: "{autoprograms}\{cm:setup_readme}"; Filename: "{app}\README.txt"; Check: n
 [InstallDelete]
 Type: files; Name: "{autoprograms}\Gesher Hello.lnk"; Check: not IsPortableInstall
 Type: files; Name: "{autoprograms}\גשר — דוגמה.lnk"; Check: not IsPortableInstall
+; גשר המיתרים: הקיצורים של Gesher בשמות הקודמים. התקנה מעל Gesher לא משאירה קיצור כפול.
+Type: files; Name: "{autoprograms}\Gesher Control Center.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\לוח הבקרה של גשר.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\Gesher README.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\גשר — מידע והוראות.lnk"; Check: not IsPortableInstall
 
 [Registry]
 ; The `.apk` association, per user (HKCU\Software\Classes). Gesher.Apk opens
