@@ -31,12 +31,12 @@ finally { $sha.Dispose() }
 function New-ReleaseMetadata([string] $Version = '0.2.0') {
     [PSCustomObject]@{
         tag_name = "v$Version"
-        html_url = "https://github.com/gesher-runtime/gesher/releases/tag/v$Version"
+        html_url = "https://github.com/yosef220/APK/releases/tag/v$Version"
         draft = $false
         prerelease = $false
         assets = @([PSCustomObject]@{
             name = "gesher-setup-$Version.exe"
-            browser_download_url = "https://github.com/gesher-runtime/gesher/releases/download/v$Version/gesher-setup-$Version.exe"
+            browser_download_url = "https://github.com/yosef220/APK/releases/download/v$Version/gesher-setup-$Version.exe"
             size = $script:Payload.Length
             state = 'uploaded'
             digest = "sha256:$script:PayloadHash"
@@ -159,16 +159,16 @@ public static class GesherInstallerVersionFixture {}
             Assert-InvalidRelease $bad "Invalid release flag accepted: $flag=$value"
         }
     }
-    foreach ($url in 'http://github.com/gesher-runtime/gesher/releases/tag/v0.2.0',
+    foreach ($url in 'http://github.com/yosef220/APK/releases/tag/v0.2.0',
         'https://github.com/another/repo/releases/tag/v0.2.0',
-        'https://github.com/gesher-runtime/gesher/releases/tag/v0.2.0?other=1') {
+        'https://github.com/yosef220/APK/releases/tag/v0.2.0?other=1') {
         $bad = New-ReleaseMetadata; $bad.html_url = $url
         Assert-InvalidRelease $bad 'Unexpected release page URL accepted'
     }
-    foreach ($url in 'http://github.com/gesher-runtime/gesher/releases/download/v0.2.0/gesher-setup-0.2.0.exe',
+    foreach ($url in 'http://github.com/yosef220/APK/releases/download/v0.2.0/gesher-setup-0.2.0.exe',
         'https://github.com/another/repo/releases/download/v0.2.0/gesher-setup-0.2.0.exe',
-        'https://github.com/gesher-runtime/gesher/releases/download/v0.3.0/gesher-setup-0.2.0.exe',
-        'https://github.com/gesher-runtime/gesher/releases/download/v0.2.0/gesher-setup-0.2.0.exe?other=1') {
+        'https://github.com/yosef220/APK/releases/download/v0.3.0/gesher-setup-0.2.0.exe',
+        'https://github.com/yosef220/APK/releases/download/v0.2.0/gesher-setup-0.2.0.exe?other=1') {
         $bad = New-ReleaseMetadata; $bad.assets[0].browser_download_url = $url
         Assert-InvalidRelease $bad 'Unexpected asset download URL accepted'
     }
