@@ -23,6 +23,22 @@ CANONICAL_ID = '1426153186'
 # הזהות שלו, מתקבל גם כשהמקור של הרשת שלו השתנה. כל שאר הבדיקות לא השתנו.
 PRODUCT_REPOSITORY = 'yosef220/gesher-hameitarim'
 PRODUCT_REPOSITORY_ID = '1471523850'
+
+
+# גשר המיתרים: גרסה נבנית בהפעלה ידנית של ה-CI על תג vX.Y.Z (docs/he/07-upstream-sync.md). רק בריפו
+# של גשר המיתרים, ורק לתג כזה. בכל מקרה אחר נדרש ענף, כמו קודם.
+RELEASE_TAG = re.compile(r'refs/tags/v(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})')
+
+
+def release_tag(repo, repo_id, ref):
+    return repo == PRODUCT_REPOSITORY and repo_id == PRODUCT_REPOSITORY_ID and RELEASE_TAG.fullmatch(ref) is not None
+
+
+def ref_name(ref):
+    for prefix in ('refs/heads/', 'refs/tags/'):
+        if ref.startswith(prefix):
+            return ref[len(prefix):]
+    return None
 SCOPE = 'fork-diagnostic'
 WORKFLOWS = {'ci': '.github/workflows/ci.yml', 'native2': '.github/workflows/native2.yml'}
 ENV_FIELDS = {
@@ -55,7 +71,8 @@ def envelope(env, checkout, *, producer=False):
             checkout == value['source'] == value['workflow_sha'],
             'Fork checkout/workflow source mismatch')
     require(value['event'] == 'workflow_dispatch', 'Fork DNS diagnostics require manual dispatch')
-    require(value['ref'].startswith('refs/heads/') and len(value['ref']) > len('refs/heads/'),
+    require((value['ref'].startswith('refs/heads/') and len(value['ref']) > len('refs/heads/')) or
+            release_tag(repo, repo_id, value['ref']),
             'Fork DNS diagnostics require a branch ref')
     path = WORKFLOWS.get(value['workflow'])
     require(path is not None and value['workflow_ref'] == repo + '/' + path + '@' + value['ref'],
@@ -82,7 +99,7 @@ def validate(env, event, repository, run, checkout, *, producer=False):
                       value['repository_id'], value['repository'], value['workflow']),
             'Fork API run/source/attempt/repository mismatch')
     require(run.get('event') == value['event'] and
-            run.get('head_branch') == value['ref'][len('refs/heads/'):] and
+            run.get('head_branch') == ref_name(value['ref']) and
             run.get('path') == WORKFLOWS[value['workflow']] and
             run.get('head_repository', {}).get('full_name') == value['repository'],
             'Fork API event/branch/workflow/head repository mismatch')

@@ -229,6 +229,25 @@ class ContextTest(unittest.TestCase):
             with self.subTest(full_name=full_name, number=number), self.assertRaises(RuntimeError):
                 attempt(full_name, number)
 
+    def test_release_tag_dispatch_only_in_the_product_repository(self):
+        # גשר המיתרים: גרסה נבנית בהפעלה ידנית על תג vX.Y.Z, ורק בריפו של גשר המיתרים.
+        def attempt(full_name, number, ref):
+            env, event, repo, run = fixture()
+            for record in (event['repository'], repo, run['repository'], run['head_repository']):
+                record.update(id=number, full_name=full_name)
+            repo['source'] = dict(id=1435000001, full_name='ztcebuck/gesher')
+            run['head_branch'] = ref.split('/', 2)[2]
+            env.update(GITHUB_REPOSITORY=full_name, GITHUB_REPOSITORY_ID=str(number), GITHUB_REF=ref,
+                       GITHUB_WORKFLOW_REF=full_name + '/.github/workflows/ci.yml@' + ref,
+                       GESHER_COHERENT_TCP_POLICY_REF=full_name + '/.github/workflows/ci.yml@' + env['GITHUB_SHA'])
+            return identity.validate(env, event, repo, run, env['GITHUB_SHA'], 'compile')
+        product, number = identity.PRODUCT_REPOSITORY, int(identity.PRODUCT_REPOSITORY_ID)
+        self.assertEqual(attempt(product, number, 'refs/tags/v1.0.0')['ref'], 'refs/tags/v1.0.0')
+        for full_name, num, ref in ((product, number, 'refs/tags/v1.0'), (product, number, 'refs/tags/latest'),
+                                    ('another-owner/another-name', 17, 'refs/tags/v1.0.0')):
+            with self.subTest(full_name=full_name, ref=ref), self.assertRaises(RuntimeError):
+                attempt(full_name, num, ref)
+
     def test_dynamic_fork_owner_and_live_api_bridge_without_identity_rewrite(self):
         env, event, repo, run = fixture()
         for record in (event['repository'], repo, run['repository'], run['head_repository']):

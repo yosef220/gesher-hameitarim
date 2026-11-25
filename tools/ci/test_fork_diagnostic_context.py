@@ -75,6 +75,22 @@ class ForkDiagnosticContextTest(unittest.TestCase):
             with self.subTest(full_name=full_name, identity=identity), self.assertRaises(RuntimeError):
                 attempt(full_name, identity)
 
+    def test_release_tag_dispatch_only_in_the_product_repository(self):
+        # גשר המיתרים: גרסה נבנית בהפעלה ידנית על תג vX.Y.Z, ורק בריפו של גשר המיתרים.
+        def attempt(full_name, identity, ref):
+            repository = dict(copy.deepcopy(self.repo), id=identity, full_name=full_name,
+                              source={'id': 1435000001, 'full_name': 'ztcebuck/gesher'})
+            env = dict(self.env, GITHUB_REPOSITORY=full_name, GITHUB_REPOSITORY_ID=str(identity), GITHUB_REF=ref,
+                       GITHUB_WORKFLOW_REF=full_name + '/.github/workflows/ci.yml@' + ref)
+            run = dict(self.run, repository=repository, head_repository=repository, head_branch=ref.split('/', 2)[2])
+            return self.validate(env=env, event={'repository': copy.deepcopy(repository)}, repository=repository, run=run)
+        product, number = diagnostic.PRODUCT_REPOSITORY, int(diagnostic.PRODUCT_REPOSITORY_ID)
+        self.assertEqual(attempt(product, number, 'refs/tags/v1.0.0')['ref'], 'refs/tags/v1.0.0')
+        for full_name, identity, ref in ((product, number, 'refs/tags/v1.0'), (product, number, 'refs/tags/latest'),
+                                         (product, number, 'refs/tags/v01.0.0'), ('another-owner/another-name', 17, 'refs/tags/v1.0.0')):
+            with self.subTest(full_name=full_name, ref=ref), self.assertRaises(RuntimeError):
+                attempt(full_name, identity, ref)
+
     def test_direct_native2_dispatch_uses_its_actual_workflow(self):
         env = dict(self.env, GITHUB_WORKFLOW='native2', GITHUB_WORKFLOW_REF=self.repo['full_name'] +
                    '/.github/workflows/native2.yml@' + self.env['GITHUB_REF'])
