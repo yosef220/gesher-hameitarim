@@ -917,8 +917,10 @@ $out = RunTimed "$Dir/dalvikvm.exe" ($launcher + 'uninstall', 'com.gesher.peer')
 $code = $LASTEXITCODE
 $out += RunTimed "$Dir/dalvikvm.exe" ($launcher + 'list') 300
 $code = [Math]::Max($code, $LASTEXITCODE)
+# גשר המיתרים: אחרי #464 נשארות 2 חבילות, כמו בשורה של אחרי ההתקנה: בלי microG אין
+# שירותי Play ו-Play Store מתוארים (#335)
 $ok = CheckOrdered 'services: gesher-app uninstall: the package''s code, data and entry removed' $out @(
-  'gesher-app: uninstalled com.gesher.peer', 'gesher-app: 4 installed packages',
+  'gesher-app: uninstalled com.gesher.peer', 'gesher-app: 2 installed packages',
   'package:com.gesher.lifecycle ', 'package:com.gesher.components ') $code
 if ($ok -and ($out.Contains('package:com.gesher.peer') -or (Test-Path (Join-Path $root 'data/app/com.gesher.peer-1')) -or
     (Get-Content (Join-Path $root 'data/system/packages.list') -Raw) -match 'com\.gesher\.peer')) {
