@@ -1,0 +1,59 @@
+# כלי האינטגרציה
+
+הכלים האלה מפיקים את `docs/he/04-pr-register.md`. הם מושכים את כל ה-PRs של upstream, מסמלצים מיזוג של כל אחד מול main ומחלקים לגלים. **הם לא משנים קוד:** הסימולציה רצה עם `git merge-tree`, בלי לגעת בעץ העבודה.
+
+## הרצה מלאה
+
+את הפקודות מריצים משורש הריפו. `DATA` היא תיקייה זמנית לנתונים.
+
+```bash
+DATA=/tmp/gesher-integration && mkdir -p "$DATA"
+```
+
+```bash
+git fetch origin '+refs/heads/main:refs/remotes/origin/main' '+refs/pull/*/head:refs/pr/*' '+refs/pull/*/merge:refs/prmerge/*'
+```
+
+```bash
+git remote add lev https://github.com/Lev-Good/gesher 2>/dev/null; git fetch lev '+refs/heads/*:refs/remotes/lev/*' '+refs/tags/*:refs/tags/lev/*' --no-tags
+```
+
+```bash
+python3 -I tools/integration/classify_prs.py "$PWD" "$DATA/prs.json"
+```
+
+```bash
+python3 -I tools/integration/simulate_merges.py "$PWD" "$DATA/prs.json" "$DATA/merge_sim.json"
+```
+
+```bash
+python3 -I tools/integration/sequential_sim.py "$PWD" "$DATA/merge_sim.json"
+```
+
+```bash
+git log --format='%s' v0.2.0..origin/main | grep -oE '\(#[0-9]+\)$|Merge pull request #[0-9]+' | grep -oE '[0-9]+' | sort -n -u > "$DATA/merged_after_020.txt"
+```
+
+```bash
+cp tools/integration/pr_web_snapshot_2026-11-25.tsv "$DATA/pr_web.tsv"
+```
+
+```bash
+python3 -I tools/integration/build_pr_register.py "$DATA" docs/he/04-pr-register.md
+```
+
+## הקבצים
+
+| קובץ | תפקיד |
+|---|---|
+| `classify_prs.py` | מסווג כל PR (ממוזג, פתוח או סגור) לפי git, ומאתר את מספרי ה-issues מהפערים ברצף המספרים |
+| `simulate_merges.py` | ממזג (בסימולציה) כל PR שלא מוזג מול main, ומדווח: נקי, מתנגש (באילו קבצים) או "כבר ב-main" |
+| `sequential_sim.py` | ממזג ברצף את כל ה-PRs הנקיים ומגלה מי מתנגש זה בזה. כותב `waves_seq.json` |
+| `combine.py` | מצליב את רשימות האתר עם git ומדווח על אי-התאמות |
+| `build_pr_register.py` | בונה את מרשם ה-PRs בעברית, כולל קטגוריות וגלים |
+| `pr_web_snapshot_2026-11-25.tsv` | צילום של רשימות ה-PRs הפתוחים והסגורים מהאתר: מצב, מחבר, תוויות וכותרת. את המצב (פתוח או סגור) אי אפשר לקבל מ-git בלבד |
+
+## מגבלות
+
+- מצב ה-PR (פתוח או סגור) נלקח מהצילום ולא מה-API: הסשן שיצר את הכלים לא קיבל גישת API לריפו של upstream. כדי לרענן, צריך לצלם את הרשימות מחדש.
+- סימולציה נקייה מראה רק שאין התנגשות טקסטואלית. התאמה סמנטית נבדקת רק ב-CI ובבדיקות.
