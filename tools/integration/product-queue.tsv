@@ -11,7 +11,7 @@ pr-484	upstream:refs/pull/484/head	4b0eae2fa38cbf7aa1ad2d55b741ede900b953cf	484	
 # מוזגו ב-upstream אחרי המעבר לרישיון קנייני (25.11). נכנסים מהגרסה של התורם מלפני השינוי
 # (refs/apache-snapshot/pr/*), שנשמרה כענף נושא topic/pr-<מספר>.
 pr-416	origin:refs/heads/topic/pr-416	10e75d8bdbe46fdea1c3e3ec591d61a9c8384367	416	2	DownloadManager: ‏content://downloads והורדות שהשרת של המערכת מריץ (מוזג ב-upstream אחרי השינוי ברישיון)
-pr-451	origin:refs/heads/topic/pr-451	8cbb3e616a76eec725b52b4f8e892f25fb03426d	451	2	הקראת טקסט (Text-to-speech) בקולות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-451	origin:refs/heads/topic/pr-451	e45457274e8ef5f350fab5b645c345013bbb0fae	451	2	הקראת טקסט (Text-to-speech) בקולות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-473	origin:refs/heads/topic/pr-473	33e93f2b8e1dbed800eef0ccf568e1f6a88f400a	473	3	Passkeys דרך ה-WebAuthn של Windows (Credential Manager) (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-450	origin:refs/heads/topic/pr-450	7f0f8a10fa28156b753dd78dea296d9ed40c2ef7	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-468	origin:refs/heads/topic/pr-468	d1861c8322a690fc4aaae06bd0fc38bf613128d5	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
