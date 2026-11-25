@@ -4,7 +4,7 @@ Describe the problem and the behavior before and after this change.
 
 ## Android contract and project scope
 
-Read [CONTRIBUTING.md](https://github.com/gesher-runtime/gesher/blob/main/CONTRIBUTING.md),
+Read [CONTRIBUTING.md](https://github.com/yosef220/APK/blob/main/CONTRIBUTING.md),
 especially "Project scope: the same experience, implemented for Windows".
 
 - Which Android API or system contract does this implement or repair? Link the

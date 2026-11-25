@@ -8,8 +8,8 @@ import urllib.request
 from github_read import get_json
 
 
-REPOSITORY = 'gesher-runtime/gesher'
-REPOSITORY_ID = 1426153186
+REPOSITORY = 'yosef220/APK'
+REPOSITORY_ID = 1471037894
 API = f'repos/{REPOSITORY}'
 DIGEST = re.compile(r'sha256:[0-9a-fA-F]{64}')
 MAX_INSTALLER_SIZE = 2147483648

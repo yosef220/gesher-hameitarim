@@ -39,7 +39,7 @@ jobs:
       # The tag filter's * also matches e.g. v1.2.3-rc1. Stop such a run here,
       # before every build job (they all depend on this one), not hours later.
       - name: Validate pushed version tag
-        if: ${{ github.repository == 'gesher-runtime/gesher' && github.event_name == 'push' && github.ref_type == 'tag' }}
+        if: ${{ github.repository == 'yosef220/APK' && github.event_name == 'push' && github.ref_type == 'tag' }}
         env:
           TAG: ${{ github.ref_name }}
         run: |

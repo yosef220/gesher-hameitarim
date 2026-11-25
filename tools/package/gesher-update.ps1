@@ -63,8 +63,8 @@ function Assert-GesherUpdateRelease([object] $Release) {
     $tagVersion = ConvertTo-GesherStableVersion $Release.Tag -AllowTagPrefix
     if (-not $version -or $version -cne $tagVersion) { throw 'Invalid Gesher release version.' }
     $assetName = "gesher-setup-$version.exe"
-    $releaseUrl = "https://github.com/gesher-runtime/gesher/releases/tag/$($Release.Tag)"
-    $downloadUrl = "https://github.com/gesher-runtime/gesher/releases/download/$($Release.Tag)/$assetName"
+    $releaseUrl = "https://github.com/yosef220/APK/releases/tag/$($Release.Tag)"
+    $downloadUrl = "https://github.com/yosef220/APK/releases/download/$($Release.Tag)/$assetName"
     if ($Release.AssetName -isnot [string] -or $Release.Url -isnot [string] -or $Release.DownloadUrl -isnot [string] -or
         $Release.AssetName -cne $assetName -or $Release.Url -cne $releaseUrl -or $Release.DownloadUrl -cne $downloadUrl) {
         throw 'The release does not contain the expected official Gesher installer.'
@@ -133,7 +133,7 @@ using System.Threading;
 
 namespace Gesher.Updates {
     public static class Transport {
-        const string Latest = "https://api.github.com/repos/gesher-runtime/gesher/releases/latest";
+        const string Latest = "https://api.github.com/repos/yosef220/APK/releases/latest";
         const int JsonLimit = 1024 * 1024;
 
         static HttpClient CreateClient() {
@@ -159,7 +159,7 @@ namespace Gesher.Updates {
             }
             string host = uri.DnsSafeHost;
             if (host == "github.com") {
-                if (!uri.AbsolutePath.StartsWith("/gesher-runtime/gesher/releases/download/", StringComparison.Ordinal) || uri.Query.Length != 0)
+                if (!uri.AbsolutePath.StartsWith("/yosef220/APK/releases/download/", StringComparison.Ordinal) || uri.Query.Length != 0)
                     throw new InvalidDataException("The installer URL is not in the official repository.");
             } else if (host != "release-assets.githubusercontent.com" &&
                        host != "objects.githubusercontent.com" &&
