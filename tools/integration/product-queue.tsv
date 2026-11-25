@@ -19,6 +19,9 @@ pr-473	origin:refs/heads/topic/pr-473	2f9ded92a867d353cc0bf4833962f6bff72384bc	4
 pr-450	origin:refs/heads/topic/pr-450	8dc1f850a240dae29f89417fa6eb829aa1570d85	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-468	origin:refs/heads/topic/pr-468	e701a99ebedfd30a329f9b26c4a98e9064e4c6cb	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-256	origin:refs/heads/topic/pr-256	0aa2b1c40fd00c2beb943ce5dcfd19c69e9344a2	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
+# ‏pr-475 ממתין: ‏main קיבל את השלב הקודם של סדרת Windows Hello בגרסה אחרת (#366, ‏e074b67b2), וה-PR המשיך
+# מאותה נקודה בכיוון אחר. מול main יש 75 מקטעים בהתנגשות (כ-1,800 שורות), רובם בלוגיקה של AuthService,
+# ‏WindowsHello ו-PackageManagerService. צריך ענף נושא ייעודי שעובר על כל מקטע ומבין את שני הצדדים.
 # ‏pr-256 ממתין: ההתנגשויות שלו כוללות את הנעיצות בהכשרת המקורות (ofd-stream-source.json ו-OFD_QUALIFICATION_SHA256
 # ב-test-selected-policy.py). אחרי פתרון pipe_io.cc ו-pipe_io_host_test.cc.in צריך להפיק מחדש את שרשרת הנעיצות
 # (OFD, ‏memfd-lease, ‏shared-stdio), כמו ש-upstream עשה ב-303bb835d, ולוודא ש-test-selected-policy.py עובר.
