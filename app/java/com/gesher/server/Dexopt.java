@@ -558,7 +558,9 @@ final class Dexopt {
     private static String toolPath(File file) {
         String raw = file.getPath();
         try {
-            String dataDir = Device.dataDir();
+            // String.valueOf: Device.dataDir() הוא String בייצור ו-File במתאם של
+            // tests/dexopt-host, כמו ש-upstream משתמש בו רק דרך new File(Device.dataDir(), ...)
+            String dataDir = String.valueOf(Device.dataDir());
             String dataCanon = new File(dataDir).getCanonicalPath();
             String fileCanon = file.getCanonicalPath();
             if (fileCanon.equals(dataCanon)) return dataDir;
