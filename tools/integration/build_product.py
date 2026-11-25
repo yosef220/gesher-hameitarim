@@ -86,17 +86,19 @@ def repo_root():
 # ---------- התור ----------
 
 def load_queue(root):
+    """מחזיר (שורות, פריטים). שורה שמתחילה ב-# היא הערה, ונשמרת במקומה בכל כתיבה.
+    כך אפשר להשבית פריט זמנית עם הסבר, בלי לאבד אותו."""
     path = root / QUEUE
-    header, items = [], []
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    items = []
+    for n, line in enumerate(lines, 1):
         if not line.strip() or line.startswith("#"):
-            if not items:
-                header.append(line)
             continue
         cells = line.split("\t")
         if len(cells) != len(COLUMNS):
             raise Failure(f"{QUEUE}:{n}: צריך {len(COLUMNS)} עמודות מופרדות בטאב, נמצאו {len(cells)}")
         item = dict(zip(COLUMNS, cells))
+        item["line"] = n - 1
         if not re.fullmatch(r"[0-9a-f]{40}", item["sha"]):
             raise Failure(f"{QUEUE}:{n}: ה-SHA של {item['id']} חייב להיות 40 תווים הקסדצימליים")
         if ":" not in item["source"]:
@@ -111,11 +113,12 @@ def load_queue(root):
     ids = [i["id"] for i in items]
     if len(ids) != len(set(ids)):
         raise Failure(f"{QUEUE}: יש מזהה שמופיע יותר מפעם אחת")
-    return header, items
+    return lines, items
 
 
-def save_queue(root, header, items):
-    lines = header + ["\t".join(i[c] for c in COLUMNS) for i in items]
+def save_queue(root, lines, items):
+    for item in items:
+        lines[item["line"]] = "\t".join(item[c] for c in COLUMNS)
     (root / QUEUE).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -374,7 +377,7 @@ def do_topic(items, item_id, upstream, onto_candidate):
         print(f"אחרי הפתרון: git add, ‏git commit, ואז --pin {item_id}")
 
 
-def do_pin(root, header, items, item_id):
+def do_pin(root, lines, items, item_id):
     item = find(items, item_id)
     branch = f"topic/{item_id}"
     sha = out("rev-parse", branch)
@@ -385,7 +388,7 @@ def do_pin(root, header, items, item_id):
         raise Failure(f"{branch} לא מכיל את הקומיט הנעוץ הקודם של {item_id}")
     item["source"] = f"origin:refs/heads/{branch}"
     item["sha"] = sha
-    save_queue(root, header, items)
+    save_queue(root, lines, items)
     print(f"{item_id} נעוץ עכשיו ל-{branch} @ {sha[:12]}.")
     print(f"לא לשכוח: git push origin {branch}, וקומיט של {QUEUE} בענף הראשי.")
 
@@ -434,7 +437,7 @@ def main():
     trailers = Path(a.trailers).read_text(encoding="utf-8").strip() if a.trailers else ""
     try:
         root = repo_root()
-        header, items = load_queue(root)
+        lines, items = load_queue(root)
         if a.fetch:
             do_fetch(items)
         elif a.check:
@@ -442,7 +445,7 @@ def main():
         elif a.topic:
             do_topic(items, a.topic, a.upstream, a.onto_candidate)
         elif a.pin:
-            do_pin(root, header, items, a.pin)
+            do_pin(root, lines, items, a.pin)
         elif a.promote:
             do_promote(trailers)
         else:
