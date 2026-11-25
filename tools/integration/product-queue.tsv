@@ -1,9 +1,9 @@
 # תור ענף המוצר: PRs שעוד לא אושרו ב-upstream, לפי סדר המיזוג.
 # נבנה עם tools/integration/build_product.py, והשיטה מתועדת ב-docs/he/07-upstream-sync.md.
 # עמודות מופרדות בטאב: מזהה, מקור (remote:ref), ‏SHA נעוץ, ‏PRs ב-upstream, גל, תיאור
-pr-464	origin:refs/heads/topic/pr-464	58218fc5046c505ca48a9b4b2ac0e0c5f3c8a7d8	464	1	לא לדווח על Play services, חשבון Google או טוקן דחיפה שלא קיימים (issue #335)
+pr-464	origin:refs/heads/topic/pr-464	619852db41857acc104e4ab1df670efff1f688c9	464	1	לא לדווח על Play services, חשבון Google או טוקן דחיפה שלא קיימים (issue #335)
 pr-491	upstream:refs/pull/491/head	d38b9ee9e8a6443800ed7ac2d7eb9ec2670aff06	491	1	דיאלוג מידע על האפליקציה במקום בקשת הסרה (issue #472)
-lev-app-compat	origin:refs/heads/topic/lev-app-compat	fbb8d238423dc71612b220b39b01906386a03851	454,455,493	1	הענף fix/app-compat של Lev-Good ‏(v0.2.0-lev3): ‏SOCKS5, נתיבי profman, ספקי תוכן מתנגשים, mkfifo ורישום התקנה
+lev-app-compat	origin:refs/heads/topic/lev-app-compat	2c0f496ceef606e222172a546fca25e4fe0df95d	454,455,493	1	הענף fix/app-compat של Lev-Good ‏(v0.2.0-lev3): ‏SOCKS5, נתיבי profman, ספקי תוכן מתנגשים, mkfifo ורישום התקנה
 pr-403	upstream:refs/pull/403/head	e9f4035c39f7f36b974bc72397c55905666169e7	402,403	1	Wi-Fi: בדיקות WifiManager כמו באנדרואיד (‏#402), ובקשות רשת והצעות רשת דרך אישור המשתמש (‏#403, מכיל את #402)
 pr-427	upstream:refs/pull/427/head	950dc2dbee2454d35e0f7265d50d146f41638264	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל
 pr-475	upstream:refs/pull/475/head	63f8c46640b2a7e901d1088c3597677d6b132968	340,470,471,475	1	סדרת Windows Hello: הרשאות AuthService ‏(‏#340), ‏Windows Hello עסוק (‏#470), המתנה תחומה אחרי ביטול (‏#471) ותיעוד (‏#475, מכיל את כולם)
