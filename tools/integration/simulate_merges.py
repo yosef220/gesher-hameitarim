@@ -7,13 +7,13 @@ repo, prs_json, out = sys.argv[1], sys.argv[2], sys.argv[3]
 def git(*a, check=False):
     r = subprocess.run(["git","-C",repo,*a],capture_output=True,text=True)
     return r.returncode, r.stdout
-_, main_tree = git("rev-parse","origin/main^{tree}"); main_tree = main_tree.strip()
+_, main_tree = git("rev-parse","upstream/main^{tree}"); main_tree = main_tree.strip()
 rows = json.load(open(prs_json))
 targets = [(f"#{r['n']}", f"refs/pr/{r['n']}", r) for r in rows if r["state"] != "merged"]
 targets.append(("lev/fix/app-compat", "refs/remotes/lev/fix/app-compat", None))
 res = []
 for name, ref, r in targets:
-    code, outp = git("merge-tree","--write-tree","--name-only","--no-messages","origin/main",ref)
+    code, outp = git("merge-tree","--write-tree","--name-only","--no-messages","upstream/main",ref)
     lines = outp.strip().splitlines()
     tree = lines[0] if lines else ""
     conflicts = [l for l in lines[1:] if l.strip()]

@@ -13,11 +13,11 @@ sim = json.load(open(sim_json))
 for x in sim:
     if x["verdict"]=="error":
         ref = "refs/remotes/lev/fix/app-compat" if x["name"].startswith("lev") else "refs/pr/"+x["name"][1:]
-        c,o,e = git("merge-tree","--write-tree","--name-only","--no-messages","origin/main",ref)
+        c,o,e = git("merge-tree","--write-tree","--name-only","--no-messages","upstream/main",ref)
         print("שגיאה", x["name"], x["head_subject"][:70], "|", (e or o)[:200])
 clean = [x for x in sim if x["verdict"]=="clean"]
 clean.sort(key=lambda x: int(x["name"][1:]))
-_, acc, _ = git("rev-parse","origin/main")
+_, acc, _ = git("rev-parse","upstream/main")
 ok, fail = [], []
 for x in clean:
     ref = "refs/pr/"+x["name"][1:]
