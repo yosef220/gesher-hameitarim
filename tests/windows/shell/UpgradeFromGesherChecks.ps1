@@ -5,7 +5,10 @@
     [string] $UpstreamRepository = 'gesher-runtime/gesher',
     # עותק של אותו מתקין בריפו שלנו, כ-pre-release שהמעדכן מתעלם ממנו. ‏upstream כבר לא ציבורי.
     [string] $FixtureRepository = 'yosef220/gesher-hameitarim',
-    [string] $FixtureTag = 'fixture-gesher-0.2.0'
+    [string] $FixtureTag = 'fixture-gesher-0.2.0',
+    # מקור אחרון: הגרסה של Lev-Good מעל 0.2.0, שפורסמה תחת Apache. אותו AppId ואותו מבנה התקנה.
+    [string] $LevRepository = 'Lev-Good/gesher',
+    [string] $LevTag = 'v0.2.0-lev3'
 )
 
 # גשר המיתרים: התקנה במקום Gesher. מתקינים את Gesher 0.2.0, הגרסה שפורסמה תחת
@@ -46,7 +49,7 @@ if ((Test-Path $app) -or (Test-Path $profileRoot)) { throw "המכונה לא נ
 $work = Join-Path ([IO.Path]::GetTempPath()) ('gesher-upgrade-' + [guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $work
 $release = $null; $sourceRepository = $null; $sourceTag = $null; $reasons = @()
-foreach ($candidate in @(@($UpstreamRepository, $UpstreamTag), @($FixtureRepository, $FixtureTag))) {
+foreach ($candidate in @(@($UpstreamRepository, $UpstreamTag), @($FixtureRepository, $FixtureTag), @($LevRepository, $LevTag))) {
     for ($attempt = 1; $attempt -le 3 -and -not $release; $attempt++) {
         $json = gh api "repos/$($candidate[0])/releases/tags/$($candidate[1])" 2>&1 | Out-String
         if ($LASTEXITCODE -eq 0) { $release = $json | ConvertFrom-Json; $sourceRepository = $candidate[0]; $sourceTag = $candidate[1] }
@@ -63,7 +66,7 @@ if (-not $release) {
     if ($summary) { $line | Tee-Object -Append $summary } else { $line }
     exit 0
 }
-$assets = @($release.assets | Where-Object { $_.name -cmatch '\Agesher-setup-[0-9.]+\.exe\z' })
+$assets = @($release.assets | Where-Object { $_.name -cmatch '\Agesher-setup-[0-9.]+(-[0-9A-Za-z.]+)?\.exe\z' })
 if ($assets.Count -ne 1) { throw "ב-$sourceRepository@$sourceTag אין מתקין אחד בדיוק (נמצאו $($assets.Count))" }
 $asset = $assets[0]
 $old = Join-Path $work $asset.name
@@ -75,13 +78,14 @@ for ($attempt = 1; $attempt -le 4; $attempt++) {
 if (-not (Test-Path $old)) { throw "ההורדה של $($asset.name) נכשלה" }
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $old).Hash.ToLowerInvariant()
 if ([string] $asset.digest -cne "sha256:$hash") { throw "ה-SHA-256 של $($asset.name) ($hash) שונה מזה שבדף הגרסה ($($asset.digest))" }
-Pass "המתקין של Gesher $UpstreamTag ירד מ-$sourceRepository@$sourceTag ואומת (sha256:$hash)"
+Pass "המתקין של Gesher ירד מ-$sourceRepository@$sourceTag ($($asset.name)) ואומת (sha256:$hash)"
 
 # 2. ההתקנה הקיימת: Gesher 0.2.0 עם אפליקציה, נתונים והגדרת עדכונים של המשתמש.
 $p = Start-Process $old -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
 if ($p.ExitCode -ne 0) { throw "ההתקנה של Gesher $UpstreamTag נכשלה (קוד $($p.ExitCode))" }
 $oldVersion = Get-GesherInstalledVersion -InstallDirectory $app
-if ($oldVersion -cne $UpstreamTag.TrimStart('v')) { throw "אחרי התקנת Gesher הגרסה המותקנת היא '$oldVersion'" }
+# בלי השוואה לגרסה שלנו: בניית CI של הריפו שלנו, לפני הגרסה הראשונה, ממוספרת 0.0.0.<ריצה>.
+if (-not $oldVersion) { throw 'אחרי התקנת Gesher אין גרסה מותקנת שאפשר לקרוא' }
 $oldName = (Get-ItemProperty $uninstallKey).DisplayName
 $oldPanel = Join-Path $programs 'Gesher Control Center.lnk'
 if (-not (Test-Path $oldPanel)) { throw "Gesher לא יצר את הקיצור $oldPanel" }
