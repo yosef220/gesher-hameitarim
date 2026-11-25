@@ -112,18 +112,25 @@ HRESULT Read(Properties* out) {
   if (FAILED(hr)) return hr;
   Properties p = {};
   Color font = {}, background = {}, region = {};
+  // גשר המיתרים: הצבע המחושב משמש רק כשבדיוק אחד מהשניים, השם או האטימות, הוא Default
+  // (CaptioningSettings.color). כששניהם Default הצבע "לא מוגדר", ו-Windows לא חייב לחשב
+  // אותו: על Windows Server 2022 ו-2025 ‏get_ComputedRegionColor מחזיר אז E_INVALIDARG, ואז
+  // כל הקריאה נכשלה. עכשיו הוא נקרא רק כשצריך אותו, וכשצריך אותו וחסר, הקריאה נכשלת כמו קודם.
+  auto needed = [](int32_t name, int32_t opacity) { return (name == 0) != (opacity == 0); };
   if (SUCCEEDED(hr)) hr = statics->get_FontColor(&p.font_color);
-  if (SUCCEEDED(hr)) hr = statics->get_ComputedFontColor(&font);
   if (SUCCEEDED(hr)) hr = statics->get_FontOpacity(&p.font_opacity);
+  if (SUCCEEDED(hr) && needed(p.font_color, p.font_opacity)) hr = statics->get_ComputedFontColor(&font);
   if (SUCCEEDED(hr)) hr = statics->get_FontSize(&p.font_size);
   if (SUCCEEDED(hr)) hr = statics->get_FontStyle(&p.font_style);
   if (SUCCEEDED(hr)) hr = statics->get_FontEffect(&p.font_effect);
   if (SUCCEEDED(hr)) hr = statics->get_BackgroundColor(&p.background_color);
-  if (SUCCEEDED(hr)) hr = statics->get_ComputedBackgroundColor(&background);
   if (SUCCEEDED(hr)) hr = statics->get_BackgroundOpacity(&p.background_opacity);
+  if (SUCCEEDED(hr) && needed(p.background_color, p.background_opacity)) {
+    hr = statics->get_ComputedBackgroundColor(&background);
+  }
   if (SUCCEEDED(hr)) hr = statics->get_RegionColor(&p.region_color);
-  if (SUCCEEDED(hr)) hr = statics->get_ComputedRegionColor(&region);
   if (SUCCEEDED(hr)) hr = statics->get_RegionOpacity(&p.region_opacity);
+  if (SUCCEEDED(hr) && needed(p.region_color, p.region_opacity)) hr = statics->get_ComputedRegionColor(&region);
   statics->Release();
   if (FAILED(hr)) return hr;
   p.computed_font_color = Argb(font);

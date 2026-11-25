@@ -32,8 +32,10 @@ struct Properties {
 
 constexpr int kValues = 12;  // Properties as an int array, in declaration order
 
-// Reads every property. E_NOTIMPL without combase's WinRT functions; another failure is
-// the first failing getter's HRESULT (nothing is reported then).
+// Reads every property. A computed color is read only when exactly one of its name and
+// opacity is Default, the only case the mapping uses it, and is 0 otherwise. E_NOTIMPL
+// without combase's WinRT functions; another failure is the first failing getter's
+// HRESULT (nothing is reported then).
 HRESULT Read(Properties* out);
 
 // PropertiesChanged (IClosedCaptionPropertiesStatics2): after StartWatch, each change
