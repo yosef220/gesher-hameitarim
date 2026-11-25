@@ -2025,6 +2025,16 @@ jobs:
           'PASS  installer: uninstall removes the Gesher Apps Start menu folder with the apps'' shortcuts, and nothing else of the Start menu' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           'PASS  installer: installs, runs Hello and gesher-app, uninstalls' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
 
+      # גשר המיתרים: התקנה במקום Gesher. ‏Gesher 0.2.0 (הגרסה שפורסמה תחת Apache 2.0) עם
+      # אפליקציה ונתונים, ומעליו המתקין שנבדק כאן. רץ אחרי ההסרה, על מכונה נקייה.
+      - name: שדרוג מ-Gesher 0.2.0 שומר את האפליקציות, הנתונים וההגדרות
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = (Get-ChildItem installer\gesher-setup-*.exe).FullName
+          tests/windows/shell/UpgradeFromGesherChecks.ps1 -InstallerPath $setup -Version $env:GESHER_PACKAGE_VERSION
+
       - name: Preserve portable Windows runtime and Setup evidence
         if: always()
         uses: actions/upload-artifact@v4
