@@ -8,8 +8,10 @@ import urllib.request
 from github_read import get_json
 
 
-REPOSITORY = 'gesher-runtime/gesher'
-REPOSITORY_ID = 1426153186
+REPOSITORY = 'yosef220/gesher-hameitarim'
+REPOSITORY_ID = 1471523850
+# גשר המיתרים: האירועים שמהם CI על תג נחשב לבניית גרסה.
+RELEASE_EVENTS = ('push', 'workflow_dispatch')
 API = f'repos/{REPOSITORY}'
 DIGEST = re.compile(r'sha256:[0-9a-fA-F]{64}')
 MAX_INSTALLER_SIZE = 2147483648
@@ -45,6 +47,10 @@ def timestamp(value):
     if result.tzinfo is None:
         raise ValueError('GitHub timestamp has no UTC offset')
     return result
+
+
+def portable_name(parts):
+    return f'gesher-{version_string(parts)}-portable.zip'
 
 
 def release_catalog(read):
@@ -92,7 +98,10 @@ def build_version(environ, read):
     official = (environ['GITHUB_REPOSITORY'] == REPOSITORY
                 and environ['GITHUB_REPOSITORY_ID'] == str(REPOSITORY_ID))
     ref = environ['GITHUB_REF']
-    if official and environ['GITHUB_EVENT_NAME'] == 'push' and ref.startswith('refs/tags/'):
+    # גשר המיתרים: גרסה נבנית בהפעלה ידנית של ה-CI על התג (gh workflow run ci.yml --ref vX.Y.Z).
+    # בפורק, בדיקות הראיות של upstream (TCP, ‏native2) עוברות רק בהפעלה ידנית, ולכן דחיפה של תג
+    # לא יכולה להוציא גרסה (docs/he/07-upstream-sync.md).
+    if official and environ['GITHUB_EVENT_NAME'] in RELEASE_EVENTS and ref.startswith('refs/tags/'):
         return version_string(release_version(ref.removeprefix('refs/tags/')))
 
     number = environ['GITHUB_RUN_NUMBER']

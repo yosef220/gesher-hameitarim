@@ -1,0 +1,22 @@
+# תור ענף המוצר: PRs שעוד לא אושרו ב-upstream, לפי סדר המיזוג.
+# נבנה עם tools/integration/build_product.py, והשיטה מתועדת ב-docs/he/07-upstream-sync.md.
+# עמודות מופרדות בטאב: מזהה, מקור (remote:ref), ‏SHA נעוץ, ‏PRs ב-upstream, גל, תיאור
+pr-464	origin:refs/heads/topic/pr-464	2938007b47dd7a5d52a222bf285832834d63aa23	464	1	לא לדווח על Play services, חשבון Google או טוקן דחיפה שלא קיימים (issue #335)
+pr-491	upstream:refs/pull/491/head	d38b9ee9e8a6443800ed7ac2d7eb9ec2670aff06	491	1	דיאלוג מידע על האפליקציה במקום בקשת הסרה (issue #472)
+lev-app-compat	origin:refs/heads/topic/lev-app-compat	2c0f496ceef606e222172a546fca25e4fe0df95d	454,455,493	1	הענף fix/app-compat של Lev-Good ‏(v0.2.0-lev3): ‏SOCKS5, נתיבי profman, ספקי תוכן מתנגשים, mkfifo ורישום התקנה
+pr-403	upstream:refs/pull/403/head	e9f4035c39f7f36b974bc72397c55905666169e7	402,403	1	Wi-Fi: בדיקות WifiManager כמו באנדרואיד (‏#402), ובקשות רשת והצעות רשת דרך אישור המשתמש (‏#403, מכיל את #402)
+pr-427	upstream:refs/pull/427/head	950dc2dbee2454d35e0f7265d50d146f41638264	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל
+pr-475	upstream:refs/pull/475/head	63f8c46640b2a7e901d1088c3597677d6b132968	340,470,471,475	1	סדרת Windows Hello: הרשאות AuthService ‏(‏#340), ‏Windows Hello עסוק (‏#470), המתנה תחומה אחרי ביטול (‏#471) ותיעוד (‏#475, מכיל את כולם)
+pr-484	upstream:refs/pull/484/head	4b0eae2fa38cbf7aa1ad2d55b741ede900b953cf	484	1	abort דרך ה-abort של bionic, וכיסוי libstdc++.so
+# מוזגו ב-upstream אחרי המעבר לרישיון קנייני (25.11). נכנסים מהגרסה של התורם מלפני השינוי
+# (refs/apache-snapshot/pr/*), שנשמרה כענף נושא topic/pr-<מספר>.
+pr-416	origin:refs/heads/topic/pr-416	10e75d8bdbe46fdea1c3e3ec591d61a9c8384367	416	2	DownloadManager: ‏content://downloads והורדות שהשרת של המערכת מריץ (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-451	origin:refs/heads/topic/pr-451	e45457274e8ef5f350fab5b645c345013bbb0fae	451	2	הקראת טקסט (Text-to-speech) בקולות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-473	origin:refs/heads/topic/pr-473	bd4cd8e8848cc74a0db243eb11c1eab30dc4583a	473	3	Passkeys דרך ה-WebAuthn של Windows (Credential Manager) (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-450	origin:refs/heads/topic/pr-450	7f0f8a10fa28156b753dd78dea296d9ed40c2ef7	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-468	origin:refs/heads/topic/pr-468	d1861c8322a690fc4aaae06bd0fc38bf613128d5	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-256	origin:refs/heads/topic/pr-256	0aa2b1c40fd00c2beb943ce5dcfd19c69e9344a2	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
+# מושבת ב-25.11: הגרסה של #500 מלפני המעבר של upstream לרישיון קנייני משנה שישה קבצים נעוצים בהכשרת
+# המקורות (internal.h, ‏socket.cc, ‏system.cc, ‏unistd.cc, ‏fsops.cc, ‏posix.cmake) בלי לעדכן את הנעיצות, והעדכון
+# שלהן ב-PR הגיע רק אחרי השינוי. כדי להחזיר: ענף נושא שמפיק מחדש את הנעיצות. ‏#312 מטופל חלקית ע"י #332.
+# pr-500	upstream:refs/pull/500/head	f608bcfeb0ffe303e46ef34b85a9c1884e3d8377	500	1	אכיפת MANAGE_EXTERNAL_STORAGE ואחסון מוגבל, כמו באנדרואיד (issue #312, משלים את #332)
