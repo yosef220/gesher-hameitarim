@@ -1,4 +1,7 @@
-"""Publish source-bound installer and portable assets using the protected main workflow."""
+"""Publish source-bound installer and portable assets using the protected main workflow.
+
+גשר המיתרים: הקומיט שמתויג יכול להיות בהיסטוריה של main או של product (RELEASE_BRANCHES).
+"""
 from dataclasses import dataclass
 import hashlib
 import json
@@ -14,13 +17,14 @@ from urllib.parse import quote
 
 from github_jobs import get_jobs
 from github_read import GitHubReadError, get_json
-from release_version import (API, DIGEST, MAX_INSTALLER_SIZE, REPOSITORY, REPOSITORY_ID,
+from release_version import (API, DIGEST, MAX_INSTALLER_SIZE, RELEASE_EVENTS, REPOSITORY, REPOSITORY_ID,
                              installer_name, portable_name, release_catalog, release_version,
                              stable_version, timestamp, version_string)
 
 
 CI_PATH = '.github/workflows/ci.yml'
-CI_ID = 389851347
+# גשר המיתרים: מספר הזהות של ci.yml בריפו שלנו (ב-upstream הוא 389851347).
+CI_ID = 430092261
 PUBLISH_PATH = '.github/workflows/publish-release.yml'
 PUBLISH_NAME = 'Publish Gesher release'
 PUBLISH_REF = f'{REPOSITORY}/{PUBLISH_PATH}@refs/heads/main'
@@ -34,6 +38,11 @@ OID = re.compile(r'[0-9a-f]{40}')
 NONCE = re.compile(r'[0-9a-f]{64}')
 LOG_PREFIX = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z ')
 MARKER = '<!-- gesher-release-publisher-v1 '
+# גשר המיתרים: הגרסאות יוצאות מענף המוצר, שהוא main ועוד ה-PRs שבתור
+# (docs/he/07-upstream-sync.md). קומיט שנבדק צריך להיות בהיסטוריה של אחד מהם.
+RELEASE_BRANCHES = ('main', 'product')
+RELEASE_NAME = 'גשר המיתרים {}'
+INSTALL_GUIDE = f'https://github.com/{REPOSITORY}/blob/main/docs/he/08-install-guide.md'
 
 
 class ReleaseError(RuntimeError):
@@ -124,7 +133,7 @@ class Source:
 
     @classmethod
     def from_run(cls, run):
-        require(run['workflow_id'] == CI_ID and run['event'] == 'push' and completed(run, 'ci')
+        require(run['workflow_id'] == CI_ID and run['event'] in RELEASE_EVENTS and completed(run, 'ci')
                 and official(run['repository']) and official(run['head_repository'])
                 and oid(run['head_sha']) and positive(run['id']) and positive(run['run_attempt'])
                 and positive(run['check_suite_id']),
@@ -180,11 +189,58 @@ def confirm_main_ancestor(api, head):
             'The tested commit is outside current protected main history')
 
 
+def contained_in(api, head, branch):
+    try:
+        kind, tip = ref_pointer(api, f'heads/{branch}')
+    except GitHubReadError:
+        return False
+    require(kind == 'commit', f'Protected {branch} did not resolve to a commit')
+    comparison = api.get(f'{API}/compare/{head}...{tip}')
+    return (comparison['status'] in ('ahead', 'identical')
+            and comparison['base_commit']['sha'] == head
+            and comparison['merge_base_commit']['sha'] == head)
+
+
+def confirm_release_ancestor(api, head):
+    for branch in RELEASE_BRANCHES:
+        if contained_in(api, head, branch):
+            return branch
+    raise ReleaseError('The tested commit is outside current main and product history')
+
+
+def release_name(source):
+    return RELEASE_NAME.format(version_string(source.version))
+
+
+def release_intro(source):
+    version = version_string(source.version)
+    return '\n'.join([
+        f'## גשר המיתרים {version}',
+        '',
+        f'**להתקנה:** מורידים את `{installer_name(source.version)}` ומפעילים אותו. אפשר להתקין מעל Gesher: '
+        'האפליקציות המותקנות והנתונים שלהן נשמרים.',
+        '',
+        '**אזהרת Windows:** קובץ ההתקנה עוד לא חתום בחתימה דיגיטלית. כשמופיע החלון "Windows הגן על המחשב שלך", '
+        'לוחצים על "מידע נוסף" ואז על "הפעל בכל זאת".',
+        '',
+        f'אפשר להשוות את טביעת האצבע של הקובץ ל-`{CHECKSUM_NAME}`. כל הפרטים, כולל רשת מסוננת: '
+        f'[מדריך ההתקנה]({INSTALL_GUIDE}).',
+    ])
+
+
 def confirm_ci_workflow(api, source, trusted_ci_blob):
     definition = api.get(f'{API}/contents/{CI_PATH}?ref={source.head}')
-    require(definition['type'] == 'file' and definition['path'] == CI_PATH
-            and definition['sha'] == trusted_ci_blob,
+    require(definition['type'] == 'file' and definition['path'] == CI_PATH,
+            'Tested CI definition is not the CI workflow file')
+    if definition['sha'] == trusted_ci_blob:
+        return
+    # גשר המיתרים: בענף המוצר ה-CI כולל גם את הבדיקות שה-PRs שבתור הוסיפו, ולכן הוא שונה
+    # מזה של main. קומיט מההיסטוריה של product נבדק מול ה-ci.yml שבראש product.
+    require(contained_in(api, source.head, 'product'),
             'Tested CI definition differs from the protected publisher snapshot')
+    product = api.get(f'{API}/contents/{CI_PATH}?ref=product')
+    require(product['type'] == 'file' and product['path'] == CI_PATH and product['sha'] == definition['sha'],
+            'Tested CI definition differs from the protected publisher and product snapshots')
 
 
 def job_identity(job, run, attempt, head):
@@ -344,7 +400,7 @@ def confirm_release(release, source, marker, expected_id=None):
     markers = [line for line in release['body'].splitlines() if line.startswith(MARKER)]
     require(positive(release['id']) and (expected_id is None or release['id'] == expected_id)
             and release['tag_name'] == source.tag and release['prerelease'] is False
-            and type(release['draft']) is bool and release['name'] == f'Gesher {version_string(source.version)}'
+            and type(release['draft']) is bool and release['name'] == release_name(source)
             and all(author.get(key) == value for key, value in BOT.items())
             and markers == [marker],
             'Release identity, ownership, or provenance changed')
@@ -446,7 +502,7 @@ def confirm_publication(api, response, endpoint, source, marker, release_id, ass
 def publish(api, source, issuer, trusted_ci_blob, directory, download=download_artifact):
     source.confirm_current(api)
     pointer = release_pointer(api, source)
-    confirm_main_ancestor(api, source.head)
+    confirm_release_ancestor(api, source.head)
     confirm_ci_workflow(api, source, trusted_ci_blob)
     package, artifact, digest = confirm_producer(api, source)
     download(artifact, digest, directory)
@@ -467,8 +523,9 @@ def publish(api, source, issuer, trusted_ci_blob, directory, download=download_a
         confirm_pointer(api, source, pointer)
         release = api.mutate('POST', f'{API}/releases', body={
             'tag_name': source.tag, 'target_commitish': source.head,
-            'name': f'Gesher {version_string(source.version)}', 'draft': True,
-            'prerelease': False, 'generate_release_notes': True, 'body': marker,
+            'name': release_name(source), 'draft': True,
+            'prerelease': False, 'generate_release_notes': True,
+            'body': marker + '\n\n' + release_intro(source),
         })
         confirm_release(release, source, marker)
         require(release['draft'] and not release['assets'], 'Create did not return a new empty draft')
@@ -500,7 +557,7 @@ def publish(api, source, issuer, trusted_ci_blob, directory, download=download_a
         known = visible_upload(api, endpoint, source, marker, release_id, assets, asset.name, known)
 
     source.confirm_current(api)
-    confirm_main_ancestor(api, source.head)
+    confirm_release_ancestor(api, source.head)
     catalog = list(release_catalog(api.get))
     draft = matching_release(catalog, source)
     require(draft is not None, 'Owned draft disappeared before publication')
