@@ -4,7 +4,7 @@
 The Android and system-server boundaries are stand-ins with android-16.0.0_r4's
 constant values; AuthService, WindowsHello, WindowsHelloBackend, DeviceCredential,
 ConfirmCredential and OwnerWatch are compiled unchanged apart from their package,
-imports and public class visibility; StandIn, the dispatch the service's Binder
+imports, boundary type qualification and public class visibility; StandIn, the dispatch the service's Binder
 uses, is compiled the same way. Tests cover the sensor-less AOSP answers with
 no Windows Hello backend, and, with an isolated test double only, the
 device-credential confirmation outcomes, cancellation, replacement, client death
