@@ -14,9 +14,12 @@
 # גשר המיתרים: התקנה במקום Gesher. מתקינים את Gesher 0.2.0, הגרסה שפורסמה תחת
 # Apache 2.0, מתקינים בו אפליקציה ושומרים נתונים והגדרה, ואז מתקינים מעליו את
 # גשר המיתרים ובודקים שהכל נשמר, ושהשם, הקיצורים ומקור העדכונים התחלפו.
-# רץ ב-CI על מכונת Windows נקייה, אחרי שההתקנה הרגילה הוסרה. צריך את gh ו-GH_TOKEN.
+# רץ ב-CI אחרי הבדיקה של המתקין, על אותה מכונה, אחרי שההתקנה שלה הוסרה. צריך את gh ו-GH_TOKEN.
 
 $ErrorActionPreference = 'Stop'
+# אפליקציות נפתחות כאן בלי חלון: lifecycle.apk לא נסגרת לבד, ובמצב חלון gesher-app מחכה
+# עד שהחלון נסגר. כך גם בבדיקה של המתקין ב-ci.yml.
+$env:GESHER_APP_WINDOW = 'headless'
 $InstallerPath = [IO.Path]::GetFullPath($InstallerPath)
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 . (Join-Path $repoRoot 'tools/package/gesher-update.ps1')
@@ -41,7 +44,20 @@ function Wait-Uninstalled {
     if (Test-Path (Join-Path $app 'unins000.exe')) { throw 'ההסרה לא הסתיימה תוך 90 שניות' }
 }
 
-if ((Test-Path $app) -or (Test-Path $profileRoot)) { throw "המכונה לא נקייה: $app או $profileRoot כבר קיימים" }
+# 0. מכונה בלי Gesher מותקן ובלי פרופיל. הבדיקה של המתקין, שרצה קודם על אותה מכונה, מסירה את
+# ההתקנה שלה. ההסרה מוחקת את התיקייה רק אחרי unins000.exe, ולכן מחכים לה. מה שנשאר אחרי
+# ההמתנה הוא לא התקנה. הוא נמחק כדי ש-Gesher 0.2.0 יותקן כמו אצל משתמש, ונרשם באזהרה עם
+# רשימת הקבצים, כדי שהשארה כזאת של ההסרה תיראה ולא תיעלם.
+if (Test-Path (Join-Path $app 'unins000.exe')) { throw "המכונה לא נקייה: Gesher מותקן ב-$app" }
+for ($i = 0; $i -lt 30 -and ((Test-Path $app) -or (Test-Path $profileRoot)); $i++) { Start-Sleep 1 }
+foreach ($leftover in $app, $profileRoot) {
+    if (-not (Test-Path -LiteralPath $leftover)) { continue }
+    $files = @(Get-ChildItem -LiteralPath $leftover -Recurse -Force -File -ErrorAction SilentlyContinue |
+        ForEach-Object { $_.FullName.Substring($leftover.Length).TrimStart('\') })
+    $shown = ($files | Select-Object -First 20) -join ', '
+    "::warning::ההסרה בבדיקה הקודמת השאירה את $leftover ($($files.Count) קבצים: $shown). הם נמחקים לפני ההתקנה של Gesher 0.2.0"
+    Remove-Item -LiteralPath $leftover -Recurse -Force
+}
 
 # 1. המתקין של Gesher 0.2.0, מדף הגרסאות של upstream, ואם הוא כבר לא זמין, מהעותק בריפו שלנו.
 # הוא מאומת מול ה-SHA-256 שמפורסם באותו דף. בלי אף מקור, השלב לא נכשל, אבל גם לא מדווח
