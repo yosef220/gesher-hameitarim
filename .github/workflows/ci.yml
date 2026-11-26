@@ -779,6 +779,7 @@ jobs:
           python3 tools/test_capture_permission_flow.py --java-home "$JAVA_HOME"
           python3 tools/test_camera_callback_admission.py --java-home "$JAVA_HOME"
           python3 tools/test_camera2_capture_dispatch.py --java-home "$JAVA_HOME"
+          python3 tools/test_recorder_camera_ready.py --java-home "$JAVA_HOME" --negative-controls
           python3 tools/test_dexopt_work.py --java-home "$JAVA_HOME"
 
       - name: Validate user interface translations
@@ -849,6 +850,12 @@ jobs:
             --opus-root third_party/aosp/external/libopus \
             --sanitize --output-dir out/media-audio-scratch-fixtures
 
+      - name: Real software AVC output ownership and independent decoded pixels
+        run: >-
+          python3 tools/test_soft_avc_output.py
+          --libavc-root third_party/aosp/external/libavc --sanitize
+          --output-dir out/media-avc-output-fixtures
+
       - name: libcore System.nanoTime shares Android awake-time domain
         run: python3 tools/test_system_nanotime.py --source third_party/aosp/libcore/ojluni/src/main/native/System.c
 
@@ -878,6 +885,8 @@ jobs:
           mkdir -p framework-assets/media-audio-scratch-fixtures
           cp out/media-audio-scratch-fixtures/*.audt out/media-audio-scratch-fixtures/fixtures.json framework-assets/media-audio-scratch-fixtures/
           cp out/test-apps/* out/boot-jars/*.jar framework-assets/
+          mkdir -p framework-assets/media-avc-output-fixtures
+          cp out/media-avc-output-fixtures/*.avct out/media-avc-output-fixtures/fixtures.json framework-assets/media-avc-output-fixtures/
           mkdir -p framework-assets/media-hevc-output-fixtures
           cp out/media-hevc-output-fixtures/*.hevct out/media-hevc-output-fixtures/fixtures.json framework-assets/media-hevc-output-fixtures/
           # ICU's data, which the runtime maps from $ANDROID_I18N_ROOT/etc/icu.
