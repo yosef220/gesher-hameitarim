@@ -501,8 +501,8 @@
       "he": "מרכז הבקרה של גשר המיתרים"
     },
     "cp_subtitle": {
-      "en": "Applications and Google Play Services Management",
-      "he": "ניהול יישומים ושירותי Google Play"
+      "en": "Control Center",
+      "he": "מרכז הבקרה"
     },
     "cp_device_status": {
       "en": "Gesher Device",
@@ -517,84 +517,84 @@
       "he": "המערכת כבויה"
     },
     "cp_btn_start": {
-      "en": "Start Device",
-      "he": "הפעל מערכת"
+      "en": "Start",
+      "he": "הפעלה"
     },
     "cp_btn_stop": {
-      "en": "Stop Device",
-      "he": "כבה מערכת"
+      "en": "Stop",
+      "he": "כיבוי"
     },
     "cp_microg_title": {
-      "en": "Google Play Services (microG)",
-      "he": "שירותי Google Play (microG)"
+      "en": "Google services",
+      "he": "שירותי Google"
     },
     "cp_microg_desc": {
-      "en": "Enables Google account login, Push notifications (FCM), and Maps/Location.",
-      "he": "מאפשר התחברות לחשבון גוגל, קבלת התראות Push ושירותי מיקום."
+      "en": "Google sign-in, notifications and location in your apps, through microG.",
+      "he": "התחברות לחשבון Google, התראות ושירותי מיקום באפליקציות. פועל דרך microG."
     },
     "cp_microg_enabled": {
-      "en": "Google Play services are enabled",
-      "he": "שירותי Google Play מופעלים ופעילים"
+      "en": "On",
+      "he": "מופעלים"
     },
     "cp_microg_disabled": {
-      "en": "Google Play services are not enabled",
-      "he": "שירותי Google Play אינם מופעלים"
+      "en": "Off",
+      "he": "לא מופעלים"
     },
     "cp_btn_enable_microg": {
-      "en": "Enable Google Play (1-Click)",
-      "he": "הפעל שירותי Google (הגדרה אוטומטית)"
+      "en": "Turn on Google services",
+      "he": "הפעלת שירותי Google"
     },
     "cp_btn_disable_microg": {
-      "en": "Disable Google Play",
-      "he": "השבת שירותי Google"
+      "en": "Turn off Google services",
+      "he": "השבתת שירותי Google"
     },
     "cp_btn_google_login": {
       "en": "Sign in to Google Account",
-      "he": "התחבר לחשבון Google"
+      "he": "התחברות לחשבון Google"
     },
     "cp_btn_microg_settings": {
       "en": "microG Settings",
       "he": "הגדרות microG"
     },
     "cp_store_title": {
-      "en": "App Store (Aurora Store)",
-      "he": "חנות אפליקציות (Aurora Store)"
+      "en": "App store",
+      "he": "חנות אפליקציות"
     },
     "cp_store_desc": {
-      "en": "Download and install Android applications directly without downloading APK files.",
-      "he": "חיפוש והורדת יישומי Android ישירות בלחיצה אחת, ללא צורך בהורדת קובצי APK."
+      "en": "Find and install apps without downloading APK files, through Aurora Store.",
+      "he": "חיפוש והתקנה של אפליקציות בלי להוריד קובצי APK, דרך Aurora Store."
     },
     "cp_store_installed": {
-      "en": "App Store is installed",
-      "he": "חנות האפליקציות מותקנת ומוכנה"
+      "en": "Installed",
+      "he": "מותקנת"
     },
     "cp_store_not_installed": {
-      "en": "App Store is not installed",
-      "he": "חנות האפליקציות אינה מותקנת"
+      "en": "Not installed",
+      "he": "לא מותקנת"
     },
     "cp_btn_install_store": {
-      "en": "Install App Store (1-Click)",
-      "he": "התקן חנות אפליקציות בלחיצה אחת"
+      "en": "Install the app store",
+      "he": "התקנת חנות האפליקציות"
     },
     "cp_btn_open_store": {
-      "en": "Open App Store",
-      "he": "פתח את חנות האפליקציות"
+      "en": "Open the store",
+      "he": "פתיחת החנות"
     },
     "cp_apps_title": {
-      "en": "Installed Applications",
-      "he": "אפליקציות מותקנות"
+      "en": "My apps",
+      "he": "האפליקציות שלי"
     },
     "cp_btn_install_apk": {
-      "en": "Install APK from file…",
-      "he": "התקן אפליקציה מקובץ (APK)…"
+      "en": "Install from an APK file…",
+      "he": "התקנה מקובץ APK…"
     },
     "cp_drag_drop_hint": {
-      "en": "Drag and drop APK files here to install",
-      "he": "גרור ושחרר קובצי APK לכאן להתקנה מהירה"
+      "en": "You can also drag an APK file onto this window.",
+      "he": "אפשר גם לגרור קובץ APK לחלון הזה."
     },
     "cp_btn_launch": {
-      "en": "Launch",
-      "he": "הפעל"
+      "en": "Open",
+      "he": "פתיחה"
     },
     "cp_btn_app_info": {
       "en": "Details",
@@ -614,7 +614,7 @@
     },
     "cp_proxy_mode_inherit": {
       "en": "Same as every app",
-      "he": "כמו כל היישומים"
+      "he": "כמו כל האפליקציות"
     },
     "cp_proxy_mode_windows": {
       "en": "Windows' settings",
@@ -654,11 +654,11 @@
     },
     "cp_btn_proxy_tip": {
       "en": "This app's own proxy",
-      "he": "פרוקסי משלו ליישום הזה"
+      "he": "פרוקסי משלה לאפליקציה הזו"
     },
     "cp_btn_proxy_all": {
       "en": "Proxy for every app",
-      "he": "פרוקסי לכל היישומים"
+      "he": "פרוקסי לכל האפליקציות"
     },
     "cp_proxy_app_title": {
       "en": "Proxy for ⁨{0}⁩",
@@ -686,23 +686,23 @@
     },
     "cp_btn_uninstall": {
       "en": "Uninstall",
-      "he": "הסר"
+      "he": "הסרה"
     },
     "cp_uninstall_title": {
       "en": "Uninstall Application",
-      "he": "הסרת יישום"
+      "he": "הסרת אפליקציה"
     },
     "cp_uninstall_confirm": {
       "en": "Are you sure you want to uninstall {0}?",
-      "he": "האם להסיר את היישום {0}?"
+      "he": "להסיר את ⁨{0}⁩?"
     },
     "cp_uninstall_detail": {
       "en": "This application and its local data will be removed from Gesher HaMeitarim.",
-      "he": "היישום וכל הנתונים המקומיים שלו יוסרו מגשר המיתרים."
+      "he": "האפליקציה וכל הנתונים שלה יימחקו מגשר המיתרים."
     },
     "cp_app_info_title": {
       "en": "App info",
-      "he": "פרטי היישום"
+      "he": "פרטי האפליקציה"
     },
     "cp_app_info_installed": {
       "en": "Installed: {0}",
@@ -770,11 +770,11 @@
     },
     "cp_uninstall_failed": {
       "en": "Failed to uninstall {0}.",
-      "he": "הסרת {0} נכשלה."
+      "he": "ההסרה של ⁨{0}⁩ נכשלה."
     },
     "cp_install_failed": {
       "en": "Failed to install {0}.",
-      "he": "התקנת {0} נכשלה."
+      "he": "ההתקנה של ⁨{0}⁩ נכשלה."
     },
     "cp_action_failed": {
       "en": "The operation failed (exit code {0}).",
@@ -793,8 +793,8 @@
       "he": "מוכן"
     },
     "cp_btn_open_logs": {
-      "en": "Open logs location",
-      "he": "פתח את מיקום הלוגים"
+      "en": "Open the logs folder",
+      "he": "פתיחת תיקיית הלוגים"
     },
     "cp_open_logs_failed": {
       "en": "Could not open the logs folder: ⁨{0}⁩",
@@ -802,7 +802,7 @@
     },
     "cp_status_working": {
       "en": "Working, please wait…",
-      "he": "מעבד, נא להמתין…"
+      "he": "רגע, עובדים על זה…"
     },
     "cp_staging": {
       "en": "Configuring services…",
@@ -945,8 +945,8 @@
       "he": "שרת המערכת לא זיהה את התהליך שהופעל"
     },
     "cp_update_title": {
-      "en": "Gesher HaMeitarim updates",
-      "he": "עדכוני גשר המיתרים"
+      "en": "Updates",
+      "he": "עדכונים"
     },
     "cp_update_automatic": {
       "en": "Check for updates automatically",
@@ -1102,7 +1102,7 @@
     },
     "cp_camera_image_picker": {
       "en": "Allow choosing an image from the PC instead of taking a photo",
-      "he": "אפשר בחירת תמונה מהמחשב במקום צילום במצלמה"
+      "he": "לאפשר בחירת תמונה מהמחשב במקום צילום"
     },
     "cp_camera_image_picker_hint": {
       "en": "Off by default. When on, an app that takes a photo or opens the camera can use an image you choose from the PC instead; when the PC has a camera, you are asked which to use. Applies the next time an app opens the camera. Whether the device reports a camera, and the camera app on a PC without one, follow after Gesher HaMeitarim restarts.",
@@ -1115,6 +1115,26 @@
     "cp_camera_image_picker_failed": {
       "en": "Could not save the camera setting: {0}",
       "he": "שמירת הגדרת המצלמה נכשלה: {0}"
+    },
+    "cp_search_hint": {
+      "en": "Search apps",
+      "he": "חיפוש אפליקציה"
+    },
+    "cp_apps_empty": {
+      "en": "No apps yet. Install one from an APK file or from the app store.",
+      "he": "עוד אין כאן אפליקציות. אפשר להתקין מקובץ APK, או מחנות האפליקציות."
+    },
+    "cp_apps_no_match": {
+      "en": "No app matches this search.",
+      "he": "אין אפליקציה שמתאימה לחיפוש."
+    },
+    "cp_drop_release": {
+      "en": "Drop here to install",
+      "he": "משחררים כאן כדי להתקין"
+    },
+    "cp_network_title": {
+      "en": "Network",
+      "he": "רשת"
     }
   }
 }

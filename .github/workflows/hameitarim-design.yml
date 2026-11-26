@@ -2,7 +2,8 @@
 #   - הקבצים שמופקים מ-ui/tokens.json מעודכנים, והניגודיות עומדת בסף בשני המצבים
 #   - מסך הפתיחה האמיתי (GDI+) מצויר על Windows בכל המצבים, לצילומים לביקורת
 #   - דף הרישיון באשף ההתקנה מצולם בעברית ובאנגלית
-# הצילומים עולים כ-artifact בשם splash-screens.
+#   - מרכז הבקרה: בדיקות החוזה של התצוגה על WPF, וצילומים בכל מצב ושפה עם הדיאלוגים
+# הצילומים עולים כ-artifacts (splash-screens, license-page-screens, control-center-screens), וגם ללוג.
 name: hameitarim-design
 
 on:
@@ -127,4 +128,53 @@ jobs:
         with:
           name: license-page-screens
           path: license-screens/
+          retention-days: 30
+
+  control-center:
+    name: מרכז הבקרה על Windows
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: הקבצים המופקים מעודכנים (טוקנים ומחרוזות)
+        shell: pwsh
+        run: |
+          python tools/ui/generate.py --check
+          if ($LASTEXITCODE -ne 0) { throw 'הטוקנים לא מעודכנים' }
+      - name: בדיקות החוזה של התצוגה (Windows PowerShell 5.1)
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: |
+          tests/windows/shell/ControlPanelPresentationChecks.ps1
+          tests/windows/shell/ControlPanelLaunchChecks.ps1
+          tests/windows/shell/ControlPanelVirtualizationChecks.ps1
+          tests/windows/shell/ControlPanelSpecialAccessChecks.ps1
+          tests/windows/shell/ControlPanelUpdateChecks.ps1
+          tests/windows/shell/ControlPanelProxyChecks.ps1
+          tests/windows/shell/ControlPanelIconCacheChecks.ps1
+          tests/windows/shell/UiLocalizationChecks.ps1
+      - name: הדיאלוגים של מרכז הבקרה (Windows PowerShell 5.1)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        shell: powershell
+        run: tests/windows/shell/Issue32And33Contracts.ps1
+      - name: צילומי מרכז הבקרה והדיאלוגים
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: tools/ui/control-center-preview.ps1 -OutDir control-center-screens
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem control-center-screens -Filter *.png | Sort-Object Name) {
+            "PANEL-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'PANEL-PNG-END'
+          }
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: control-center-screens
+          path: control-center-screens/
           retention-days: 30

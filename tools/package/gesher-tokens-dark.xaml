@@ -6,6 +6,8 @@
   <SolidColorBrush x:Key="GesherSurfaceBrush" Color="#0F1A2B"/>
   <Color x:Key="GesherSurfaceRaisedColor">#16243A</Color>
   <SolidColorBrush x:Key="GesherSurfaceRaisedBrush" Color="#16243A"/>
+  <Color x:Key="GesherSurfaceHoverColor">#1E2D45</Color>
+  <SolidColorBrush x:Key="GesherSurfaceHoverBrush" Color="#1E2D45"/>
   <Color x:Key="GesherSelectionColor">#42392A</Color>
   <SolidColorBrush x:Key="GesherSelectionBrush" Color="#42392A"/>
   <Color x:Key="GesherInkColor">#EAF0F7</Color>
@@ -53,4 +55,12 @@
   <CornerRadius x:Key="GesherRadiusPanel">8</CornerRadius>
   <CornerRadius x:Key="GesherRadiusButton">6</CornerRadius>
   <CornerRadius x:Key="GesherRadiusPill">999</CornerRadius>
+  <!-- הגשר: מסגרת של 296x196, והקצוות של המסלול בגובה GesherBridgeDeckEndY -->
+  <sys:Double x:Key="GesherBridgeWidth">296</sys:Double>
+  <sys:Double x:Key="GesherBridgeHeight">196</sys:Double>
+  <sys:Double x:Key="GesherBridgeDeckEndY">182</sys:Double>
+  <Geometry x:Key="GesherBridgeMastGeometry">M 180.86,171.95 L 191.14,173.53 L 213.17,10.33 L 208.83,9.67 Z</Geometry>
+  <Geometry x:Key="GesherBridgeDeckGeometry">M 8.00,182.00 Q 148.00,162.00 288.00,182.00</Geometry>
+  <Geometry x:Key="GesherBridgeStringsGeometry">M 209.50,19.76 L 54.00,174.31 M 207.20,34.74 L 76.40,172.42 M 204.90,49.71 L 98.80,171.04 M 202.60,64.68 L 121.20,170.17 M 200.30,79.65 L 143.60,169.81 M 198.00,94.62 L 166.00,169.97</Geometry>
+  <Geometry x:Key="GesherBridgeStaysGeometry">M 207.50,32.78 L 246.00,174.70 M 202.50,65.33 L 246.00,174.70</Geometry>
 </ResourceDictionary>
