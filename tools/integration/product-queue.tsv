@@ -17,7 +17,7 @@ pr-451	origin:refs/heads/topic/pr-451	d9e2ad871a485a7758529543e7b3d78d5ddd5a42	4
 pr-473	origin:refs/heads/topic/pr-473	59c46d223b32cda7c8cc6435738eb2135dae768e	473	3	Passkeys דרך ה-WebAuthn של Windows (Credential Manager) (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-450	origin:refs/heads/topic/pr-450	0ff8f9bde10e7972e8c1236626852b121171664f	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-468	origin:refs/heads/topic/pr-468	0944c1433c779b29a8a3392ef18ceb5d7f6f3342	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
-pr-475	origin:refs/heads/topic/pr-475	5502e8183b8c56f20ce59ada816f3b0395dcc40c	340,470,471,475	1	סדרת Windows Hello: הרשאות AuthService ‏(‏#340), ‏Windows Hello עסוק (‏#470), המתנה תחומה אחרי ביטול (‏#471) ותיעוד (‏#475, מכיל את כולם)
+pr-475	origin:refs/heads/topic/pr-475	1d8346ff1440c970e38912d785d172c3b980f03e	340,470,471,475	1	סדרת Windows Hello: הרשאות AuthService ‏(‏#340), ‏Windows Hello עסוק (‏#470), המתנה תחומה אחרי ביטול (‏#471) ותיעוד (‏#475, מכיל את כולם)
 pr-256	origin:refs/heads/topic/pr-256	0aa2b1c40fd00c2beb943ce5dcfd19c69e9344a2	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
 # ‏pr-403 ממתין: מול main יש 60 מקטעים בהתנגשות (כ-2,200 שורות), בעיקר WifiConnections.java (28 מקטעים),
 # ‏PackageManagerService.java ובדיקות השירות. גם כאן main קיבל עבודה קודמת על Wi-Fi בדרך אחרת. צריך ענף נושא ייעודי.
@@ -34,27 +34,30 @@ pr-256	origin:refs/heads/topic/pr-256	0aa2b1c40fd00c2beb943ce5dcfd19c69e9344a2	2
 # גל 2 (26.11.2026): ‏21 PRs שנכנסים ברצף מעל product בלי התנגשות, מהעותקים מלפני השינוי ברישיון
 # (הענף archive/apache-snapshots). הוצאו: #81 (מדווח על סנכרון SMTC שלא קורה), ‏#374 (רק האוטומציה של
 # upstream למיזוג, שכבויה אצלנו), ‏#479 (חלון לא גדול מהמסך הווירטואלי: מחכה להחלטה של בעל המאגר).
-pr-266	origin:refs/heads/archive/apache-snapshots	6c43bd3b5c2f5348c5fcd5b129ff58ab3118ee8b	266	2	ביצועים: זמן חיים מוגבל לבקשות ל-authenticator של חשבונות (NATIVE-10 A)
-pr-290	origin:refs/heads/archive/apache-snapshots	4ecfd19b7629a975cf03c2a51ed30bbe0a89560f	290	2	ממשק: האייקונים והצלילים של MessageBox בהודעות של המארח
-pr-336	origin:refs/heads/archive/apache-snapshots	67c55c5193258ab8572a951d2ed9a354da7ae949	336	2	ביצועים: שימוש חוזר בחוצצי הקלט והפלט של AVC
-pr-338	origin:refs/heads/archive/apache-snapshots	77c305a7d393fc73bd7baad437b296d09a7183be	338	2	ביצועים: אינדקס לשליחה ל-observers של content, בלי לשנות את סדר המסירה של Android
-pr-341	origin:refs/heads/archive/apache-snapshots	2f9ce398e84d57f1278cddbd8277a3c83b96c0a0	341	2	HTTP: הזרמה של תשובות Brotli, עם בעלות מוגבלת בצד ה-native
-pr-353	origin:refs/heads/archive/apache-snapshots	d725b66d8518cc7d90c7475d0c00aa1eb6e7571a	353,390	2	ביצועים: משפחות הרכיבים נבנות פעם אחת לכל שאילתת intent ב-PackageManager (מכיל את #390: אודיו, קלט חוסם שהוכן נשמר בזמן מיקס של השלמה)
-pr-380	origin:refs/heads/archive/apache-snapshots	261a7ee6bcc34fd75c9cef94ef3cdaf75c77c2d7	380	2	אפקטים של עוצמת קול של Android לנגנים של OpenSL ES
-pr-389	origin:refs/heads/archive/apache-snapshots	eb3a28e762748bb29add79fd8204bb2ff6349e44	389	2	ביצועים: מקדמי הכרומה של NV12 ל-RGBA נשמרים בין פריימים במצלמה
-pr-393	origin:refs/heads/archive/apache-snapshots	4782e29299aa466ad8c0455cd4ec4518d1f06d5d	393	2	CI: בידוד של observers של המטא-דאטה של TSF מכותבים שממתינים
-pr-394	origin:refs/heads/archive/apache-snapshots	d664ac2a90507b26b6b8a281ea6874063b94618a	394	2	בדיקה: DNS מחכה לקריאה האמיתית של ה-timeout ולסיום של ה-executor
-pr-404	origin:refs/heads/archive/apache-snapshots	14fd8fcb01887d7883d4a209dd0762f90ef6bf0b	404	2	מדיה: מקדמי ה-resampler נשמרים בתוך כל מיקס
-pr-411	origin:refs/heads/archive/apache-snapshots	9f10e0845739ecbe1496fd5f0173ed000bb320da	411	2	בדיקה: UsbManager זמין בזמן ההפעלה של אפליקציה מותקנת (#407)
-pr-412	origin:refs/heads/topic/pr-412	60d1c1a739f205e123b7882959c6cefa9405b881	412	2	ביצועים: המרת שורות לחיתוך אי-זוגי של I420 בלי חישוב חוזר
-pr-415	origin:refs/heads/topic/pr-415	eca036b879e6ae83a2654a9ce6d9724d45a2a75c	415	2	ביצועים: בלי הקצאות של Formatter בתמציות הזהות של שירותים
-pr-420	origin:refs/heads/archive/apache-snapshots	7cd662bd2f2ed1995a5d88f0f0f7e138d6b6fc17	420	2	CI: הקריאה של רשימת הגרסאות הציבורית דרך אותה קריאה מאומתת ומוגבלת
-pr-424	origin:refs/heads/archive/apache-snapshots	9b5e595bdd93a664a04363fcf4e45b9d6f36d78a	424	2	ביצועים: bionic חוזר למסלול שהצליח במחיקה של עץ תיקיות
-pr-428	origin:refs/heads/archive/apache-snapshots	57f9310913419ab529387c6f59e2c7a43d3f8361	428	2	ביצועים: דילוג על מילים בלי אפסים בכתיבה של Annex-B לקובץ MP4
+# גל 2 ממתין (26.11): בריצה 45847382858, יחד עם #475, נכשלו: צבעי NV12 ל-RGBA בקריאת פריימים (חשוד: #389),
+# המצלמה (חשוד: #389), טביעת האצבע של TsfJobSupervisor.cs בבדיקות הזהות (‏#393), ואותות POSIX ב-test-native.
+# ‏#475 נבדק קודם לבד מעל product, וגל 2 חוזר אחרי שכל כשל יוסבר ויתוקן.
+#pr-266	origin:refs/heads/archive/apache-snapshots	6c43bd3b5c2f5348c5fcd5b129ff58ab3118ee8b	266	2	ביצועים: זמן חיים מוגבל לבקשות ל-authenticator של חשבונות (NATIVE-10 A)
+#pr-290	origin:refs/heads/archive/apache-snapshots	4ecfd19b7629a975cf03c2a51ed30bbe0a89560f	290	2	ממשק: האייקונים והצלילים של MessageBox בהודעות של המארח
+#pr-336	origin:refs/heads/archive/apache-snapshots	67c55c5193258ab8572a951d2ed9a354da7ae949	336	2	ביצועים: שימוש חוזר בחוצצי הקלט והפלט של AVC
+#pr-338	origin:refs/heads/archive/apache-snapshots	77c305a7d393fc73bd7baad437b296d09a7183be	338	2	ביצועים: אינדקס לשליחה ל-observers של content, בלי לשנות את סדר המסירה של Android
+#pr-341	origin:refs/heads/archive/apache-snapshots	2f9ce398e84d57f1278cddbd8277a3c83b96c0a0	341	2	HTTP: הזרמה של תשובות Brotli, עם בעלות מוגבלת בצד ה-native
+#pr-353	origin:refs/heads/archive/apache-snapshots	d725b66d8518cc7d90c7475d0c00aa1eb6e7571a	353,390	2	ביצועים: משפחות הרכיבים נבנות פעם אחת לכל שאילתת intent ב-PackageManager (מכיל את #390: אודיו, קלט חוסם שהוכן נשמר בזמן מיקס של השלמה)
+#pr-380	origin:refs/heads/archive/apache-snapshots	261a7ee6bcc34fd75c9cef94ef3cdaf75c77c2d7	380	2	אפקטים של עוצמת קול של Android לנגנים של OpenSL ES
+#pr-389	origin:refs/heads/archive/apache-snapshots	eb3a28e762748bb29add79fd8204bb2ff6349e44	389	2	ביצועים: מקדמי הכרומה של NV12 ל-RGBA נשמרים בין פריימים במצלמה
+#pr-393	origin:refs/heads/archive/apache-snapshots	4782e29299aa466ad8c0455cd4ec4518d1f06d5d	393	2	CI: בידוד של observers של המטא-דאטה של TSF מכותבים שממתינים
+#pr-394	origin:refs/heads/archive/apache-snapshots	d664ac2a90507b26b6b8a281ea6874063b94618a	394	2	בדיקה: DNS מחכה לקריאה האמיתית של ה-timeout ולסיום של ה-executor
+#pr-404	origin:refs/heads/archive/apache-snapshots	14fd8fcb01887d7883d4a209dd0762f90ef6bf0b	404	2	מדיה: מקדמי ה-resampler נשמרים בתוך כל מיקס
+#pr-411	origin:refs/heads/archive/apache-snapshots	9f10e0845739ecbe1496fd5f0173ed000bb320da	411	2	בדיקה: UsbManager זמין בזמן ההפעלה של אפליקציה מותקנת (#407)
+#pr-412	origin:refs/heads/topic/pr-412	60d1c1a739f205e123b7882959c6cefa9405b881	412	2	ביצועים: המרת שורות לחיתוך אי-זוגי של I420 בלי חישוב חוזר
+#pr-415	origin:refs/heads/topic/pr-415	eca036b879e6ae83a2654a9ce6d9724d45a2a75c	415	2	ביצועים: בלי הקצאות של Formatter בתמציות הזהות של שירותים
+#pr-420	origin:refs/heads/archive/apache-snapshots	7cd662bd2f2ed1995a5d88f0f0f7e138d6b6fc17	420	2	CI: הקריאה של רשימת הגרסאות הציבורית דרך אותה קריאה מאומתת ומוגבלת
+#pr-424	origin:refs/heads/archive/apache-snapshots	9b5e595bdd93a664a04363fcf4e45b9d6f36d78a	424	2	ביצועים: bionic חוזר למסלול שהצליח במחיקה של עץ תיקיות
+#pr-428	origin:refs/heads/archive/apache-snapshots	57f9310913419ab529387c6f59e2c7a43d3f8361	428	2	ביצועים: דילוג על מילים בלי אפסים בכתיבה של Annex-B לקובץ MP4
 # pr-434 הוצא מגל 2 (26.11): הראיות שלו (docs/research/uri-grant-retirement-2026-11-23.json) מוצמדות
 # לגרסאות של ApkPackage.java, ‏ContentProviders.java ו-PackageManagerService.java מלפני #353 ושאר הפריטים,
 # ו-test_uri_retirement_report.py נכשל בכוונה על ראיות מקוד שהשתנה. עדכון של טביעות האצבע בלי מדידה
 # חדשה היה מציג מדידה שלא נעשתה. נכנס אחרי קמפיין מדידה חדש על הקוד המשולב.
 #pr-434	origin:refs/heads/archive/apache-snapshots	1462b55fc0bf72f2a2e1a385ad2990f0bdcf6a6e	434	2	ביצועים: הרשאות ה-URI של חבילה מותקנת מבוטלות פעם אחת בכל פרסום
-pr-436	origin:refs/heads/archive/apache-snapshots	477d23da682c909639e625ee9f16c1192b8e60b0	436	2	בדיקה: שמירה של fixtures וקבלה מחדש של ספקים בבדיקות השירותים
-pr-441	origin:refs/heads/archive/apache-snapshots	b1784db80e19df6e06ba363cbfb737a7bc6b04a0	441	2	ביצועים: המרה של ASCII למחרוזת רחבה בלי שלב ביניים של multibyte
+#pr-436	origin:refs/heads/archive/apache-snapshots	477d23da682c909639e625ee9f16c1192b8e60b0	436	2	בדיקה: שמירה של fixtures וקבלה מחדש של ספקים בבדיקות השירותים
+#pr-441	origin:refs/heads/archive/apache-snapshots	b1784db80e19df6e06ba363cbfb737a7bc6b04a0	441	2	ביצועים: המרה של ASCII למחרוזת רחבה בלי שלב ביניים של multibyte
