@@ -30,6 +30,13 @@
 - **לפני כל דחיפה:** לוודא ש-`git remote get-url origin` הוא `https://github.com/yosef220/gesher-hameitarim`. הפעלה מחדש של הסשן מחזירה אותו לפעמים ל-APK.
 - **קרדיט:** הקומיטים נרשמים על שם `yosef220` בכתובת החסויה של GitHub, ו-Claude מופיע בשורת `Co-Authored-By`.
 
+## רישיון
+
+- **מ-26.11.2026:** גשר המיתרים מופץ לפי PolyForm Strict 1.0.0 (`LICENSE`). מותר שימוש לא מסחרי בלבד, בלי הפצה, בלי שינויים ובלי גרסאות נגזרות. שימוש בעסק צריך רישיון נפרד בכתב מבעל המאגר. ההחלטה והנימוקים: `docs/he/09-license.md`.
+- **Apache 2.0 (`LICENSE-APACHE`)** חל על הקוד של Gesher עד `303bb835d`, על התרומות שהוגשו ל-Gesher, על הענף של Lev-Good, ועל כל מה שהמאגר פרסם עד `1f29fef7a`. לא משנים כותרות Apache בקבצים שמקורם ב-Gesher.
+- **קובץ חדש שלנו** מקבל את הכותרת `Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0`.
+- **את הטקסט של PolyForm לא משנים.** העותקים שבמתקין (`tools/package/licenses/GESHER-*.txt`) זהים ל-`LICENSE` ול-`LICENSE-APACHE`, וזה נבדק ב-`tools/tests/test_portable_package.py`.
+
 ## אינטגרציה של PRs
 
 - מיזוג עם היסטוריה (`git merge --no-ff`), כדי שהקרדיט של כל תורם יישמר.

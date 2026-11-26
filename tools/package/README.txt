@@ -132,3 +132,13 @@ What works, and what doesn't yet
 
 The runtime keeps the directories Android expects in %LOCALAPPDATA%\Gesher;
 uninstalling removes them.
+
+License
+-------
+Gesher HaMeitarim is offered under the PolyForm Strict License 1.0.0: use for
+noncommercial purposes only, with no right to distribute it (including this
+installer) or to make changes or new works based on it. Any other use, including
+use in a business, needs a separate written license from the repository owner,
+https://github.com/yosef220. The parts that come from Gesher remain under the
+Apache License 2.0. The licenses are in the licenses folder:
+GESHER-HAMEITARIM-LICENSE.txt and GESHER-APACHE-LICENSE-2.0.txt.

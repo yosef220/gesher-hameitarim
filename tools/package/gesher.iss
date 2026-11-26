@@ -100,6 +100,10 @@ Source: "etc\permissions\android.test.mock.xml"; DestDir: "{app}\etc\permissions
 Source: "{#BuildDir}\android.test.runner.jar"; DestDir: "{app}"; Flags: ignoreversion
 Source: "etc\permissions\android.test.runner.xml"; DestDir: "{app}\etc\permissions"; Flags: ignoreversion
 Source: "licenses\JUNIT-CPL-NOTICES.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
+; גשר המיתרים: הרישיון של המוצר (PolyForm Strict 1.0.0), ו-Apache 2.0 של החלקים שמקורם ב-Gesher.
+; העותקים זהים ל-LICENSE ול-LICENSE-APACHE שבשורש (נבדק ב-tools/tests/test_portable_package.py).
+Source: "licenses\GESHER-HAMEITARIM-LICENSE.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
+Source: "licenses\GESHER-APACHE-LICENSE-2.0.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 Source: "etc\permissions\privapp-permissions-microg.xml"; DestDir: "{app}\etc\permissions"; Flags: ignoreversion
 Source: "{#BuildDir}\binderd.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\servicemanager.exe"; DestDir: "{app}"; Flags: ignoreversion

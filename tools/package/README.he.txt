@@ -117,3 +117,12 @@ Aurora Store מ־auroraoss.com, ו־WebView2 מ־go.microsoft.com. כשהורד�
     gesher classes.dex com.example.Main
 
 הסרת גשר המיתרים מסירה גם את הסביבה ואת נתוני היישומים שבתוכה.
+
+רישיון
+------
+גשר המיתרים מופץ לפי PolyForm Strict License 1.0.0: מותר להשתמש בו למטרות לא
+מסחריות בלבד. אסור להפיץ אותו (גם לא את המתקין), לשנות אותו או לבנות ממנו גרסאות.
+לכל שימוש אחר, כולל שימוש בעסק, צריך רישיון נפרד בכתב מבעל המאגר:
+https://github.com/yosef220
+החלקים שמקורם ב-Gesher נשארים תחת Apache 2.0. הרישיונות נמצאים בתיקייה licenses:
+GESHER-HAMEITARIM-LICENSE.txt ו-GESHER-APACHE-LICENSE-2.0.txt.

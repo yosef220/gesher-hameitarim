@@ -1,4 +1,4 @@
-﻿# Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: Apache-2.0
+﻿# Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
 # גשר המיתרים: סוכן העדכונים שרץ ברקע. קובץ חדש בפרויקט הזה.
 #
 # ‏gesher-app מפעיל אותו בלי חלון כשמשתמש פותח אפליקציה מתפריט התחל או מקובץ APK,

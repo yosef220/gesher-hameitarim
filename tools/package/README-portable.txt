@@ -29,3 +29,8 @@ The Control Center updater keeps the current portable runtime directory and Data
 To update manually with Setup, select portable mode and choose the existing App
 directory (or the runtime directory of a flat portable installation). Back up Data
 first. Never install the standard mode over a portable runtime directory.
+
+License: Gesher HaMeitarim is offered under the PolyForm Strict License 1.0.0
+(noncommercial use only; no distribution, no changes, no new works based on it).
+The parts that come from Gesher remain under the Apache License 2.0. See
+App\licenses\GESHER-HAMEITARIM-LICENSE.txt and GESHER-APACHE-LICENSE-2.0.txt.

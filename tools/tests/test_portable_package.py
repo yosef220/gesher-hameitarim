@@ -15,6 +15,25 @@ VERSION = '0.9.1'
 NAME = f'gesher-{VERSION}-portable.zip'
 
 
+
+class ProjectLicenseTests(unittest.TestCase):
+    """גשר המיתרים: המתקין והחבילה הניידת מפיצים בדיוק את הרישיונות שבשורש המאגר."""
+
+    def test_shipped_licenses_are_the_repository_licenses(self):
+        licenses = ROOT / 'tools/package/licenses'
+        for shipped, source in (('GESHER-HAMEITARIM-LICENSE.txt', 'LICENSE'),
+                                ('GESHER-APACHE-LICENSE-2.0.txt', 'LICENSE-APACHE')):
+            with self.subTest(shipped=shipped):
+                self.assertEqual((licenses / shipped).read_bytes(), (ROOT / source).read_bytes())
+
+    def test_project_license_is_polyform_strict_and_the_installer_ships_both(self):
+        text = (ROOT / 'LICENSE').read_text(encoding='utf-8')
+        self.assertIn('\n# PolyForm Strict License 1.0.0\n', text)
+        self.assertTrue((ROOT / 'LICENSE-APACHE').read_text(encoding='utf-8').lstrip().startswith('Apache License'))
+        manifest = (ROOT / 'tools/package/gesher.iss').read_text(encoding='utf-8-sig')
+        for name in ('GESHER-HAMEITARIM-LICENSE.txt', 'GESHER-APACHE-LICENSE-2.0.txt'):
+            self.assertIn(f'Source: "licenses\\{name}"; DestDir: "{{app}}\\licenses"', manifest)
+
 @unittest.skipUnless(SHELL, 'PowerShell is required to execute the production packager')
 class PortablePackageTests(unittest.TestCase):
     def setUp(self):
@@ -72,6 +91,7 @@ class PortablePackageTests(unittest.TestCase):
             for name in ('Gesher.exe', 'portable.marker', 'Data/', 'README.txt', 'security-notice.txt',
                          'security-notice.he.txt', 'App/gesher-panel-native.ps1',
                          'App/licenses/ANGLE-NOTICES.txt', 'App/licenses/APKSIG-LICENSE.txt',
+                         'App/licenses/GESHER-HAMEITARIM-LICENSE.txt', 'App/licenses/GESHER-APACHE-LICENSE-2.0.txt',
                          'App/etc/permissions/org.apache.http.legacy.xml',
                          'App/tzdata/etc/tz/tzdata', 'App/media/audio/notifications/Test.ogg',
                          'App/framework/x86_64/boot.art'):

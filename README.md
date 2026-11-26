@@ -152,10 +152,19 @@ download and install a newer version. Automatic checks can be disabled; installi
 requires confirmation and preserves installed Android apps and their data.
 See [updating Gesher](docs/updates.md) for behavior, release packaging and tests.
 
-## License
+## License / רישיון
 
-[Apache License 2.0](LICENSE), the same license as AOSP. See
-[decision 0001](docs/decisions/0001-license.md).
+Gesher HaMeitarim is offered under the [PolyForm Strict License 1.0.0](LICENSE):
+noncommercial use only, with no right to distribute it or to make changes or new
+works based on it. Any other use, including use in a business, needs a separate
+written license from the repository owner. The parts that come from Gesher, up to
+its last version released under the Apache License 2.0, remain under
+[Apache 2.0](LICENSE-APACHE). See [NOTICE.md](NOTICE.md).
+
+גשר המיתרים מופץ לפי [PolyForm Strict License 1.0.0](LICENSE): שימוש למטרות לא
+מסחריות בלבד, בלי זכות להפיץ, לשנות או לבנות ממנו גרסאות. לכל שימוש אחר, כולל
+בעסק, צריך רישיון נפרד בכתב מבעל המאגר. החלקים שמקורם ב-Gesher נשארים תחת
+[Apache 2.0](LICENSE-APACHE). פירוט ב-[NOTICE.md](NOTICE.md).
 
 ---
 
