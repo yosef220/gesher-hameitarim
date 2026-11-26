@@ -47,7 +47,7 @@ pr-394	origin:refs/heads/archive/apache-snapshots	d664ac2a90507b26b6b8a281ea6874
 pr-404	origin:refs/heads/archive/apache-snapshots	14fd8fcb01887d7883d4a209dd0762f90ef6bf0b	404	2	מדיה: מקדמי ה-resampler נשמרים בתוך כל מיקס
 pr-411	origin:refs/heads/archive/apache-snapshots	9f10e0845739ecbe1496fd5f0173ed000bb320da	411	2	בדיקה: UsbManager זמין בזמן ההפעלה של אפליקציה מותקנת (#407)
 pr-412	origin:refs/heads/topic/pr-412	60d1c1a739f205e123b7882959c6cefa9405b881	412	2	ביצועים: המרת שורות לחיתוך אי-זוגי של I420 בלי חישוב חוזר
-pr-415	origin:refs/heads/archive/apache-snapshots	1d32232b0befd91fafaa738807ce582ecb3a6ca0	415	2	ביצועים: בלי הקצאות של Formatter בתמציות הזהות של שירותים
+pr-415	origin:refs/heads/topic/pr-415	eca036b879e6ae83a2654a9ce6d9724d45a2a75c	415	2	ביצועים: בלי הקצאות של Formatter בתמציות הזהות של שירותים
 pr-420	origin:refs/heads/archive/apache-snapshots	7cd662bd2f2ed1995a5d88f0f0f7e138d6b6fc17	420	2	CI: הקריאה של רשימת הגרסאות הציבורית דרך אותה קריאה מאומתת ומוגבלת
 pr-424	origin:refs/heads/archive/apache-snapshots	9b5e595bdd93a664a04363fcf4e45b9d6f36d78a	424	2	ביצועים: bionic חוזר למסלול שהצליח במחיקה של עץ תיקיות
 pr-428	origin:refs/heads/archive/apache-snapshots	57f9310913419ab529387c6f59e2c7a43d3f8361	428	2	ביצועים: דילוג על מילים בלי אפסים בכתיבה של Annex-B לקובץ MP4
