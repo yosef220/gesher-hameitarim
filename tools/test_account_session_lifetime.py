@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +41,7 @@ def main():
                                               check=True,capture_output=True).stdout)
         subprocess.run([str(args.java_home/'bin/javac'),'-J-XX:-UsePerfData','-encoding','UTF-8',
                         '-cp',cp,'-d',str(classes),str(source),
+                        str(ROOT/'app/java/com/gesher/server/AccountRequests.java'),
                         str(ROOT/'tests/account-session/AccountSessionLifetimeHost.java'),
                         str(ROOT/'tests/account-session/AccountSessionTimeoutHost.java'),
                         str(ROOT/'tests/account-session/AccountRetirementHost.java'),
@@ -59,6 +61,16 @@ def main():
                             '--patch-module','jdk.unsupported='+str(work/'cleaner'),
                             '-cp',str(classes)+os.pathsep+cp,fixture,str(native),*arguments],
                            check=True,env=env,timeout=45)
+    # The immutable framework controller already invokes this entry point from
+    # the submitted source checkout. Keep admission in the same required gate,
+    # rather than adding a branch-local workflow step the controller cannot see.
+    if not args.source_ref:
+        subprocess.run([sys.executable, str(ROOT/'tools/test_account_request_admission.py'),
+                        '--java-home', str(args.java_home),
+                        '--framework-classes', str(args.framework_classes),
+                        '--core-classes', str(args.core_classes),
+                        '--app-classes', str(args.app_classes),
+                        '--apksig-jar', str(args.apksig_jar), '--cc', args.cc], check=True)
 
 if __name__=='__main__':
     main()
