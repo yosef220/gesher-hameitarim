@@ -5,7 +5,7 @@
 package com.gesher.server;
 
 /**
- * What {@link AuthService} asks of Windows Hello (ADR 0091): whether the signed-in user can
+ * What {@link AuthService} asks of Windows Hello (ADR 0094): whether the signed-in user can
  * confirm a credential, and that confirmation. The values are Windows' own
  * ({@code Windows.Security.Credentials.UI.UserConsentVerifierAvailability} and
  * {@code UserConsentVerificationResult}); the native implementation is specified in
@@ -33,6 +33,11 @@ public interface WindowsHelloBackend {
 
     /** The user's current availability (CheckAvailabilityAsync), one of the values above. */
     int availability();
+
+    /** A fresh availability check for startup retries, even when normal reads are cached. */
+    default int refreshAvailability() {
+        return availability();
+    }
 
     /**
      * Starts a verification owned by the requesting app's window. {@code completion} is
