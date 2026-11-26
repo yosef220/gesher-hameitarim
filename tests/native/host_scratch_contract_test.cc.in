@@ -244,6 +244,8 @@ struct OpenFileDescription {
   bool OwnedPipe() const { struct stat info{}; return ::fstat(fd, &info) == 0 && S_ISFIFO(info.st_mode); }
   bool KnownPipeStatus() const { return ::fcntl(fd, F_GETFL) >= 0; }
   int Flags() const { return ::fcntl(fd, F_GETFL); }
+  // FIFO (#256) הוא FIFO עם שם (mkfifo). הצינורות כאן הם צינורות אנונימיים של Linux, ולכן לא.
+  bool IsFifo() const { return false; }
 };
 struct DescriptorSnapshot {
   HANDLE handle = INVALID_HANDLE_VALUE;
@@ -284,6 +286,8 @@ static int QueryPipe(HANDLE handle, void* output, ULONG size, FILE_INFORMATION_C
       static_cast<ULONG>(bytes), static_cast<ULONG>(capacity - bytes)};
   return 0;
 }
+// FIFO (#256): אף תיאור כאן אינו FIFO, ולכן PollPipeHandle לא מגיע לכאן.
+static int PollFifoHandle(const DescriptorSnapshotPtr&, short, short*) { std::abort(); }
 @PIPE_ADMISSION@
 @PIPE_POLL@
 #endif
