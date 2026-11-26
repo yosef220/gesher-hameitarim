@@ -24,6 +24,7 @@
 #include <gesher/reserved_names.h>
 #include <gesher/file_description.h>
 
+#include "fifo_internal.h"
 #include "internal.h"
 #include "descriptor_resources.h"
 #include "record_lock_descriptors.h"
@@ -272,13 +273,11 @@ int Chmod(const char* path, mode_t mode, bool follow) {
   if (gesher::system_linker::RefuseChange(path) != 0) return -1;
   std::wstring windows;
   if (!gesher::DiskPath(path, &windows, EPERM)) return -1;
-  HANDLE h = CreateFileW(windows.c_str(), FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                         OPEN_EXISTING,
-                         FILE_FLAG_BACKUP_SEMANTICS | (follow ? 0 : FILE_FLAG_OPEN_REPARSE_POINT),
-                         nullptr);
+  HANDLE h = gesher::OpenPathMaybeFifo(
+      windows, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | FILE_READ_EA | FILE_WRITE_EA, follow);
   if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
   int result = !follow && gesher::IsSymlinkHandle(h) ? (errno = EOPNOTSUPP, -1) : SetMode(h, mode);
+  if (result == 0 && gesher::IsFifoHandle(h)) gesher::WriteFifoMode(h, mode);
   CloseHandle(h);
   return result;
 }
@@ -305,11 +304,7 @@ int Access(const char* path, int mode, bool follow) {
     case PathKind::kMissing:
       return errno = ENOENT, -1;
   }
-  HANDLE h = CreateFileW(windows.c_str(), FILE_READ_ATTRIBUTES,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                         OPEN_EXISTING,
-                         FILE_FLAG_BACKUP_SEMANTICS | (follow ? 0 : FILE_FLAG_OPEN_REPARSE_POINT),
-                         nullptr);
+  HANDLE h = gesher::OpenPathMaybeFifo(windows, FILE_READ_ATTRIBUTES, follow);
   if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
   BY_HANDLE_FILE_INFORMATION info;
   bool ok = GetFileInformationByHandle(h, &info);
@@ -419,9 +414,7 @@ int Link(const char* oldpath, const char* newpath, bool follow) {
   if (!gesher::DiskPath(oldpath, &from, EPERM) || !gesher::DiskPath(newpath, &to, EEXIST)) return -1;
   if (follow) {
     // AT_SYMLINK_FOLLOW: a link to the file a symbolic link names.
-    HANDLE h = CreateFileW(from.c_str(), FILE_READ_ATTRIBUTES,
-                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                           OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    HANDLE h = gesher::OpenPathMaybeFifo(from, FILE_READ_ATTRIBUTES, true);
     if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
     wchar_t final_path[32768];
     DWORD n = GetFinalPathNameByHandleW(h, final_path, 32768, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);

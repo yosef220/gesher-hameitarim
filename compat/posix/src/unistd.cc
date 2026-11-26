@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "internal.h"
+#include "fifo_internal.h"
 #include "revocable_internal.h"
 #include "binder_internal.h"
 #include "event_internal.h"
@@ -481,6 +482,7 @@ int gesher_ftruncate(int fd, off_t length) {
   gesher::FileOperationLease operation(snapshot);
   if (operation.Error()) return errno = operation.Error(), -1;
   const HANDLE file = snapshot->handle;
+  if (GetFileType(file) != FILE_TYPE_DISK) return errno = EINVAL, -1;
   if (gesher::FileDescriptionIsMemfd(snapshot)) {
     if (int error = gesher::MemfdResizeHandleError(file, static_cast<uint64_t>(length))) return errno = error, -1;
   }
@@ -774,7 +776,9 @@ off_t lseek(int fd, off_t offset, int whence) {
   if (flags < 0) return -1;
   if ((flags & O_PATH) != 0) return errno = EBADF, -1;
   if (whence < SEEK_SET || whence > SEEK_HOLE) return errno = EINVAL, -1;
-  if (is_stream) return errno = ESPIPE, -1;
+  if (is_stream || gesher::StatFifoDescription(snapshot, nullptr, nullptr, nullptr)) {
+    return errno = ESPIPE, -1;
+  }
   if (no_position) return 0;
   const HANDLE file = snapshot->handle;
   SetLastError(ERROR_SUCCESS);
@@ -869,8 +873,7 @@ char* realpath(const char* path, char* resolved_path) {
     return nullptr;
   }
   if (kind == gesher::PathKind::kFile) {
-    HANDLE h = CreateFileW(wpath.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                           nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    HANDLE h = gesher::OpenPathMaybeFifo(wpath, 0, true);
     if (h == INVALID_HANDLE_VALUE) {
       gesher::FailWithLastError();
       return nullptr;
