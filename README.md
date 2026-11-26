@@ -106,6 +106,9 @@ SDK inventory that separates structural gaps from demonstrated failures.
 
 ## Building
 
+See the [build and package guide](docs/build-and-package.md) for source identity,
+complete installer suppliers and local validation.
+
 The production build runs on Linux or WSL and produces Windows x64 binaries.
 Requirements: CMake 3.24+, Ninja, Python 3.12+, git, curl, and GNU Make. The
 recipe downloads the pinned [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)
@@ -136,7 +139,8 @@ Outputs include:
 
 - `dalvikvm.exe`: The ported ART runtime with JIT compiler.
 - `gesher-exec.exe`: App process host and launcher.
-- `installer/gesher-setup-*.exe`: Complete Windows installer and shell integration.
+- `installer/gesher-setup-*.exe`: Complete Windows installer and shell integration,
+  produced separately by the CI `package` job after supplier verification.
 
 Tests: `tests/build-test-apps.sh out/test-apps` (needs a JDK), then
 `tests/windows/run-tests.ps1` on Windows.
@@ -148,10 +152,19 @@ download and install a newer version. Automatic checks can be disabled; installi
 requires confirmation and preserves installed Android apps and their data.
 See [updating Gesher](docs/updates.md) for behavior, release packaging and tests.
 
-## License
+## License / רישיון
 
-[Apache License 2.0](LICENSE), the same license as AOSP. See
-[decision 0001](docs/decisions/0001-license.md).
+Gesher HaMeitarim is offered under the [PolyForm Strict License 1.0.0](LICENSE):
+noncommercial use only, with no right to distribute it or to make changes or new
+works based on it. Any other use, including use in a business, needs a separate
+written license from the repository owner. The parts that come from Gesher, up to
+its last version released under the Apache License 2.0, remain under
+[Apache 2.0](LICENSE-APACHE). See [NOTICE.md](NOTICE.md).
+
+גשר המיתרים מופץ לפי [PolyForm Strict License 1.0.0](LICENSE): שימוש למטרות לא
+מסחריות בלבד, בלי זכות להפיץ, לשנות או לבנות ממנו גרסאות. לכל שימוש אחר, כולל
+בעסק, צריך רישיון נפרד בכתב מבעל המאגר. החלקים שמקורם ב-Gesher נשארים תחת
+[Apache 2.0](LICENSE-APACHE). פירוט ב-[NOTICE.md](NOTICE.md).
 
 ---
 
