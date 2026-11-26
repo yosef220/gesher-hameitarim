@@ -710,7 +710,10 @@ if ($codeA -eq 0 -and $codeB -eq 0 -and $started -eq 1 -and $connected -eq 1 -an
 $initialList = RunTimed "$Dir/dalvikvm.exe" ($launcher + 'list') 300
 $initialListCode = $LASTEXITCODE
 $initialPackageCount = ([regex]::Matches($initialList, '(?m)^package:')).Count
-if ($initialListCode -ne 0 -or -not $initialList.Contains("gesher-app: $initialPackageCount installed packages") -or
+# גשר המיתרים: gesher-app כותב ביחיד כשיש חבילה אחת (package_count_one ב-Launcher.java).
+# עם #464 בלי microG זה קורה כשנשארת רק חבילת בדיקה של shard קודם, כמו com.gesher.stt
+$initialPackageText = if ($initialPackageCount -eq 1) { 'gesher-app: 1 installed package' } else { "gesher-app: $initialPackageCount installed packages" }
+if ($initialListCode -ne 0 -or -not $initialList.Contains($initialPackageText) -or
     $initialList -match '(?m)^package:com\.gesher\.(lifecycle|peer|components) ') {
   Write-Host "FAIL  services: initial package inventory is consistent and contains no install fixtures (exit $initialListCode)"
   Write-Host $initialList
