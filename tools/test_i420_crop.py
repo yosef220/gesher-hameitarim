@@ -58,6 +58,12 @@ def generate(output, ref=None, observe=True, mutation=None):
                               sources['compat/media/surface/queue_surface.cc']))
     constants.discard('NATIVE_WINDOW_TIMESTAMP_AUTO')
     boundary = sources['tests/media/surface_geometry_host.cc.in'].split('@PRODUCTION@')[0]
+    # גשר המיתרים: התבנית המשותפת קיבלה ב-main את המקום @DAMAGE_TYPES@, ושאר הבדיקות שקוראות אותה
+    # ממלאות אותו מ-surface_damage.h (test_surface_geometry_contracts.py). ‏#412 נכתב לפני כן.
+    if '@DAMAGE_TYPES@' in boundary:
+        boundary = boundary.replace('@DAMAGE_TYPES@', re.sub(
+            r'^\s*#(?:include|pragma).*\n', '',
+            (ROOT / 'compat/hwui/window/surface_damage.h').read_text(), flags=re.MULTILINE))
     boundary = boundary.replace('@CONSTANTS@', 'enum { ' + ', '.join(sorted(constants)) + ' };')
     boundary = boundary.replace('int64_t systemTime(int)', 'inline int64_t systemTime(int)')
     boundary = '#pragma once\n#include "compat/media/video/video_decoder.h"\n' + boundary
