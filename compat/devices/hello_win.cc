@@ -1,7 +1,7 @@
 // Copyright (C) 2026 The Gesher Authors
 // SPDX-License-Identifier: Apache-2.0
 // Gesher (devices track): Windows Hello user-consent verification through its
-// ABI (docs/research/windows-hello-native-spec.md, ADR 0091).
+// ABI (docs/research/windows-hello-native-spec.md, ADR 0094).
 
 #include "hello_win.h"
 
@@ -54,6 +54,8 @@ void Log(const char* call, HRESULT hr) {
   fprintf(stderr, "gesher hello: %s failed: 0x%08lx\n", call, static_cast<unsigned long>(hr));
 }
 
+}  // namespace
+
 // The foreground top-level window of `pid`, checked as ForegroundProcess
 // (clipboard_access.cc) does: owner alive and unchanged across the query.
 HWND ForegroundWindowOf(DWORD pid) {
@@ -74,8 +76,6 @@ HWND ForegroundWindowOf(DWORD pid) {
   return root != nullptr ? root : window;
 }
 
-}  // namespace
-
 struct Verification {
   IAsyncOperation<int>* operation = nullptr;
   IAsyncInfo* info = nullptr;
@@ -87,6 +87,10 @@ struct Verification {
   std::atomic<bool> abandoned{false};
   bool released = false;
 };
+
+HWND OwnerWindow(DWORD pid) {
+  return ForegroundWindowOf(pid);
+}
 
 int Availability(HRESULT* hr) {
   *hr = S_OK;
