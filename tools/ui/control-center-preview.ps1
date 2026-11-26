@@ -33,12 +33,18 @@ function New-SampleIcon([string] $color, [string] $letter) {
     return $bitmap
 }
 
-function Save-Visual($element, [string] $name) {
-    $element.UpdateLayout()
-    $element.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
-    $width = [int][Math]::Ceiling($element.ActualWidth); $height = [int][Math]::Ceiling($element.ActualHeight)
-    $bitmap = [System.Windows.Media.Imaging.RenderTargetBitmap]::new($width, $height, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
-    $bitmap.Render($element)
+# מצייר את החלון כולו (כולל ההיפוך של RTL שעל החלון עצמו), וחותך לגודל התוכן: אזור הלקוח
+# בלי השטח של שורת הכותרת של Windows, שהיה נשאר ריק בתחתית.
+function Save-Visual($window, [string] $name) {
+    $window.UpdateLayout()
+    $window.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
+    $full = [System.Windows.Media.Imaging.RenderTargetBitmap]::new([int][Math]::Ceiling($window.ActualWidth), [int][Math]::Ceiling($window.ActualHeight),
+        96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+    $full.Render($window)
+    $content = $window.Content
+    $width = [Math]::Min($full.PixelWidth, [int][Math]::Ceiling($content.ActualWidth))
+    $height = [Math]::Min($full.PixelHeight, [int][Math]::Ceiling($content.ActualHeight))
+    $bitmap = [System.Windows.Media.Imaging.CroppedBitmap]::new($full, [System.Windows.Int32Rect]::new(0, 0, $width, $height))
     $encoder = [System.Windows.Media.Imaging.PngBitmapEncoder]::new()
     $encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
     $stream = [IO.File]::Create((Join-Path $OutDir "$name.png"))
