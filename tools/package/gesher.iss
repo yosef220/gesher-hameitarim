@@ -276,6 +276,9 @@ Type: files; Name: "{autoprograms}\Gesher Hello.lnk"
 Type: files; Name: "{autoprograms}\גשר — דוגמה.lnk"
 ; Icon handlers an update moved aside (PrepareToInstall) while Explorer had them loaded.
 Type: files; Name: "{app}\gesher_shellext.*.old"
+; גשר המיתרים: מה שה-runtime מקמפל ליד האפליקציות לדוגמה שבתיקיית ההתקנה (oat\x86_64\*.vdex). ההסרה
+; לא מחקה אותו, ותיקיית ההתקנה נשארה אחריה (נמצא בבדיקת השדרוג, ריצה 45788361478).
+Type: filesandordirs; Name: "{app}\oat"
 
 [Code]
 const
