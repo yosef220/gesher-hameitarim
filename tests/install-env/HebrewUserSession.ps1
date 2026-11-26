@@ -15,15 +15,18 @@ param(
 #
 #   1. בודק את הסביבה: מי אני, ושהנתיבים שלי (פרופיל, AppData, ‏TEMP ותפריט התחל) הם מה שהבדיקה
 #      צריכה. אצל משתמש בשם עברי הם בעברית. כשהסביבה לא כזאת, הסשן עוצר עם קוד 2, ולא בודק את גשר.
+#      לאבחון נרשם גם אם tmpfile() של ה-CRT עובד בתיקייה הזמנית של המשתמש.
 #   2. מריץ את tests/e2e/run-e2e.ps1 על האפליקציות שהתבקשו: התקנה של המתקין, התקנה של כל
 #      אפליקציה, הפעלה עד הפריים הראשון, קלט, סגירה, ההפעלה דרך הקישור לקובצי ‎.apk ודרך הקיצור
-#      בתפריט התחל.
+#      בתפריט התחל. כל קיצור ב-"Gesher Apps" נקרא בנוסף דרך Shell.Application, לצד הקריאה של ה-e2e.
 #   3. מתקין אפליקציה נוספת מקובץ בשם עברי בתיקיית ההורדות (Downloads\אפליקציה מהאינטרנט.apk),
 #      כמו משתמש שמוריד APK מהדפדפן.
 #   4. בודק את מה ש-#355 שבר: ש-dex2oat קומפל כל אפליקציה (base.vdex בתיקיית הקוד שלה, תחת
 #      הפרופיל), ושאין בלוגים "dex2oat failed". רושם מה הריצה קיבלה בפועל: נתיב ASCII דרך השם
 #      הקצר, או הנתיב בעברית. ‏profman רץ רק כשהמכשיר פנוי ויש פרופיל חדש, ולכן הוא נרשם אם רץ,
 #      ולא נדרש.
+#   5. כשהמכשיר לא עלה ו-tmpfile() נכשל: ניסיון נוסף עם TEMP ו-TMP בנתיב ASCII, כדי לדעת אם זו
+#      הסיבה היחידה. התוצאה נרשמת לאבחון, ולא מבטלת את הכשל.
 #
 # הכל נכתב ל-session.log ול-report.json בתיקיית התוצאות. קוד יציאה: 0 הצליח, 1 כשל של גשר,
 # 2 כשל של הסביבה או של הבדיקה עצמה.
@@ -286,6 +289,41 @@ namespace Hameitarim {
     $questionRuns = [regex]::Matches($serverLog + "`n" + $dexoptLog, '\?{3,}').Count
     $script:Report.question_mark_runs = $questionRuns
     if ($questionRuns) { Add-Result "INFO  בלוגים של המכשיר יש $questionRuns רצפים של '???'. ייתכן שנתיב עבר דרך דף קוד בלי עברית. כדאי לבדוק ב-gesher-logs" }
+
+    # --- 6. כשהמכשיר לא עלה: אותו משתמש, עם TEMP ו-TMP בנתיב ASCII בלבד. הפרופיל, ההתקנה
+    # וה-APK נשארים בנתיבים בעברית. כך נבדק אם הנתיב הזמני הוא הסיבה היחידה, ואם dex2oat מקבל
+    # נתיבים בעברית ב-UTF-8 (#328). התוצאה לא מבטלת את הכשל שלמעלה.
+    if ($installed -and $productFailed -and $tmpfileErrno -ne 0) {
+        $asciiTemp = Join-Path "$env:SystemDrive\" 'GesherTemp'
+        $null = [IO.Directory]::CreateDirectory($asciiTemp)
+        $savedTemp = $env:TEMP; $savedTmp = $env:TMP
+        $env:TEMP = $asciiTemp; $env:TMP = $asciiTemp
+        try {
+            $retryApk = Get-ChildItem -LiteralPath (Join-Path $savedTemp 'gesher-e2e') -Filter "$($appList[0])_*.apk" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $script:Report.ascii_temp_crt_tmpfile_errno = [Hameitarim.Crt]::TryTmpfile()
+            if (-not $retryApk) {
+                Add-Result "INFO  ניסיון עם TEMP בנתיב ASCII: אין APK של $($appList[0]) מה-e2e, ולכן לא נוסה"
+            } else {
+                $env:GESHER_APP_WINDOW = 'headless'
+                $retryOut = & (Join-Path $app 'gesher-app.cmd') $retryApk.FullName --headless 2>&1 | Out-String
+                $retryExit = $LASTEXITCODE
+                Remove-Item Env:GESHER_APP_WINDOW -ErrorAction SilentlyContinue
+                Set-Content -LiteralPath (Join-Path $OutDir 'ascii-temp-retry.log') -Value $retryOut -Encoding utf8
+                & (Join-Path $app 'gesher-app.cmd') shutdown 2>&1 | Out-Null
+                $retryVdex = @(Get-ChildItem -LiteralPath $appRoot -Directory -Filter "$($appList[0])-*" -ErrorAction SilentlyContinue |
+                    ForEach-Object { Join-Path $_.FullName 'oat\x86_64\base.vdex' } | Where-Object { Test-Path -LiteralPath $_ })
+                $script:Report.ascii_temp_retry = [ordered]@{ temp = $asciiTemp; exit = $retryExit; vdex = @($retryVdex) }
+                if ($retryExit -eq 0 -and $retryVdex) {
+                    Add-Result "INFO  ניסיון עם TEMP ו-TMP ב-$($asciiTemp): המכשיר עלה, $($appList[0]) הותקן, קומפל ב-dex2oat תחת הנתיב בעברית ($($retryVdex[0])) ונפתח. כלומר הנתיב הזמני הוא מה שעצר את המכשיר"
+                } else {
+                    $tail = (($retryOut -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join ' | '
+                    Add-Result "INFO  ניסיון עם TEMP ו-TMP ב-$($asciiTemp): נכשל גם כך (קוד $retryExit): $tail"
+                }
+            }
+        } finally {
+            $env:TEMP = $savedTemp; $env:TMP = $savedTmp
+        }
+    }
 
     $script:Report.verdict = if ($productFailed) { 'product-fail' } else { 'pass' }
     Save-Report

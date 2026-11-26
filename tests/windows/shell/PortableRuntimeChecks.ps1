@@ -1,4 +1,4 @@
-# Copyright (C) 2026 The Gesher Authors; SPDX-License-Identifier: Apache-2.0
+﻿# Copyright (C) 2026 The Gesher Authors; SPDX-License-Identifier: Apache-2.0
 # Actual packaged Windows/ART smoke. Run with pwsh after the ordinary installer
 # has been installed and its version verified. No registry/shortcut fixtures are
 # written or removed. Notifications may still register AppUserModelIds; this
@@ -44,6 +44,33 @@ function Assert-PortableRuntime([bool] $Condition, [string] $Message) {
 function File-Hash([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+}
+# גשר המיתרים: מחיקה של עץ שהבדיקה יצרה. בכונן בלי מחיקה בסמנטיקה של POSIX (exFAT, ‏FAT32)
+# השם של קובץ שתהליך אחר עדיין מחזיק פתוח (למשל אנטי-וירוס שסורק קובץ exe חדש) נשאר עד שהתהליך
+# סוגר אותו, והתיקייה "לא ריקה" עד אז. ב-NTFS השם נעלם מיד. לכן: ניסיון חוזר לזמן מוגבל, אזהרה
+# שאומרת אילו קבצים נשארו, וכשל עם הרשימה אם הם לא נעלמים. מה שנבדק לא משתנה.
+function Remove-TestTree([string] $Path, [int] $TimeoutSeconds = 60) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $attempt = 0
+    while ($true) {
+        try {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            if ($attempt -gt 0) { Write-Host "INFO: $Path נמחק אחרי $($attempt + 1) ניסיונות" }
+            return
+        } catch {
+            $attempt++
+            if (-not (Test-Path -LiteralPath $Path)) { return }
+            $left = @(Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.FullName.Substring($Path.Length).TrimStart('\') })
+            if ([DateTime]::UtcNow -ge $deadline) {
+                throw "$Path לא נמחק אחרי $attempt ניסיונות. נשארו: $($left -join ', '). $($_.Exception.Message)"
+            }
+            if ($attempt -eq 1) {
+                Write-Warning "המחיקה של $Path צריכה ניסיון נוסף. נשארו: $(($left | Select-Object -First 10) -join ', '). $($_.Exception.Message)"
+            }
+            Start-Sleep -Milliseconds 500
+        }
+    }
 }
 function Is-InDirectory([string] $Path, [string] $Directory) {
     $pathFull = [IO.Path]::GetFullPath($Path)
@@ -292,7 +319,7 @@ namespace Gesher {
     Assert-HostUnchanged 'failed-portable-finalization'
     Stop-OwnedProcesses $blocked
     Assert-PortableRuntime (@(Owned-Processes $blocked).Count -eq 0) 'Failed portable finalization left a runtime process'
-    Remove-Item -LiteralPath $blocked -Recurse -Force
+    Remove-TestTree $blocked
 
     # Test the flat Setup layout first, then release its large runtime files
     # before extracting/copying two complete ZIP installations.
@@ -311,7 +338,7 @@ namespace Gesher {
     Assert-HostUnchanged 'flat-install-and-update'
     Stop-OwnedProcesses $flat
     Assert-PortableRuntime (@(Owned-Processes $flat).Count -eq 0) 'Flat runtime still owns a process'
-    Remove-Item -LiteralPath $flat -Recurse -Force
+    Remove-TestTree $flat
 
     $extraction = Join-Path $work 'zip'
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $extraction
@@ -386,7 +413,7 @@ namespace Gesher {
                 if (Test-Path -LiteralPath $profileLogs) {
                     Copy-Item -LiteralPath $profileLogs -Destination (Join-Path $logs ((Split-Path $root -Leaf) + '-device')) -Recurse -Force
                 }
-                Remove-Item -LiteralPath $root -Recurse -Force
+                Remove-TestTree $root
             }
         } catch { $cleanupFailures.Add($_.Exception.Message); Write-Warning $_.Exception.Message }
     }

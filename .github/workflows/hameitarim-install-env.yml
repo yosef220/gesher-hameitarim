@@ -21,6 +21,10 @@ on:
         description: 'תג הגרסה לבדיקה, למשל v1.0.0 (ריק: הגרסה האחרונה שפורסמה)'
         type: string
         default: ''
+      run_id:
+        description: 'או: מספר של ריצת ci.yml (למשל על product-candidate), שהמתקין שלה ייבדק במקום גרסה שפורסמה'
+        type: string
+        default: ''
   push:
     # הענפים שבהם התהליך מפותח. אחרי המיזוג ל-main הוא רץ בהפעלה ידנית, על כל גרסה.
     branches: ['claude/gracious-bohr-8xtijg', 'install-env/**']
@@ -30,6 +34,7 @@ on:
 
 permissions:
   contents: read
+  actions: read  # המתקין מריצת CI אחרת (run_id)
 
 concurrency:
   group: hameitarim-install-env-${{ github.ref }}
@@ -69,7 +74,8 @@ jobs:
         shell: pwsh
         env:
           TAG: ${{ inputs.tag }}
-        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -Destination installer
+          RUN_ID: ${{ inputs.run_id }}
+        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -RunId "$env:RUN_ID" -Destination installer
 
       - name: 'ביקורת: משתמש עם שם ASCII'
         if: ${{ matrix.control }}
@@ -117,7 +123,8 @@ jobs:
         shell: pwsh
         env:
           TAG: ${{ inputs.tag }}
-        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -Destination installer -IncludePortable
+          RUN_ID: ${{ inputs.run_id }}
+        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -RunId "$env:RUN_ID" -Destination installer -IncludePortable
 
       - name: התקנה ופתיחה מכונן exFAT ומכונן FAT32, וגרסה ניידת על exFAT
         shell: pwsh

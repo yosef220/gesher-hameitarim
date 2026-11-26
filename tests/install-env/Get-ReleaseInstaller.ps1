@@ -5,16 +5,52 @@ param(
     [string] $Destination = 'installer',
     [string] $Repository = $env:GITHUB_REPOSITORY,
     # גם הגרסה הניידת (gesher-<גרסה>-portable.zip), באותן בדיקות.
-    [switch] $IncludePortable
+    [switch] $IncludePortable,
+    # מספר של ריצת CI (ci.yml) במקום גרסה שפורסמה, למשל של product-candidate: ה-artifact
+    # gesher-setup שעבודת האריזה שלה העלתה.
+    [string] $RunId = ''
 )
 
 # גשר המיתרים: מוריד את המתקין של גרסה שפורסמה, כמו שמשתמש מוריד אותו, ובודק שהוא הקובץ
 # שפורסם: ה-SHA-256 שלו שווה גם ל-digest ש-GitHub חישב לקובץ שהועלה, וגם לשורה שלו
-# ב-SHA256SUMS.txt של אותה גרסה. מדפיס ל-GITHUB_OUTPUT את path, ‏version ו-tag, ועם
-# -IncludePortable גם את portable. צריך את gh ו-GH_TOKEN.
+# ב-SHA256SUMS.txt של אותה גרסה. עם -RunId: המתקין מריצת CI, שנבדק מול SHA256SUMS.txt שבאותו
+# artifact. מדפיס ל-GITHUB_OUTPUT את path, ‏version ו-tag, ועם -IncludePortable גם את portable.
+# צריך את gh ו-GH_TOKEN.
 
 $ErrorActionPreference = 'Stop'
 if (-not $Repository) { throw 'חסר שם הריפו (GITHUB_REPOSITORY)' }
+if ($RunId) {
+    if ($RunId -notmatch '^\d+$') { throw "מספר ריצה לא תקין: $RunId" }
+    $null = New-Item -ItemType Directory -Force $Destination
+    gh run download $RunId --repo $Repository --name gesher-setup --dir $Destination
+    if ($LASTEXITCODE -ne 0) { throw "אין artifact בשם gesher-setup בריצה $RunId" }
+    $setup = @(Get-ChildItem -LiteralPath $Destination -Filter 'gesher-setup-*.exe')
+    if ($setup.Count -ne 1 -or $setup[0].Name -notmatch '^gesher-setup-(\d+\.\d+\.\d+)\.exe$') { throw "בריצה $RunId אין בדיוק מתקין אחד" }
+    $version = $Matches[1]
+    $names = @($setup[0].Name)
+    if ($IncludePortable) { $names += "gesher-$version-portable.zip" }
+    $sums = Get-Content -LiteralPath (Join-Path $Destination 'SHA256SUMS.txt')
+    $paths = @{}
+    foreach ($name in $names) {
+        $path = (Resolve-Path -LiteralPath (Join-Path $Destination $name)).Path
+        $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $listed = $null
+        foreach ($line in $sums) {
+            if ($line -match "^([0-9a-fA-F]{64})\s+\*?$([regex]::Escape($name))\s*$") { $listed = $Matches[1].ToLowerInvariant() }
+        }
+        if ($listed -ne $actual) { throw "ה-SHA-256 של $name ($actual) לא תואם ל-SHA256SUMS.txt של הריצה ($listed)" }
+        Write-Host "PASS  $name מריצה $($RunId): sha256:$actual, זהה ל-SHA256SUMS.txt של אותו artifact"
+        if ($env:GITHUB_STEP_SUMMARY) { "הקובץ שנבדק: ``$name`` מריצת CI $RunId, ‏sha256:``$actual``" >> $env:GITHUB_STEP_SUMMARY }
+        $paths[$name] = $path
+    }
+    if ($env:GITHUB_OUTPUT) {
+        "path=$($paths[$names[0]])" >> $env:GITHUB_OUTPUT
+        if ($IncludePortable) { "portable=$($paths["gesher-$version-portable.zip"])" >> $env:GITHUB_OUTPUT }
+        "version=$version" >> $env:GITHUB_OUTPUT
+        "tag=run-$RunId" >> $env:GITHUB_OUTPUT
+    }
+    return
+}
 $endpoint = if ($Tag) { "repos/$Repository/releases/tags/$Tag" } else { "repos/$Repository/releases/latest" }
 $release = gh api $endpoint | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or -not $release.tag_name) { throw "לא נמצאה גרסה ($endpoint)" }
