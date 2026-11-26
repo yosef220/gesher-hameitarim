@@ -130,13 +130,15 @@
                     <Border Grid.Row="0" Padding="20,16,20,16" BorderBrush="{StaticResource GesherLineBrush}" BorderThickness="0,0,0,1">
                         <StackPanel>
                             <Grid>
+                                <!-- החיפוש ברוחב 220 כשיש מקום, ומתכווץ עד 120 בחלון צר; הכותרת תמיד בשורה אחת -->
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*" MinWidth="120" MaxWidth="220"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Text_cp_apps_title}" Style="{StaticResource TextScreenTitle}"
                                            TextWrapping="NoWrap" VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                <Grid Grid.Column="1" MaxWidth="220" MinWidth="120" HorizontalAlignment="Right">
+                                <Grid Grid.Column="2">
                                     <TextBox Name="AppsSearch" AutomationProperties.Name="{DynamicResource Text_cp_search_hint}"/>
                                     <TextBlock Text="{DynamicResource Text_cp_search_hint}" IsHitTestVisible="False" Margin="9,0"
                                                VerticalAlignment="Center" Foreground="{StaticResource GesherInkMutedBrush}">
