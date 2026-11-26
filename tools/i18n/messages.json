@@ -8,8 +8,8 @@
     }
   },
   "messages": {
-    "intent_chooser_title": {"en": "Gesher — choose an app", "he": "גשר — בחירת יישום"},
-    "chooser_title": {"en": "Gesher accounts", "he": "גשר — בחירת חשבון"},
+    "intent_chooser_title": {"en": "Gesher HaMeitarim — choose an app", "he": "גשר המיתרים — בחירת יישום"},
+    "chooser_title": {"en": "Gesher HaMeitarim accounts", "he": "גשר המיתרים — בחירת חשבון"},
     "chooser_prompt": {"en": "Choose an account for this application:", "he": "בחר חשבון עבור יישום זה:"},
     "chooser_select": {"en": "Select", "he": "בחירה"},
     "chooser_cancel": {"en": "Cancel", "he": "ביטול"},
@@ -27,30 +27,36 @@
       "he": "מפעיל…"
     },
     "brand": {
-      "en": "Gesher",
-      "he": "גשר"
+      "en": "Gesher HaMeitarim",
+      "he": "גשר המיתרים"
     },
     "android_app": {
       "en": "Android app",
       "he": "יישום Android"
     },
     "run_app": {
-      "en": "{0} (Android app, Gesher)",
-      "he": "{0} (יישום Android, גשר)"
+      "en": "{0} (Android app, Gesher HaMeitarim)",
+      "he": "{0} (יישום Android, גשר המיתרים)"
     },
     "url_protocol": {
-      "en": "URL:{0} ({1}, Gesher)",
-      "he": "URL:{0} ({1}, גשר)"
+      "en": "URL:{0} ({1}, Gesher HaMeitarim)",
+      "he": "URL:{0} ({1}, גשר המיתרים)"
     },
     "permission_title": {
-      "en": "Gesher permission request",
-      "he": "גשר — בקשת הרשאה"
+      "en": "Gesher HaMeitarim permission request",
+      "he": "גשר המיתרים — בקשת הרשאה"
     },
     "permission_heading": {"en": "Allow app access?", "he": "לאפשר גישה ליישום?"},
     "permission_app": {"en": "Android application", "he": "יישום Android"},
     "permission_requested": {"en": "This app is requesting the following permissions:", "he": "היישום מבקש את ההרשאות הבאות:"},
     "permission_allow": {"en": "Allow", "he": "לאפשר"},
     "permission_deny": {"en": "Don't allow", "he": "לא לאפשר"},
+    "background_permission_title": {"en": "Gesher HaMeitarim background permission request", "he": "גשר המיתרים — בקשת הרשאה ברקע"},
+    "background_permission_heading": {"en": "Allow access all the time?", "he": "לאפשר גישה כל הזמן?"},
+    "background_permission_requested": {"en": "This app is also asking to use this permission in the background, when you are not using it:", "he": "היישום מבקש להשתמש בהרשאה זו גם ברקע, כשאינך משתמש בו:"},
+    "background_permission_always": {"en": "Allow all the time", "he": "לאפשר כל הזמן"},
+    "background_permission_foreground": {"en": "Allow only while using the app", "he": "לאפשר רק בזמן השימוש ביישום"},
+    "background_permission_deny": {"en": "Don't allow, not even while using the app", "he": "לא לאפשר, גם לא בזמן השימוש ביישום"},
     "exact_alarm_title": {"en": "Alarms and reminders", "he": "התראות ותזכורות"},
     "exact_alarm_allow": {"en": "Allow alarms and reminders", "he": "לאפשר התראות ותזכורות"},
     "exact_alarm_detail": {"en": "Allow this app to schedule alarms and reminders at precise times. Turning this off stops the app and cancels its exact alarms.", "he": "הרשאה לתזמן התראות ותזכורות בזמנים מדויקים. ביטול ההרשאה מפסיק את היישום ומבטל את ההתראות המדויקות שלו."},
@@ -66,8 +72,8 @@
       "he": " להשתמש בהרשאות הבאות?\n\n"
     },
     "account_title": {
-      "en": "Gesher account access",
-      "he": "גשר — גישה לחשבון"
+      "en": "Gesher HaMeitarim account access",
+      "he": "גשר המיתרים — גישה לחשבון"
     },
     "account_prefix": {
       "en": "Allow this Android application to access an account token?\n\nApplication: ",
@@ -82,8 +88,8 @@
       "he": "\nסוג אסימון: "
     },
     "camera_name": {
-      "en": "Gesher Camera",
-      "he": "מצלמת גשר"
+      "en": "Gesher HaMeitarim Camera",
+      "he": "מצלמת גשר המיתרים"
     },
     "camera_selection_restart": {
       "en": "Close your Android apps and run gesher-app shutdown for the camera change to take effect.",
@@ -97,17 +103,33 @@
       "en": "Cancel",
       "he": "ביטול"
     },
+    "camera_source_title": {
+      "en": "Camera or image from the PC?",
+      "he": "מצלמה או תמונה מהמחשב?"
+    },
+    "camera_source_camera": {
+      "en": "Use the PC camera",
+      "he": "שימוש במצלמת המחשב"
+    },
+    "camera_source_image": {
+      "en": "Choose an image from the PC",
+      "he": "בחירת תמונה מהמחשב"
+    },
+    "camera_pick_title": {
+      "en": "Choose an image for the camera",
+      "he": "בחירת תמונה עבור המצלמה"
+    },
     "no_device": {
       "en": "no Gesher device is running",
-      "he": "סביבת גשר אינה פועלת"
+      "he": "סביבת גשר המיתרים אינה פועלת"
     },
     "device_stopped": {
       "en": "the Gesher device {0} stopped",
-      "he": "סביבת גשר {0} נעצרה"
+      "he": "סביבת גשר המיתרים {0} נעצרה"
     },
     "same_drive": {
-      "en": "{0} must be on drive {1}, with Gesher.",
-      "he": "{0} חייב להיות בכונן {1}, שבו מותקן גשר."
+      "en": "{0} must be on drive {1}, with Gesher HaMeitarim.",
+      "he": "{0} חייב להיות בכונן {1}, שבו מותקן גשר המיתרים."
     },
     "binder_failed": {
       "en": "binderd did not complete its connection handshake",
@@ -127,15 +149,15 @@
     },
     "app_crash_generic": {"en": "The application ⁨{0}⁩ closed because of an error.\n\nDetails are in the log:\n⁨{1}⁩\n\nEvent: ⁨{2}⁩", "he": "האפליקציה ⁨{0}⁩ נסגרה עקב שגיאה.\n\nפרטים מופיעים בלוג:\n⁨{1}⁩\n\nמזהה אירוע: ⁨{2}⁩"},
     "app_crash_bluetooth": {"en": "The application ⁨{0}⁩ closed after trying to use a missing Bluetooth adapter. Windows currently reports no Bluetooth adapter.\n\nConnect or enable a Bluetooth adapter in Windows, then try again.\n\nDetails are in the log:\n⁨{1}⁩\n\nEvent: ⁨{2}⁩", "he": "האפליקציה ⁨{0}⁩ נסגרה לאחר שניסתה להשתמש במתאם Bluetooth שאינו זמין. Windows מדווח כרגע שאין מתאם Bluetooth.\n\nחבר או הפעל מתאם Bluetooth ב־Windows ונסה שוב.\n\nפרטים מופיעים בלוג:\n⁨{1}⁩\n\nמזהה אירוע: ⁨{2}⁩"},
-    "app_crash_security": {"en": "The application ⁨{0}⁩ closed after a security or permission check rejected an operation.\n\nCheck the application permissions in the Gesher control center. The log may explain other security restrictions:\n⁨{1}⁩\n\nEvent: ⁨{2}⁩", "he": "האפליקציה ⁨{0}⁩ נסגרה לאחר שבדיקת אבטחה או הרשאות דחתה פעולה.\n\nבדוק את הרשאות האפליקציה בלוח הבקרה של גשר. הלוג עשוי להסביר מגבלות אבטחה אחרות:\n⁨{1}⁩\n\nמזהה אירוע: ⁨{2}⁩"},
+    "app_crash_security": {"en": "The application ⁨{0}⁩ closed after a security or permission check rejected an operation.\n\nCheck the application permissions in the Gesher HaMeitarim Control Center. The log may explain other security restrictions:\n⁨{1}⁩\n\nEvent: ⁨{2}⁩", "he": "האפליקציה ⁨{0}⁩ נסגרה לאחר שבדיקת אבטחה או הרשאות דחתה פעולה.\n\nבדוק את הרשאות האפליקציה במרכז הבקרה של גשר המיתרים. הלוג עשוי להסביר מגבלות אבטחה אחרות:\n⁨{1}⁩\n\nמזהה אירוע: ⁨{2}⁩"},
     "app_crash_compatibility": {"en": "The application ⁨{0}⁩ closed after a class, method or native library could not be linked.\n\nThis may require a compatibility fix. Include the log when reporting the problem:\n⁨{1}⁩\n\nEvent: ⁨{2}⁩", "he": "האפליקציה ⁨{0}⁩ נסגרה לאחר שלא ניתן היה לקשר מחלקה, מתודה או ספרייה מקומית.\n\nייתכן שנדרש תיקון תאימות. צרף את הלוג לדיווח על התקלה:\n⁨{1}⁩\n\nמזהה אירוע: ⁨{2}⁩"},
     "launch_failed": {
       "en": "The Android application could not be opened.\n\n{0}",
       "he": "לא ניתן לפתוח את יישום ה־Android.\n\n{0}"
     },
     "install_update_incompatible": {
-      "en": "The application ⁨{0}⁩ is already installed, but signed with a different signing key than this file.\n\nTo install this file, first remove the installed application (in the Gesher Control Center, or: gesher-app uninstall {0}). Its app data will be deleted.",
-      "he": "היישום ⁨{0}⁩ כבר מותקן, אבל חתום במפתח חתימה שונה מזה של הקובץ הזה.\n\nכדי להתקין את הקובץ, יש להסיר קודם את היישום המותקן (בלוח הבקרה של גשר, או: gesher-app uninstall {0}). נתוני היישום יימחקו."
+      "en": "The application ⁨{0}⁩ is already installed, but signed with a different signing key than this file.\n\nTo install this file, first remove the installed application (in the Gesher HaMeitarim Control Center, or: gesher-app uninstall {0}). Its app data will be deleted.",
+      "he": "היישום ⁨{0}⁩ כבר מותקן, אבל חתום במפתח חתימה שונה מזה של הקובץ הזה.\n\nכדי להתקין את הקובץ, יש להסיר קודם את היישום המותקן (במרכז הבקרה של גשר המיתרים, או: gesher-app uninstall {0}). נתוני היישום יימחקו."
     },
     "install_bad_signature": {
       "en": "The signature of ⁨{0}⁩ does not verify: the file was changed after it was signed, or it is damaged.",
@@ -146,8 +168,16 @@
       "he": "חלקי היישום ⁨{0}⁩ אינם חתומים כולם באותו מפתח."
     },
     "install_missing_split": {
-      "en": "The application ⁨{0}⁩ is a base split APK and requires companion split APKs (such as ABI or density splits) to be installed.\n\nInstall the full bundle (.xapk or .apks), or place its split APKs (split_*.apk / config.*.apk) in the same folder.",
-      "he": "היישום ⁨{0}⁩ הוא קובץ בסיס חלקי (Split APK) שדורש גם את חלקי ההתקנה הנלווים (כגון ספריות מעבד או משאבי מסך).\n\nיש להתקין את החבילה המלאה (.xapk או .apks), או להציב את קובצי החלקים הנלווים (split_*.apk / config.*.apk) באותה תיקייה."
+      "en": "The application ⁨{0}⁩ is a base split APK and requires companion split APKs (such as ABI or density splits) to be installed.\n\nInstall the full bundle (.xapk, .apks, .apkm or .apk+), or place its split APKs (split_*.apk / config.*.apk) in the same folder.",
+      "he": "היישום ⁨{0}⁩ הוא קובץ בסיס חלקי (Split APK) שדורש גם את חלקי ההתקנה הנלווים (כגון ספריות מעבד או משאבי מסך).\n\nיש להתקין את החבילה המלאה (.xapk, .apks, .apkm או .apk+), או להציב את קובצי החלקים הנלווים (split_*.apk / config.*.apk) באותה תיקייה."
+    },
+    "install_no_matching_abis": {
+      "en": "The application {0} has native code only for {1}; Gesher HaMeitarim runs x86_64 and arm64-v8a.\n\nUse the app's arm64-v8a, x86_64 or universal APK.",
+      "he": "היישום \u202a{0}\u202c כולל קוד מקומי (Native) עבור \u202a{1}\u202c בלבד; גשר המיתרים תומך ב־\u202ax86_64\u202c וב־\u202aarm64-v8a\u202c.\n\nיש להשתמש בקובץ התקנה (APK) עבור \u202aarm64-v8a\u202c, \u202ax86_64\u202c או בגרסה אוניברסלית."
+    },
+    "install_no_matching_abis_details": {
+      "en": "The application cannot be installed because its native code is not compatible with Gesher HaMeitarim.\n\nDetails: \u202a{0}\u202c",
+      "he": "אי אפשר להתקין את היישום משום שהקוד המקומי (Native) שלו אינו תואם לגשר המיתרים.\n\nפרטים: \u202a{0}\u202c"
     },
     "uninstalled": {
       "en": "uninstalled {0}",
@@ -203,39 +233,39 @@
     },
     "connected": {
       "en": "connected to the running Gesher device {0} (system server pid {1})",
-      "he": "התחבר לסביבת גשר הפעילה {0} (מזהה תהליך שרת המערכת: {1})"
+      "he": "התחבר לסביבת גשר המיתרים הפעילה {0} (מזהה תהליך שרת המערכת: {1})"
     },
     "cleaning": {
       "en": "cleaning up the Gesher device {0}: its system server is gone or does not answer",
-      "he": "מנקה את סביבת גשר {0}: שרת המערכת נעצר או שאינו מגיב"
+      "he": "מנקה את סביבת גשר המיתרים {0}: שרת המערכת נעצר או שאינו מגיב"
     },
     "device_starting": {
       "en": "starting the Gesher device {0} (logs in {1})",
-      "he": "מפעיל את סביבת גשר {0} (יומנים ב־{1})"
+      "he": "מפעיל את סביבת גשר המיתרים {0} (יומנים ב־{1})"
     },
     "device_started": {
       "en": "started the Gesher device {0}: binderd pid {1}, servicemanager pid {2}, system server pid {3}",
-      "he": "סביבת גשר {0} הופעלה: מזהי תהליכים — תקשורת {1}, מנהל שירותים {2}, שרת המערכת {3}"
+      "he": "סביבת גשר המיתרים {0} הופעלה: מזהי תהליכים — תקשורת {1}, מנהל שירותים {2}, שרת המערכת {3}"
     },
     "server_not_ready": {
       "en": "the system server of the Gesher device {0} did not get ready (its log: {1})",
-      "he": "שרת המערכת של סביבת גשר {0} לא הצליח להתחיל (יומן: {1})"
+      "he": "שרת המערכת של סביבת גשר המיתרים {0} לא הצליח להתחיל (יומן: {1})"
     },
     "no_service": {
       "en": "no gesher service in the device's servicemanager",
-      "he": "שירות גשר אינו זמין במנהל השירותים"
+      "he": "שירות גשר המיתרים אינו זמין במנהל השירותים"
     },
     "proxy_windows": {
       "en": "no proxy of Gesher's own: Windows' settings",
-      "he": "לא הוגדר שרת מתווך בגשר: נעשה שימוש בהגדרות Windows"
+      "he": "לא הוגדר שרת מתווך בגשר המיתרים: נעשה שימוש בהגדרות Windows"
     },
     "every_app": {
       "en": "every app",
       "he": "כל היישומים"
     },
     "proxy_invalid": {
-      "en": "{0}: not host:port, direct or windows",
-      "he": "{0}: יש להזין host:port, direct או windows"
+      "en": "{0}: not host:port, socks5://host:port, direct or windows",
+      "he": "{0}: יש להזין host:port, socks5://host:port, direct או windows"
     },
     "proxy_saved": {
       "en": "proxy of {0}: {1} (app processes started from now on)",
@@ -251,11 +281,11 @@
     },
     "microg_disabled": {
       "en": "microG disabled for the next Gesher device start. APKs and data are retained.",
-      "he": "microG הושבת החל מההפעלה הבאה של גשר. קובצי היישומים והנתונים נשמרו."
+      "he": "microG הושבת החל מההפעלה הבאה של גשר המיתרים. קובצי היישומים והנתונים נשמרו."
     },
     "microg_stop": {
       "en": "Stop this Gesher device before changing addon files (gesher-app shutdown).",
-      "he": "יש לעצור את סביבת גשר לפני שינוי קובצי הרחבה (gesher-app shutdown)."
+      "he": "יש לעצור את סביבת גשר המיתרים לפני שינוי קובצי הרחבה (gesher-app shutdown)."
     },
     "microg_removed": {
       "en": "microG addon APKs removed. Application and account data are retained.",
@@ -271,11 +301,11 @@
     },
     "microg_runtime": {
       "en": "Use the rebuilt Gesher runtime, or pass -RuntimeDir with its location.",
-      "he": "יש להשתמש בסביבת גשר המעודכנת, או לציין את מיקומה באמצעות ‎-RuntimeDir."
+      "he": "יש להשתמש בסביבת גשר המיתרים המעודכנת, או לציין את מיקומה באמצעות ‎-RuntimeDir."
     },
     "microg_icu": {
       "en": "The Gesher runtime must contain exactly one ICU data file.",
-      "he": "סביבת גשר חייבת להכיל קובץ נתוני ICU אחד בדיוק."
+      "he": "סביבת גשר המיתרים חייבת להכיל קובץ נתוני ICU אחד בדיוק."
     },
     "microg_timeout": {
       "en": "The offline microG APK verifier timed out.",
@@ -291,7 +321,7 @@
     },
     "microg_staged": {
       "en": "microG staged. Start the Gesher device to load the verified addons.",
-      "he": "microG מוכן. יש להפעיל את סביבת גשר כדי לטעון את ההרחבות שאומתו."
+      "he": "microG מוכן. יש להפעיל את סביבת גשר המיתרים כדי לטעון את ההרחבות שאומתו."
     },
     "microg_settings": {
       "en": "Open microG Settings to configure Check-in, Cloud Messaging and accounts.",
@@ -301,21 +331,22 @@
       "en": "Install the Microsoft Edge WebView2 Runtime (Android apps' web views need it)",
       "he": "התקנת Microsoft Edge WebView2 (נדרש להצגת תוכן אינטרנט ביישומי Android)"
     },
+    "setup_app_name": {"en": "Gesher HaMeitarim", "he": "גשר המיתרים"},
     "setup_readme": {
-      "en": "Gesher README",
-      "he": "גשר — מידע והוראות"
+      "en": "Gesher HaMeitarim README",
+      "he": "גשר המיתרים — מידע והוראות"
     },
     "setup_apk": {
-      "en": "Android app (Gesher)",
-      "he": "יישום Android (גשר)"
+      "en": "Android app (Gesher HaMeitarim)",
+      "he": "יישום Android (גשר המיתרים)"
     },
     "setup_bundle": {
-      "en": "Android app bundle (Gesher)",
-      "he": "חבילת יישום Android (גשר)"
+      "en": "Android app bundle (Gesher HaMeitarim)",
+      "he": "חבילת יישום Android (גשר המיתרים)"
     },
     "setup_run": {
-      "en": "Run with Gesher",
-      "he": "הפעלה באמצעות גשר"
+      "en": "Run with Gesher HaMeitarim",
+      "he": "הפעלה באמצעות גשר המיתרים"
     },
     "setup_microg": {
       "en": "Install Google Play services support (microG)",
@@ -330,8 +361,8 @@
       "he": "התקנת חנות אפליקציות (Aurora Store)"
     },
     "setup_control_panel": {
-      "en": "Gesher Control Center",
-      "he": "לוח הבקרה של גשר"
+      "en": "Gesher HaMeitarim Control Center",
+      "he": "מרכז הבקרה של גשר המיתרים"
     },
     "setup_installing_webview2": {
       "en": "Installing Microsoft Edge WebView2...",
@@ -342,12 +373,48 @@
       "he": "מגדיר שירותי Google Play ויישומים..."
     },
     "setup_download_skipped": {
-      "en": "Setup could not download these components and will continue without them:\n\n%1\nThe network may be blocking the download, or the server may be unreachable (%2). To install them later, run Setup again (microG and Aurora Store can also be installed from the Gesher Control Center).",
-      "he": "לא ניתן היה להוריד את הרכיבים הבאים, וההתקנה תמשיך בלעדיהם:\n\n%1\nייתכן שהרשת חוסמת את ההורדה או שאין גישה לשרת ההורדה (%2). כדי להתקין אותם מאוחר יותר, יש להריץ את ההתקנה שוב (את microG ואת Aurora Store אפשר להתקין גם מלוח הבקרה של גשר)."
+      "en": "Setup could not download these components and will continue without them:\n\n%1\nThe network may be blocking the download, or the server may be unreachable (%2). To install them later, run Setup again (microG and Aurora Store can also be installed from the Gesher HaMeitarim Control Center).",
+      "he": "לא ניתן היה להוריד את הרכיבים הבאים, וההתקנה תמשיך בלעדיהם:\n\n%1\nייתכן שהרשת חוסמת את ההורדה או שאין גישה לשרת ההורדה (%2). כדי להתקין אותם מאוחר יותר, יש להריץ את ההתקנה שוב (את microG ואת Aurora Store אפשר להתקין גם ממרכז הבקרה של גשר המיתרים)."
+    },
+    "setup_install_type_title": {
+      "en": "Installation Type",
+      "he": "סוג התקנה"
+    },
+    "setup_install_type_desc": {
+      "en": "Choose how you want to install Gesher HaMeitarim.",
+      "he": "בחר כיצד ברצונך להתקין את גשר המיתרים."
+    },
+    "setup_install_standard": {
+      "en": "Standard installation (recommended for this computer)",
+      "he": "התקנה רגילה (מומלץ למחשב זה)"
+    },
+    "setup_install_standard_desc": {
+      "en": "Installs into your user profile, registers .apk associations, and adds Start menu shortcuts.",
+      "he": "מתקין לפרופיל המשתמש, משייך קובצי .apk ומוסיף קיצורי דרך לתפריט התחל."
+    },
+    "setup_install_portable": {
+      "en": "Portable installation (for USB flash drives or standalone folder)",
+      "he": "התקנה ניידת (לדיסק-און-קי או תיקייה עצמאית)"
+    },
+    "setup_install_portable_desc": {
+      "en": "Extracts Gesher HaMeitarim as a self-contained portable application. Does not modify the Windows registry or Start menu.",
+      "he": "מחלץ את גשר המיתרים כיישום נייד ועצמאי. אינו משנה את רישום המערכת (Registry) ולא מוסיף קיצורים לתפריט התחל."
+    },
+    "setup_portable_existing_install": {
+      "en": "This folder contains a standard Gesher HaMeitarim installation. Choose another folder for the portable installation.",
+      "he": "בתיקייה זו קיימת התקנה רגילה של גשר המיתרים. יש לבחור תיקייה אחרת להתקנה הניידת."
+    },
+    "setup_standard_existing_portable": {
+      "en": "This folder contains a portable Gesher HaMeitarim installation. Choose portable installation to update it, or choose another folder.",
+      "he": "בתיקייה זו קיימת התקנה ניידת של גשר המיתרים. לעדכונה יש לבחור בהתקנה ניידת, או לבחור תיקייה אחרת."
+    },
+    "setup_portable_write_failed": {
+      "en": "The portable data folder or launcher could not be written. Check that the destination is writable.",
+      "he": "לא ניתן לכתוב את תיקיית הנתונים או את קובץ ההפעלה הנייד. יש לוודא שניתן לכתוב לתיקיית היעד."
     },
     "cp_title": {
-      "en": "Gesher Control Center",
-      "he": "לוח הבקרה של גשר"
+      "en": "Gesher HaMeitarim Control Center",
+      "he": "מרכז הבקרה של גשר המיתרים"
     },
     "cp_subtitle": {
       "en": "Applications and Google Play Services Management",
@@ -355,7 +422,7 @@
     },
     "cp_device_status": {
       "en": "Gesher Device",
-      "he": "מערכת גשר"
+      "he": "מערכת גשר המיתרים"
     },
     "cp_device_running": {
       "en": "Device is running",
@@ -445,6 +512,10 @@
       "en": "Launch",
       "he": "הפעל"
     },
+    "cp_btn_app_info": {
+      "en": "Details",
+      "he": "פרטים"
+    },
     "cp_separate_windows": {
       "en": "Separate windows",
       "he": "חלונות נפרדים"
@@ -452,6 +523,70 @@
     "cp_separate_windows_tip": {
       "en": "Each task of the app opens in a window of its own, instead of one window for the app. Applies from the app's next start.",
       "he": "כל משימה של האפליקציה נפתחת בחלון משלה, במקום חלון אחד לאפליקציה. חל מההפעלה הבאה של האפליקציה."
+    },
+    "cp_proxy_desc": {
+      "en": "Gesher HaMeitarim's own HTTP or SOCKS5 proxy for every app, instead of Windows' proxy settings. Each app can have its own with its Proxy button. It applies to app processes started from now on: close a running app completely and start it again, or stop and start the device (reopening a window can keep the app's process and its previous proxy). It covers clients that support the selected proxy type and use the system proxy; WebView pages keep Windows' settings.",
+      "he": "פרוקסי HTTP או SOCKS5 של גשר המיתרים לכל היישומים, במקום הגדרות הפרוקסי של Windows. לכל יישום אפשר לקבוע פרוקסי משלו בכפתור 'פרוקסי' שלו. חל על תהליכי יישומים שיופעלו מעכשיו: יש לסגור יישום פועל לגמרי ולהפעיל אותו מחדש, או לכבות ולהפעיל את המערכת (פתיחה מחדש של חלון יכולה להשאיר את תהליך היישום עם הפרוקסי הקודם). חל על לקוחות שתומכים בסוג הפרוקסי הנבחר ומשתמשים בפרוקסי המערכת; דפי WebView ממשיכים לפי הגדרות Windows."
+    },
+    "cp_proxy_mode_inherit": {
+      "en": "Same as every app",
+      "he": "כמו כל היישומים"
+    },
+    "cp_proxy_mode_windows": {
+      "en": "Windows' settings",
+      "he": "הגדרות Windows"
+    },
+    "cp_proxy_mode_direct": {
+      "en": "No proxy (direct)",
+      "he": "ללא פרוקסי (ישיר)"
+    },
+    "cp_proxy_mode_server": {
+      "en": "Proxy server",
+      "he": "שרת פרוקסי"
+    },
+    "cp_proxy_address_hint": {
+      "en": "HTTP: host:port (127.0.0.1:8080). SOCKS5: socks5://host:port (socks5://127.0.0.1:1080).",
+      "he": "HTTP: כתובת:פורט (127.0.0.1:8080). SOCKS5: למשל socks5://127.0.0.1:1080."
+    },
+    "cp_proxy_save": {
+      "en": "Save",
+      "he": "שמירה"
+    },
+    "cp_proxy_saved": {
+      "en": "Proxy saved. It applies to app processes started from now on: close a running app completely and start it again.",
+      "he": "הפרוקסי נשמר. חל על תהליכי יישומים שיופעלו מעכשיו: יש לסגור יישום פועל לגמרי ולהפעיל אותו מחדש."
+    },
+    "cp_proxy_invalid": {
+      "en": "⁨{0}⁩ is not a proxy server address. Enter host:port for HTTP or socks5://host:port for SOCKS5.",
+      "he": "⁨{0}⁩ אינה כתובת של שרת פרוקסי. יש להזין host:port עבור HTTP או socks5://host:port עבור SOCKS5."
+    },
+    "cp_proxy_save_failed": {
+      "en": "Failed to save the proxy: {0}",
+      "he": "שמירת הפרוקסי נכשלה: {0}"
+    },
+    "cp_btn_proxy": {
+      "en": "Proxy",
+      "he": "פרוקסי"
+    },
+    "cp_btn_proxy_tip": {
+      "en": "This app's own proxy",
+      "he": "פרוקסי משלו ליישום הזה"
+    },
+    "cp_btn_proxy_all": {
+      "en": "Proxy for every app",
+      "he": "פרוקסי לכל היישומים"
+    },
+    "cp_proxy_app_title": {
+      "en": "Proxy for ⁨{0}⁩",
+      "he": "פרוקסי עבור ⁨{0}⁩"
+    },
+    "cp_proxy_app_desc": {
+      "en": "This app's own proxy, instead of the setting of every app. It applies when a new process of the app starts: close the app completely and start it again (reopening its window can keep its process and its previous proxy). WebView pages keep Windows' settings.",
+      "he": "פרוקסי משלו ליישום הזה, במקום ההגדרה של כל היישומים. חל כשמתחיל תהליך חדש של היישום: יש לסגור את היישום לגמרי ולהפעיל אותו מחדש (פתיחה מחדש של החלון יכולה להשאיר את התהליך עם הפרוקסי הקודם). דפי WebView ממשיכים לפי הגדרות Windows."
+    },
+    "cp_proxy_app_value": {
+      "en": "Proxy: {0}",
+      "he": "פרוקסי: {0}"
     },
     "windows_separate_saved": {
       "en": "{0}: each task in a window of its own, from the app's next start",
@@ -478,8 +613,8 @@
       "he": "האם להסיר את היישום {0}?"
     },
     "cp_uninstall_detail": {
-      "en": "This application and its local data will be removed from Gesher.",
-      "he": "היישום וכל הנתונים המקומיים שלו יוסרו מגשר."
+      "en": "This application and its local data will be removed from Gesher HaMeitarim.",
+      "he": "היישום וכל הנתונים המקומיים שלו יוסרו מגשר המיתרים."
     },
     "cp_app_info_title": {
       "en": "App info",
@@ -494,12 +629,60 @@
       "he": "עודכן לאחרונה: {0}"
     },
     "cp_app_info_detail": {
-      "en": "An app asked to open this application's settings. Here you can launch or uninstall it.",
-      "he": "יישום ביקש לפתוח את ההגדרות של היישום הזה. כאן אפשר להפעיל אותו או להסיר אותו."
+      "en": "An app asked to open this application's settings. Here you can allow or deny its special access. You can launch or uninstall it from the app list in the Gesher HaMeitarim Control Center.",
+      "he": "יישום ביקש לפתוח את ההגדרות של היישום הזה. כאן אפשר לאשר או לשלול את הגישה המיוחדת שלו. אפשר להפעיל או להסיר אותו מרשימת היישומים במרכז הבקרה של גשר המיתרים."
     },
     "cp_app_info_close": {
       "en": "Close",
       "he": "סגירה"
+    },
+    "cp_app_info_detail_list": {
+      "en": "Here you can allow or deny this application's special access. You can launch or uninstall it from the app list in the Gesher HaMeitarim Control Center.",
+      "he": "כאן אפשר לאשר או לשלול את הגישה המיוחדת של היישום הזה. אפשר להפעיל או להסיר אותו מרשימת היישומים במרכז הבקרה של גשר המיתרים."
+    },
+    "cp_access_title": {
+      "en": "Special app access (on Android, you allow these in Settings):",
+      "he": "הרשאות גישה מיוחדות (באנדרואיד מאשרים אותן בהגדרות):"
+    },
+    "cp_access_loading": {
+      "en": "Reading the special access from the Gesher device...",
+      "he": "קורא את הגישה המיוחדת מסביבת גשר המיתרים..."
+    },
+    "cp_access_fixed": {
+      "en": "{0} (always allowed: this app is itself an installer)",
+      "he": "{0} (תמיד מאושר: היישום הזה הוא בעצמו מתקין יישומים)"
+    },
+    "cp_access_all_files": {
+      "en": "All files access",
+      "he": "גישה לכל הקבצים"
+    },
+    "cp_access_overlay": {
+      "en": "Display over other apps",
+      "he": "הצגה מעל יישומים אחרים"
+    },
+    "cp_access_install": {
+      "en": "Install unknown apps",
+      "he": "התקנת יישומים לא מוכרים"
+    },
+    "cp_access_write_settings": {
+      "en": "Modify system settings",
+      "he": "שינוי הגדרות המערכת"
+    },
+    "cp_access_usage": {
+      "en": "Usage access",
+      "he": "גישה לנתוני שימוש"
+    },
+    "cp_access_media": {
+      "en": "Media management",
+      "he": "ניהול מדיה"
+    },
+    "cp_access_unavailable": {
+      "en": "Gesher HaMeitarim could not read this application's special access. If the Gesher device is stopped, start it and open the details again.",
+      "he": "גשר המיתרים לא הצליח לקרוא את הגישה המיוחדת של היישום הזה. אם סביבת גשר המיתרים כבויה, יש להפעיל אותה ולפתוח שוב את הפרטים."
+    },
+    "cp_access_failed": {
+      "en": "Could not change \"{0}\".",
+      "he": "לא ניתן היה לשנות את \"{0}\"."
     },
     "cp_uninstall_failed": {
       "en": "Failed to uninstall {0}.",
@@ -524,6 +707,14 @@
     "cp_status_ready": {
       "en": "Ready",
       "he": "מוכן"
+    },
+    "cp_btn_open_logs": {
+      "en": "Open logs location",
+      "he": "פתח את מיקום הלוגים"
+    },
+    "cp_open_logs_failed": {
+      "en": "Could not open the logs folder: ⁨{0}⁩",
+      "he": "לא ניתן לפתוח את תיקיית הלוגים: ⁨{0}⁩"
     },
     "cp_status_working": {
       "en": "Working, please wait…",
@@ -623,7 +814,7 @@
     },
     "binder_handshake": {
       "en": "the binder endpoint of the Gesher device {0} did not complete its connection handshake (binderd exit {1})",
-      "he": "שירות התקשורת של סביבת גשר {0} לא השלים את יצירת החיבור (קוד יציאה {1})"
+      "he": "שירות התקשורת של סביבת גשר המיתרים {0} לא השלים את יצירת החיבור (קוד יציאה {1})"
     },
     "binder_ready": {
       "en": "binder endpoint accepted a protocol connection: {0} (pid {1})",
@@ -647,7 +838,7 @@
     },
     "toast_sent": {
       "en": "toast activator: the click went to the Gesher device",
-      "he": "הלחיצה על ההתראה הועברה לסביבת גשר"
+      "he": "הלחיצה על ההתראה הועברה לסביבת גשר המיתרים"
     },
     "apps_folder": {
       "en": "Gesher Apps",
@@ -670,16 +861,32 @@
       "he": "שרת המערכת לא זיהה את התהליך שהופעל"
     },
     "cp_update_title": {
-      "en": "Gesher updates",
-      "he": "עדכוני גשר"
+      "en": "Gesher HaMeitarim updates",
+      "he": "עדכוני גשר המיתרים"
     },
     "cp_update_automatic": {
       "en": "Check for updates automatically",
       "he": "בדיקת עדכונים אוטומטית"
     },
     "cp_update_automatic_hint": {
-      "en": "Check when the control center opens, at most once a day. Installation requires your approval.",
-      "he": "בודק בעת פתיחת לוח הבקרה, לכל היותר פעם ביום. התקנה דורשת את אישורך."
+      "en": "Check when the control center opens, at most once a day.",
+      "he": "בודק בעת פתיחת לוח הבקרה, לכל היותר פעם ביום."
+    },
+    "cp_update_auto_install": {
+      "en": "Install updates automatically",
+      "he": "התקנת עדכונים אוטומטית"
+    },
+    "cp_update_auto_install_hint": {
+      "en": "Downloads a verified update and installs it when no apps are open, without asking. Turn this off to approve each update yourself.",
+      "he": "מוריד עדכון מאומת ומתקין אותו כשאין אפליקציה פתוחה, בלי לשאול. כבה כדי לאשר כל עדכון בעצמך."
+    },
+    "cp_update_waiting_for_apps": {
+      "en": "Version \u2068{0}\u2069 is ready and will be installed when all apps are closed.",
+      "he": "גרסה \u2068{0}\u2069 מוכנה, ותותקן כשכל האפליקציות ייסגרו."
+    },
+    "cp_update_installing_silent": {
+      "en": "Installing version \u2068{0}\u2069…",
+      "he": "מתקין את גרסה \u2068{0}\u2069…"
     },
     "cp_update_check": {
       "en": "Check for updates",
@@ -730,8 +937,8 @@
       "he": "גרסה \u2068{0}\u2069 זמינה לעדכון."
     },
     "cp_update_current": {
-      "en": "Gesher is up to date.",
-      "he": "גשר מעודכן."
+      "en": "Gesher HaMeitarim is up to date.",
+      "he": "גשר המיתרים מעודכן."
     },
     "cp_update_no_release": {
       "en": "There is no published stable release yet.",
@@ -762,8 +969,8 @@
       "he": "פעולת העדכון בוטלה."
     },
     "cp_update_confirm": {
-      "en": "Install Gesher \u2068{0}\u2069 now?\nSetup will close running Gesher applications. Installed apps and their data will be kept.",
-      "he": "להתקין עכשיו את גשר \u2068{0}\u2069?\nההתקנה תסגור יישומי גשר פעילים. היישומים המותקנים והנתונים שלהם יישמרו."
+      "en": "Install Gesher HaMeitarim \u2068{0}\u2069 now?\nSetup will close running Gesher HaMeitarim apps. Installed apps and their data will be kept.",
+      "he": "להתקין עכשיו את גשר המיתרים \u2068{0}\u2069?\nההתקנה תסגור יישומים פעילים של גשר המיתרים. היישומים המותקנים והנתונים שלהם יישמרו."
     },
     "cp_update_installing": {
       "en": "Preparing or installing the update… Complete the setup window when it opens.",
@@ -804,6 +1011,26 @@
     "cp_update_reopen_failed": {
       "en": "The update is installed. Close and reopen the control center from the Start menu.",
       "he": "העדכון מותקן. סגור את לוח הבקרה ופתח אותו מחדש מתפריט התחל."
+    },
+    "cp_camera_title": {
+      "en": "Camera",
+      "he": "מצלמה"
+    },
+    "cp_camera_image_picker": {
+      "en": "Allow choosing an image from the PC instead of taking a photo",
+      "he": "אפשר בחירת תמונה מהמחשב במקום צילום במצלמה"
+    },
+    "cp_camera_image_picker_hint": {
+      "en": "Off by default. When on, an app that takes a photo or opens the camera can use an image you choose from the PC instead; when the PC has a camera, you are asked which to use. Applies the next time an app opens the camera. Whether the device reports a camera, and the camera app on a PC without one, follow after Gesher HaMeitarim restarts.",
+      "he": "כבוי כברירת מחדל. כשהאפשרות פועלת, יישום שמצלם או פותח את המצלמה יכול להשתמש במקום זאת בתמונה שתבחר מהמחשב; כשיש למחשב מצלמה, תישאל במה להשתמש. חל בפעם הבאה שיישום פותח את המצלמה. דיווח המכשיר על קיום מצלמה, ויישום המצלמה במחשב ללא מצלמה, מתעדכנים לאחר הפעלה מחדש של גשר המיתרים."
+    },
+    "cp_camera_image_picker_saved": {
+      "en": "Camera setting saved.",
+      "he": "הגדרת המצלמה נשמרה."
+    },
+    "cp_camera_image_picker_failed": {
+      "en": "Could not save the camera setting: {0}",
+      "he": "שמירת הגדרת המצלמה נכשלה: {0}"
     }
   }
 }
