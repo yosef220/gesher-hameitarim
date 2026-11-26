@@ -1,0 +1,7 @@
+scenario,submitted,prepared,operation_workers_peak,blocked_callbacks,overload_errors,expected_result
+original_public_api,128,,,128,0,fails_callback_bound
+candidate_public_api,128,,,4,64,passes
+candidate_burst,1,1,1,,0,passes
+candidate_burst,32,32,32,,0,passes
+candidate_burst,256,256,32,,0,passes
+candidate_burst,1024,256,32,,768,passes
