@@ -40,9 +40,8 @@ pr-256	origin:refs/heads/topic/pr-256	0aa2b1c40fd00c2beb943ce5dcfd19c69e9344a2	2
 # - ‏#393: תיקון לכלי ה-CI בלבד. משנה את TsfJobSupervisor.cs, ששלוש בדיקות TCP נועצות לפי גיבוב
 #   שנבדק (run-component.ps1 ו-test-helper-metadata.ps1), ונכשל ב-"Actual source helper differs".
 #   כדי להחזיר: בדיקה של השינוי בבקר והפקה מחדש של הנעיצות.
-# - ‏#441: החוזים החדשים שלו ל-ASCII עוברים על Linux, ונכשלים בכל ההרצות על Windows (dalvikvm, ‏single,
-#   ‏device, ‏x86_64 ו-arm64). הכשל בבדיקות שכוללות errno == 17 אחרי קריאה מוצלחת, כלומר כנראה הסביבה
-#   משנה את errno של האורח. כדי להחזיר: לאמת ולתקן את שימור ה-errno, ולא לרכך את הבדיקה.
+# - ‏#441 חזר דרך topic/pr-441: החוזים שלו ל-ASCII נכשלו על Windows כי p.Check של native2 מאפס את
+#   errno אחרי כל בדיקה. המתאם שומר אותו עכשיו. החוזים והקבצים שהראיות מקפיאות לא השתנו.
 # - ‏#434: ראו למטה.
 pr-266	origin:refs/heads/archive/apache-snapshots	6c43bd3b5c2f5348c5fcd5b129ff58ab3118ee8b	266	2	ביצועים: זמן חיים מוגבל לבקשות ל-authenticator של חשבונות (NATIVE-10 A)
 pr-290	origin:refs/heads/archive/apache-snapshots	4ecfd19b7629a975cf03c2a51ed30bbe0a89560f	290	2	ממשק: האייקונים והצלילים של MessageBox בהודעות של המארח
@@ -67,4 +66,4 @@ pr-428	origin:refs/heads/archive/apache-snapshots	57f9310913419ab529387c6f59e2c7
 # חדשה היה מציג מדידה שלא נעשתה. נכנס אחרי קמפיין מדידה חדש על הקוד המשולב.
 #pr-434	origin:refs/heads/archive/apache-snapshots	1462b55fc0bf72f2a2e1a385ad2990f0bdcf6a6e	434	2	ביצועים: הרשאות ה-URI של חבילה מותקנת מבוטלות פעם אחת בכל פרסום
 pr-436	origin:refs/heads/archive/apache-snapshots	477d23da682c909639e625ee9f16c1192b8e60b0	436	2	בדיקה: שמירה של fixtures וקבלה מחדש של ספקים בבדיקות השירותים
-#pr-441	origin:refs/heads/archive/apache-snapshots	b1784db80e19df6e06ba363cbfb737a7bc6b04a0	441	2	ביצועים: המרה של ASCII למחרוזת רחבה בלי שלב ביניים של multibyte
+pr-441	origin:refs/heads/topic/pr-441	6d595403fd556b539bb5bf4401968cbad8384f92	441	2	ביצועים: המרה של ASCII למחרוזת רחבה בלי שלב ביניים של multibyte
