@@ -43,6 +43,10 @@ MARKER = '<!-- gesher-release-publisher-v1 '
 RELEASE_BRANCHES = ('main', 'product')
 RELEASE_NAME = 'גשר המיתרים {}'
 INSTALL_GUIDE = f'https://github.com/{REPOSITORY}/blob/main/docs/he/08-install-guide.md'
+# גשר המיתרים: "מה חדש" לכל גרסה, בעברית: tools/ci/release-notes/vX.Y.Z.md, אם קיים. הקובץ נקרא
+# מהגרסה של main שהפרסום רץ ממנה (בתוך tools/ci, שנמצא ב-sparse checkout של publish-release.yml).
+RELEASE_NOTES = Path(__file__).resolve().parent / 'release-notes'
+MAX_RELEASE_NOTES = 16384
 
 
 class ReleaseError(RuntimeError):
@@ -212,8 +216,20 @@ def release_name(source):
     return RELEASE_NAME.format(version_string(source.version))
 
 
+def release_notes(source):
+    path = RELEASE_NOTES / f'v{version_string(source.version)}.md'
+    if not path.is_file():
+        return ''
+    raw = path.read_bytes()
+    require(len(raw) <= MAX_RELEASE_NOTES, 'Release notes are too large')
+    text = raw.decode('utf-8').strip()
+    require(MARKER not in text, 'Release notes must not contain the publisher marker')
+    return text
+
+
 def release_intro(source):
     version = version_string(source.version)
+    notes = release_notes(source)
     return '\n'.join([
         f'## גשר המיתרים {version}',
         '',
@@ -225,6 +241,7 @@ def release_intro(source):
         '',
         f'אפשר להשוות את טביעת האצבע של הקובץ ל-`{CHECKSUM_NAME}`. כל הפרטים, כולל רשת מסוננת: '
         f'[מדריך ההתקנה]({INSTALL_GUIDE}).',
+        *(['', notes] if notes else []),
     ])
 
 

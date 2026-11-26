@@ -366,6 +366,23 @@ class PublisherTests(unittest.TestCase):
         self.assertIn('Publication confirmed', self.publish())
         self.assertFalse(self.api.own['draft'])
 
+    def test_release_notes_follow_the_install_instructions(self):
+        # גשר המיתרים: "מה חדש" מ-tools/ci/release-notes/vX.Y.Z.md, אחרי הוראות ההתקנה.
+        with tempfile.TemporaryDirectory() as root:
+            notes = Path(root)
+            (notes / 'v0.2.1.md').write_text('### מה חדש\n\n- סוכן עדכונים\n', encoding='utf-8')
+            with patch.object(pub, 'RELEASE_NOTES', notes):
+                intro = pub.release_intro(SOURCE)
+                self.assertLess(intro.index('הפעל בכל זאת'), intro.index('### מה חדש'))
+                (notes / 'v0.2.1.md').write_text(pub.MARKER + 'x -->', encoding='utf-8')
+                with self.assertRaises(pub.ReleaseError):
+                    pub.release_intro(SOURCE)
+                (notes / 'v0.2.1.md').write_bytes(b'x' * (pub.MAX_RELEASE_NOTES + 1))
+                with self.assertRaises(pub.ReleaseError):
+                    pub.release_intro(SOURCE)
+            with patch.object(pub, 'RELEASE_NOTES', notes / 'missing'):
+                self.assertNotIn('### מה חדש', pub.release_intro(SOURCE))
+
     def test_lightweight_tag(self):
         self.api.tag['object'] = {'sha': HEAD, 'type': 'commit'}
         self.assertIn('Publication confirmed', self.publish())
