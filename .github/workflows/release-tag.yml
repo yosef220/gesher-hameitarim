@@ -1,0 +1,121 @@
+# גשר המיתרים: יצירת תג הגרסה על הראש של product. ה-workflow הזה לא קיים ב-upstream.
+#
+# למה הוא קיים: את התג אפשר ליצור גם עם git, אבל לא מכל מקום שבו עובדים על הפרויקט (למשל, הסשן
+# שבונה את הגרסאות חסום מדחיפת תגים). כאן התג נוצר עם GITHUB_TOKEN, אחרי הבדיקות שלמטה.
+#
+# הפעלה: Actions ← "יצירת תג גרסה" ← Run workflow, מ-main, או:
+#   gh workflow run release-tag.yml --ref main -f version=X.Y.Z -f commit=<ה-SHA של הראש של product>
+#
+# הוא יוצר את התג vX.Y.Z רק אם הקומיט שנמסר הוא בדיוק הראש של product, ורק אם התג עוד לא קיים.
+# הוא לא מריץ את ה-CI ולא מפרסם. אחריו מפעילים ידנית את ה-CI על התג
+# (gh workflow run ci.yml --ref vX.Y.Z), וכשה-CI עובר, publish-release.yml מפרסם לבד.
+# השלבים המלאים ב-docs/he/07-upstream-sync.md.
+name: יצירת תג גרסה
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'מספר הגרסה, בלי v (למשל 1.0.0)'
+        required: true
+        type: string
+      commit:
+        description: 'ה-SHA המלא (40 תווים) של הראש של product שה-CI שלו עבר'
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: gesher-release-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: יצירת התג על הראש של product
+    if: >-
+      github.repository == 'yosef220/gesher-hameitarim' &&
+      github.repository_id == '1471523850' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: בדיקת הגרסה, הראש של product והתג, ויצירת התג
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          # אותם כללים כמו באימות התג ב-ci.yml, כדי לעצור כאן ולא אחרי שהתג כבר נוצר.
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})$ ]] ||
+            fail "הגרסה '$VERSION' צריכה להיות X.Y.Z, בלי v ובלי אפסים מובילים"
+          parts=("${BASH_REMATCH[@]:1}")
+          for part in "${parts[@]}"; do
+            [ "$part" -le 65535 ] || fail "רכיב בגרסה $VERSION גדול מ-65535"
+          done
+          [ "${parts[0]}" -gt 0 ] || [ "${parts[1]}" -ge 2 ] ||
+            fail "הגרסה צריכה להיות לפחות 0.2.0 (בניות ה-CI הישנות הותקנו כ-0.1.<מספר ריצה>)"
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "הקומיט צריך להיות SHA מלא של 40 תווים, באותיות קטנות"
+          tag="v$VERSION"
+
+          head=$(gh api "repos/$REPO/git/ref/heads/product" --jq '.object.type + " " + .object.sha') ||
+            fail "לא הצלחתי לקרוא את הראש של product"
+          [ "$head" = "commit $COMMIT" ] ||
+            fail "הראש של product הוא '${head#* }', ולא $COMMIT. התג לא נוצר"
+
+          # שם ב-peeled_sha את הקומיט שהתג מצביע עליו, דרך אובייקט התג אם יש כזה. ריק אם התג לא קיים.
+          # נקראת ישירות ולא בתוך $(...), כדי ש-fail יעצור את כל הסקריפט ויודפס.
+          peeled() {
+            local found kind sha _
+            peeled_sha=''
+            found=$(gh api "repos/$REPO/git/matching-refs/tags/$tag" \
+              --jq ".[] | select(.ref == \"refs/tags/$tag\") | .object.type + \" \" + .object.sha") ||
+              fail "לא הצלחתי לבדוק אם התג $tag קיים"
+            [ -n "$found" ] || return 0
+            kind=${found%% *}; sha=${found#* }
+            for _ in 1 2 3 4; do
+              [ "$kind" = tag ] || break
+              found=$(gh api "repos/$REPO/git/tags/$sha" --jq '.object.type + " " + .object.sha') ||
+                fail "לא הצלחתי לקרוא את אובייקט התג $sha"
+              kind=${found%% *}; sha=${found#* }
+            done
+            [ "$kind" = commit ] || fail "התג $tag קיים, אבל לא מצביע על קומיט"
+            peeled_sha=$sha
+          }
+
+          peeled
+          existing=$peeled_sha
+          if [ -n "$existing" ]; then
+            [ "$existing" = "$COMMIT" ] || fail "התג $tag כבר קיים, על $existing ולא על $COMMIT. הוא לא שונה"
+            echo "התג $tag כבר קיים על $COMMIT, ולא נוצר מחדש."
+            state="כבר היה קיים"
+          else
+            object=$(gh api -X POST "repos/$REPO/git/tags" -f tag="$tag" -f message="גשר המיתרים $VERSION" \
+              -f object="$COMMIT" -f type=commit --jq '.sha') ||
+              fail "יצירת אובייקט התג נכשלה. התג לא נוצר"
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$object" --silent ||
+              fail "יצירת ההפניה refs/tags/$tag נכשלה. ייתכן שהתג לא נוצר"
+            # מדווחים רק על מה שנקרא בחזרה מ-GitHub.
+            peeled
+            [ "$peeled_sha" = "$COMMIT" ] || fail "התג $tag נשלח ליצירה, אבל לא נמצא אחר כך על $COMMIT"
+            echo "התג $tag נוצר על $COMMIT."
+            state="נוצר"
+          fi
+
+          {
+            echo "### התג \`$tag\` $state על \`$COMMIT\`"
+            echo
+            echo "השלב הבא: להפעיל את ה-CI על התג. ב-Actions ← ci ← Run workflow, לבחור את \`$tag\` תחת Tags, או:"
+            echo
+            echo '```'
+            echo "gh workflow run ci.yml --ref $tag"
+            echo '```'
+            echo
+            echo "כשה-CI עובר, הפרסום רץ לבד מ-main."
+          } >> "$GITHUB_STEP_SUMMARY"

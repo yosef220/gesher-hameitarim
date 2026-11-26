@@ -7,14 +7,14 @@ $assignment=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.Ass
 if($assignment.Count -ne 1){throw 'Helper pin map is missing/ambiguous'}
 $actual=$assignment[0].Right.Expression.SafeGetValue()
 $reviewed=@{
- 'tools/windows4/TsfJobSupervisor.cs'='625be4d5906bb48dd02d6103382fd2e85ac88738'
+ 'tools/windows4/TsfJobSupervisor.cs'='6e1d2673011603de136abbd1a9e7e773b3708bea'
  'tools/windows4/TsfJobWorker.cs'='e4392ea9ee4e8faf6d2f4b28424f8e05fe692ce1'
- 'tools/windows4/test-tsf-job-supervisor.ps1'='3b0f7ebb636b91859b86797f94136c0b6dccd5fd'
+ 'tools/windows4/test-tsf-job-supervisor.ps1'='6e97087bfa9473d3d28727c1447a5434f545aec4'
  'tools/net-tcp-priority/qualified/TsfJobSupervisor.cs'='625be4d5906bb48dd02d6103382fd2e85ac88738'
  'tools/native3-locks/artifact/download-verified-artifact.py'='cd5cc415e53102c664edac22b1604df639c8804b'
  'tools/ci/receipt-diagnostics.ps1'='b89f2f3f8a54a8b23937bae48ad900c85d4d49e9'
  'tools/ci/source_identity.py'='8bbf1174020adab86b02403070f88c5aa42d9755'
- 'tools/ci/github_read.py'='997d37c8f6677bb8e1bbfb38d5c87f504b3eb0e4'
+ 'tools/ci/github_read.py'='a0b0496b84194d824f7ff2d91a41a286397f1586'
  'tools/ci/github_jobs.py'='ae6864eaf1f612317c917a10a2f45e5c8b15ac0c'
 }
 function ExactMap($Value){
@@ -29,7 +29,10 @@ foreach($entry in $actual.GetEnumerator()){
  $bad=$actual.Clone();$bad[$entry.Key]='0'*40;if(ExactMap $bad){throw 'Changed hash accepted'}
  $bad=$actual.Clone();$bad.Remove($entry.Key);if(ExactMap $bad){throw 'Missing helper accepted'}
 }
-foreach($stale in @(@{P='tools/windows4/TsfJobSupervisor.cs';H='d1cf9319268df1bccf03177e7f8dde52a7f55510'},@{P='tools/windows4/TsfJobWorker.cs';H='08f29f78f56195825d96de2f2f6632bf91133e1e'},@{P='tools/windows4/test-tsf-job-supervisor.ps1';H='91e6946c4ab05a42ffbf6917166193c3dad07872'})){
+foreach($stale in @(@{P='tools/windows4/TsfJobSupervisor.cs';H='d1cf9319268df1bccf03177e7f8dde52a7f55510'},@{P='tools/windows4/TsfJobWorker.cs';H='08f29f78f56195825d96de2f2f6632bf91133e1e'},@{P='tools/windows4/test-tsf-job-supervisor.ps1';H='91e6946c4ab05a42ffbf6917166193c3dad07872'},
+ @{P='tools/windows4/TsfJobSupervisor.cs';H='625be4d5906bb48dd02d6103382fd2e85ac88738'},@{P='tools/windows4/test-tsf-job-supervisor.ps1';H='3b0f7ebb636b91859b86797f94136c0b6dccd5fd'},
+ @{P='tools/ci/github_read.py';H='997d37c8f6677bb8e1bbfb38d5c87f504b3eb0e4'},
+ @{P='tools/ci/github_read.py';H='185256b2664ae3e6225f38f6add8d493731d30aa'})){
  $bad=$actual.Clone();$bad[$stale.P]=$stale.H;if(ExactMap $bad){throw 'Historical stale helper hash accepted'}
 }
 $bad=$actual.Clone();$bad['tools/unreviewed.cs']='0'*40;if(ExactMap $bad){throw 'Additional helper accepted'}
