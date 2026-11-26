@@ -1,0 +1,91 @@
+# Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+#
+# גשר המיתרים: בדיקות התקנה בסביבה ישראלית (שלב 3.3 בתוכנית העבודה). ה-workflow הזה לא קיים ב-upstream.
+#   - המתקין של גרסה שפורסמה, כמו שמשתמש מוריד אותו, מאומת מול ה-digest של GitHub ומול SHA256SUMS.txt
+#   - משתמש Windows עם שם עברי ("ישראל ישראלי"): התקנה, הפעלה של אפליקציות אמיתיות מ-F-Droid,
+#     והקומפילציה של dex2oat תחת הנתיב שלו (issue #355). פעם כשלתיקיית המשתמש יש שם קצר (8.3),
+#     כמו ברוב המחשבים, ופעם בלי, כשהריצה מקבלת את הנתיב בעברית
+#   - משתמש ביקורת עם שם ASCII, באותה מכונה ובאותה בדיקה. כשהוא עובר והמשתמש בשם עברי נכשל,
+#     הכשל שייך לנתיב בעברית
+# הסקריפטים והתיעוד: tests/install-env. התוצאות עולות כ-artifacts (install-env-*), עם הלוגים של גשר.
+#
+# לא בונה את המוצר ולא מריץ את ci.yml: שתי משימות Windows בלבד, על מתקין שכבר פורסם.
+name: hameitarim-install-env
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'תג הגרסה לבדיקה, למשל v1.0.0 (ריק: הגרסה האחרונה שפורסמה)'
+        type: string
+        default: ''
+  push:
+    # הענפים שבהם התהליך מפותח. אחרי המיזוג ל-main הוא רץ בהפעלה ידנית, על כל גרסה.
+    branches: ['claude/gracious-bohr-8xtijg', 'install-env/**']
+    paths:
+      - '.github/workflows/hameitarim-install-env.yml'
+      - 'tests/install-env/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hameitarim-install-env-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hebrew-user:
+    name: משתמש בשם עברי, ${{ matrix.label }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            short_names: 'on'
+            label: 'עם שם קצר, וביקורת ASCII'
+            control: true
+          - os: windows-2025
+            short_names: 'off'
+            label: 'בלי שם קצר'
+            control: false
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # שתי אפליקציות מ-tests/e2e/apps.json: מחשבון פשוט, ופנקס עם מסד נתונים בתיקיית הנתונים.
+      APPS: 'com.ath0.rpn,com.nononsenseapps.notepad'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tests/e2e
+            tests/windows/graphics
+            tests/install-env
+
+      - name: המתקין של הגרסה, מאומת
+        id: installer
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -Destination installer
+
+      - name: 'ביקורת: משתמש עם שם ASCII'
+        if: ${{ matrix.control }}
+        shell: pwsh
+        run: |
+          tests/install-env/HebrewUserChecks.ps1 -InstallerPath '${{ steps.installer.outputs.path }}' `
+            -ShortNames any -UserName 'gesher-ascii' -Apps $env:APPS.Split(',') -OutDir results/ascii
+
+      - name: משתמש בשם עברי
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          tests/install-env/HebrewUserChecks.ps1 -InstallerPath '${{ steps.installer.outputs.path }}' `
+            -ShortNames '${{ matrix.short_names }}' -Apps $env:APPS.Split(',') -OutDir 'results/hebrew-${{ matrix.short_names }}'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: install-env-hebrew-${{ matrix.short_names }}-${{ matrix.os }}
+          path: results/
+          if-no-files-found: warn
