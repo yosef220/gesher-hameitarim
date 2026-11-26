@@ -39,7 +39,7 @@ foreach ($line in Get-Content -LiteralPath (Join-Path $Destination 'SHA256SUMS.t
 if (-not $listed) { throw "$name לא מופיע ב-SHA256SUMS.txt של $Tag" }
 if ($listed -ne $actual) { throw "ב-SHA256SUMS.txt כתוב $listed ל-$name, והקובץ שהורד הוא $actual" }
 
-Write-Host "PASS  המתקין של $Tag: $name, sha256:$actual, זהה ל-digest של GitHub ול-SHA256SUMS.txt"
+Write-Host "PASS  המתקין של $($Tag): $name, sha256:$actual, זהה ל-digest של GitHub ול-SHA256SUMS.txt"
 if ($env:GITHUB_OUTPUT) {
     "path=$path" >> $env:GITHUB_OUTPUT
     "version=$version" >> $env:GITHUB_OUTPUT
