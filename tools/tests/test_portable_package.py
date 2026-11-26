@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -25,6 +26,15 @@ class ProjectLicenseTests(unittest.TestCase):
                                 ('GESHER-APACHE-LICENSE-2.0.txt', 'LICENSE-APACHE')):
             with self.subTest(shipped=shipped):
                 self.assertEqual((licenses / shipped).read_bytes(), (ROOT / source).read_bytes())
+
+    def test_installer_license_page_is_built_from_the_license(self):
+        # מסך "אני מסכים" של המתקין (license.he.rtf, ‏license.en.rtf) נבנה מ-LICENSE ב-license_rtf.py.
+        result = subprocess.run([sys.executable, str(ROOT / 'tools/package/license_rtf.py'), '--check'],
+                                capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = (ROOT / 'tools/package/gesher.iss').read_text(encoding='utf-8-sig')
+        for language in ('en', 'he'):
+            self.assertRegex(manifest, rf'(?m)^Name: "{language}";.*; LicenseFile: "license\.{language}\.rtf";')
 
     def test_project_license_is_polyform_strict_and_the_installer_ships_both(self):
         text = (ROOT / 'LICENSE').read_text(encoding='utf-8')
