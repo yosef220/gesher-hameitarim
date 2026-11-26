@@ -1,3 +1,27 @@
+# גשר המיתרים
+
+**ההמשך של Gesher: אפליקציות אנדרואיד על Windows, עם ממשק בעברית.**
+
+## הקרדיט: Gesher המקורי
+
+גשר המיתרים מבוסס על **Gesher**, שיצר **palmoni5**. הוא פתח את הפרויקט ב-19 באוקטובר 2026, ובחמישה שבועות כתב בעצמו את רובו המכריע: 3,163 מתוך 3,342 הקומיטים עד הגרסה האחרונה שפורסמה כקוד פתוח. תרמו לו גם yom-chadash, ‏Y-PLONI, ‏ztcebuck, ‏ARI212121, ‏dudu, ‏talmidhon, ‏Lev-Good, ‏israelv ו-tsoolgee, ועוד תורמים שה-PRs שלהם נכללו כאן, כמו dudua99. הקרדיט של כל אחד מהם שמור בהיסטוריית הקוד.
+
+**למה יש המשך:** ב-25 בנובמבר 2026 עבר Gesher לרישיון קנייני, ובאותו ערב המאגר שלו נסגר לציבור. הגרסה האחרונה שפורסמה תחת Apache 2.0 נשארת פתוחה לפי הרישיון הזה, וממנה גשר המיתרים ממשיך: עם התיקונים שנכנסו ל-Gesher ולא יצאו בגרסה רשמית, ממשק בעברית, עדכונים אוטומטיים, והתקנה מעל Gesher ששומרת את האפליקציות.
+
+**תודה** ל-palmoni5 ולכל מי שתרם ל-Gesher. בלי העבודה שלהם, הפרויקט הזה לא היה קיים.
+
+## Credit: the original Gesher
+
+Gesher HaMeitarim is based on **Gesher**, created by **palmoni5**, who started the project on 19 October 2026 and wrote the overwhelming majority of it: 3,163 of the 3,342 commits up to its last open-source release. Contributors include yom-chadash, Y-PLONI, ztcebuck, ARI212121, dudu, talmidhon, Lev-Good, israelv and tsoolgee, and others whose pull requests are included here, such as dudua99. Each contributor's credit is kept in the git history.
+
+On 25 November 2026 Gesher moved to a proprietary license, and its repository was closed to the public that evening. Its last version released under the Apache License 2.0 remains available under that license, and Gesher HaMeitarim continues from it.
+
+Thank you to palmoni5 and everyone who contributed to Gesher.
+
+---
+
+*מכאן והלאה: ה-README המקורי של Gesher, שמתאר את הטכנולוגיה. The rest of this page is Gesher's original README.*
+
 <p align="center">
   <img src="assets/gesher.png" alt="Gesher Logo" width="160"/>
 </p>
@@ -12,6 +36,17 @@ speed, with no hidden VM and no Android image to boot.
 
 > **Release: v0.1.0** — Native execution of Android applications on Windows with ART JIT, HWUI/Direct3D acceleration, WASAPI audio, Camera/Location subsystems, microG GMS stubs, ARM64-to-x64 binary translation, and seamless desktop integration.
 > See the [architecture overview](docs/architecture.md).
+
+## Security: apps are not isolated from Windows
+
+Gesher runs each Android app as an ordinary Windows program, with the
+permissions of your Windows account. Android's permission prompts control what
+an app can do through Android's APIs, but they do not isolate it from Windows:
+its code, especially its native code, can read and change your files, use the
+network and start programs, as any program you install can. **Treat an `.apk`
+like a downloaded `.exe`: install only apps you trust, from sources you
+trust.** Per-app isolation with Windows AppContainers is under development and
+off by default; see [docs/sandbox.md](docs/sandbox.md).
 
 ## How it works
 
@@ -95,6 +130,9 @@ SDK inventory that separates structural gaps from demonstrated failures.
 
 ## Building
 
+See the [build and package guide](docs/build-and-package.md) for source identity,
+complete installer suppliers and local validation.
+
 The production build runs on Linux or WSL and produces Windows x64 binaries.
 Requirements: CMake 3.24+, Ninja, Python 3.12+, git, curl, and GNU Make. The
 recipe downloads the pinned [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)
@@ -125,7 +163,8 @@ Outputs include:
 
 - `dalvikvm.exe`: The ported ART runtime with JIT compiler.
 - `gesher-exec.exe`: App process host and launcher.
-- `installer/gesher-setup-*.exe`: Complete Windows installer and shell integration.
+- `installer/gesher-setup-*.exe`: Complete Windows installer and shell integration,
+  produced separately by the CI `package` job after supplier verification.
 
 Tests: `tests/build-test-apps.sh out/test-apps` (needs a JDK), then
 `tests/windows/run-tests.ps1` on Windows.
@@ -137,10 +176,19 @@ download and install a newer version. Automatic checks can be disabled; installi
 requires confirmation and preserves installed Android apps and their data.
 See [updating Gesher](docs/updates.md) for behavior, release packaging and tests.
 
-## License
+## License / רישיון
 
-[Apache License 2.0](LICENSE), the same license as AOSP. See
-[decision 0001](docs/decisions/0001-license.md).
+Gesher HaMeitarim is offered under the [PolyForm Strict License 1.0.0](LICENSE):
+noncommercial use only, with no right to distribute it or to make changes or new
+works based on it. Any other use, including use in a business, needs a separate
+written license from the repository owner. The parts that come from Gesher, up to
+its last version released under the Apache License 2.0, remain under
+[Apache 2.0](LICENSE-APACHE). See [NOTICE.md](NOTICE.md).
+
+גשר המיתרים מופץ לפי [PolyForm Strict License 1.0.0](LICENSE): שימוש למטרות לא
+מסחריות בלבד, בלי זכות להפיץ, לשנות או לבנות ממנו גרסאות. לכל שימוש אחר, כולל
+בעסק, צריך רישיון נפרד בכתב מבעל המאגר. החלקים שמקורם ב-Gesher נשארים תחת
+[Apache 2.0](LICENSE-APACHE). פירוט ב-[NOTICE.md](NOTICE.md).
 
 ---
 
@@ -151,3 +199,14 @@ See [updating Gesher](docs/updates.md) for behavior, release packaging and tests
 הסינון שמותקן במחשב.
 
 גרסה **v0.1.0** כוללת מנוע ART עם JIT, האצת חומרה HWUI/Direct3D, סאונד WASAPI, תמיכת מצלמה ומיקום, שירותי microG GMS, תרגום ספריות ARM64, ושילוב מלא בשולחן העבודה של Windows.
+
+### אבטחה: האפליקציות אינן מבודדות מ-Windows
+
+‏גשר מריץ כל אפליקציית אנדרואיד כתוכנה רגילה של Windows, עם ההרשאות של חשבון
+ה-Windows שלך. בקשות ההרשאה של אנדרואיד קובעות מה אפליקציה יכולה לעשות דרך
+הממשקים של אנדרואיד, אבל אינן מבודדות אותה מ-Windows: הקוד שלה, ובמיוחד קוד
+native, יכול לקרוא ולשנות את הקבצים שלך, להשתמש ברשת ולהפעיל תוכנות, כמו כל
+תוכנה שמותקנת במחשב. **יש להתייחס לקובץ ‎`.apk` כמו לקובץ ‎`.exe` שהורד
+מהאינטרנט: להתקין רק אפליקציות מהימנות, ממקורות מהימנים.** בידוד לכל אפליקציה
+באמצעות Windows AppContainer נמצא בפיתוח וכבוי כברירת מחדל; ראו
+[docs/sandbox.md](docs/sandbox.md).
