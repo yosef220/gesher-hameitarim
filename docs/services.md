@@ -99,6 +99,11 @@ The report does not identify the Truecaller APK version or Gesher build, so
 these checks do not establish that app's complete setup flow. The special-access
 controls from #332 cover a separate set of Android permissions.
 
+## Downloads
+
+`DownloadProvider` serves `content://downloads`, the provider behind
+`android.app.DownloadManager`, from the system server; see [downloads.md](downloads.md).
+
 ## Storage Access Framework documents
 
 `DocumentsStorageProvider` publishes `com.gesher.documents` through the platform's
