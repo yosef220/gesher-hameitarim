@@ -32,6 +32,7 @@
 #include <string_view>
 
 #include "binder_internal.h"
+#include "fifo_internal.h"
 #include "internal.h"
 #include "record_lock_descriptors.h"
 #include "system_linker.h"
@@ -184,6 +185,13 @@ int OpenFile(const std::wstring& path, int flags, mode_t mode) {
   if ((flags & O_DIRECT) != 0 && (flags & O_PATH) == 0) return errno = EINVAL, -1;
   if ((flags & O_NOATIME) != 0 && (flags & O_PATH) == 0) return errno = EOPNOTSUPP, -1;
   if ((flags & O_PATH) == 0) flags |= O_LARGEFILE;
+  // Classify an existing POSIX FIFO before CreateFileW can apply CREATE_ALWAYS
+  // or TRUNCATE_EXISTING (which would erase the reparse point or fail).
+  {
+    bool handled = false;
+    int fifo_fd = OpenFifo(path, flags, &handled);
+    if (handled) return fifo_fd;
+  }
   DWORD disposition;
   if ((flags & O_PATH) != 0) {
     disposition = OPEN_EXISTING;
@@ -717,11 +725,7 @@ int utimensat(int dirfd, const char* path, const struct timespec times[2], int f
   std::wstring windows;
   switch (gesher::MapPath(resolved.c_str(), &windows)) {
     case PathKind::kFile: {
-      HANDLE h = CreateFileW(windows.c_str(), 0,
-                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS |
-                                 ((flags & AT_SYMLINK_NOFOLLOW) != 0 ? FILE_FLAG_OPEN_REPARSE_POINT : 0),
-                             nullptr);
+      HANDLE h = gesher::OpenPathMaybeFifo(windows, 0, (flags & AT_SYMLINK_NOFOLLOW) == 0);
       if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
       const int result = SetHandleTimes(h, times);
       CloseTimeHandle(h);
