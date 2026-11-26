@@ -1172,6 +1172,7 @@ public final class PackageManagerService extends IPackageManager.Default {
      * digitizer's contacts ({@link #addHostHardwareFeatures}), and FEATURE_RAM_NORMAL as
      * AOSP's SystemConfig adds it for a device that is not low-RAM. The OpenGL ES version
      * is not a named feature ({@link #getSystemAvailableFeatures}).
+     * FEATURE_SECURE_LOCK_SCREEN follows Windows Hello ({@link #addSecureLockScreenFeature}).
      */
     static final android.util.ArrayMap<String, android.content.pm.FeatureInfo> FEATURES =
             new android.util.ArrayMap<>();
@@ -1213,6 +1214,11 @@ public final class PackageManagerService extends IPackageManager.Default {
             addPrintingFeature(FEATURES, PrintManagerService.supported());
         } catch (LinkageError e) {
             // No runtime natives (a host JVM loading the class): no printing to report.
+        }
+        try {
+            addSecureLockScreenFeature(FEATURES, DeviceCredential.system().supported());
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM loading the class): no verifier to report.
         }
         try {
             // Probe the properties' natives first: ActivityManager's static initializer
@@ -1545,6 +1551,17 @@ public final class PackageManagerService extends IPackageManager.Default {
     static void addWifiFeature(android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
             com.gesher.net.WindowsWifi.Hardware hardware) {
         if (hardware != null && hardware.present()) addFeature(features, PackageManager.FEATURE_WIFI);
+    }
+
+    /**
+     * FEATURE_SECURE_LOCK_SCREEN when Windows has a credential verifier Gesher can use
+     * (Windows Hello on build 22000 or later, set up by the user or not), decided once
+     * when the system server starts ({@link DeviceCredential#supported}, ADR 0094).
+     */
+    static void addSecureLockScreenFeature(
+            android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
+            boolean supported) {
+        if (supported) addFeature(features, PackageManager.FEATURE_SECURE_LOCK_SCREEN);
     }
 
     /** Whether the audio input has a real device (AudioSystem, compat/media/audio/capture.cc). */
