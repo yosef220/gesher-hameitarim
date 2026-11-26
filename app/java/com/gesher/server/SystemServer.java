@@ -482,6 +482,8 @@ public final class SystemServer {
             CameraApp.sync(mInstaller, mServices.pm);
             // The speech recognition service, when Windows has recognizers (docs/speech-recognition.md).
             SttEngineApp.sync(mInstaller, mServices.pm);
+            // The text-to-speech engine, when Windows has voices (docs/tts.md).
+            TtsEngineApp.sync(mInstaller, mServices.pm);
             trackLauncherRecords(mServices.pm);
             // The launcher waits for this file: the services are registered.
             File ready = Device.readyFile();
