@@ -95,11 +95,11 @@ def inline(value):
     return ''.join(parts)
 
 
-def paragraph(body, *, rtl, size, color, semibold=False, before=0, after=120):
+def paragraph(body, *, rtl, size, color, semibold=False, before=0, after=120, line=264):
     font = (3 if semibold else 1) if rtl else (2 if semibold else 0)
     direction = '\\rtlpar\\qr' if rtl else '\\ltrpar\\ql'
     run = '\\rtlch' if rtl else '\\ltrch'
-    return (f'\\pard{direction}\\sb{before}\\sa{after}\\sl300\\slmult1'
+    return (f'\\pard{direction}\\sb{before}\\sa{after}\\sl{line}\\slmult1'
             f'{{{run}\\f{font}\\af{font}\\fs{round(size * 2)}\\afs{round(size * 2)}\\cf{color} {body}}}\\par\n')
 
 
@@ -111,7 +111,7 @@ def legal_blocks():
         raise ValueError('ב-LICENSE חסרים הקו המפריד או הנוסח של PolyForm Strict 1.0.0')
     blocks = []
     for block in re.split(r'\n\s*\n', preface.strip()):
-        if re.search('[֐-׿]', block) and not block.startswith('Gesher HaMeitarim'):
+        if re.search('[\u0590-\u05FF]', block) and not block.startswith('Gesher HaMeitarim'):
             continue
         lines = block.splitlines() if block.startswith('Gesher HaMeitarim') else [' '.join(block.split())]
         blocks.extend(('body', line) for line in lines)
@@ -135,22 +135,22 @@ def render(language):
            '{\\f2\\fswiss\\fcharset0 Segoe UI Semibold;}{\\f3\\fswiss\\fcharset177 Segoe UI Semibold;}}\n',
            '{\\colortbl;' + colors + '}\n',
            '\\viewkind4\\deflang1033\n']
-    out.append(paragraph(text(summary['lead']), rtl=rtl, size=12, color=SKY, semibold=True, after=160))
+    out.append(paragraph(text(summary['lead']), rtl=rtl, size=11, color=SKY, semibold=True, after=80))
     for heading, items in summary['groups']:
-        out.append(paragraph(text(heading), rtl=rtl, size=10.5, color=SKY, semibold=True, before=120, after=60))
+        out.append(paragraph(text(heading), rtl=rtl, size=9.5, color=SKY, semibold=True, before=80, after=20))
         for item in items:
-            out.append(paragraph(text('• ' + item), rtl=rtl, size=10, color=INK, after=40))
+            out.append(paragraph(text('\u2022 ' + item), rtl=rtl, size=9, color=INK, after=10))
     for index, note in enumerate(summary['notes']):
-        out.append(paragraph(text(note), rtl=rtl, size=10, color=INK if index < 2 else STEEL,
-                             before=200 if index == 0 else 0, after=100))
-    out.append(paragraph(text(summary['legal']), rtl=rtl, size=10.5, color=SKY, semibold=True, before=240, after=120))
+        out.append(paragraph(text(note), rtl=rtl, size=9, color=INK if index < 2 else STEEL,
+                             before=120 if index == 0 else 0, after=60))
+    out.append(paragraph(text(summary['legal']), rtl=rtl, size=9.5, color=SKY, semibold=True, before=200, after=80))
     for kind, value in legal_blocks():
         if kind == 'title':
-            out.append(paragraph('{\\b ' + inline(value) + '}', rtl=False, size=10, color=INK, before=80, after=60))
+            out.append(paragraph('{\\b ' + inline(value) + '}', rtl=False, size=9, color=INK, before=60, after=40, line=252))
         elif kind == 'heading':
-            out.append(paragraph('{\\b ' + inline(value) + '}', rtl=False, size=9, color=INK, before=120, after=40))
+            out.append(paragraph('{\\b ' + inline(value) + '}', rtl=False, size=8.5, color=INK, before=100, after=20, line=252))
         else:
-            out.append(paragraph(inline(value), rtl=False, size=9, color=STEEL, after=80))
+            out.append(paragraph(inline(value), rtl=False, size=8.5, color=STEEL, after=60, line=252))
     out.append('}\n')
     return ''.join(out).encode('ascii')
 
