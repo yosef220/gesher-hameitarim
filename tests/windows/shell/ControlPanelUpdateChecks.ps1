@@ -93,7 +93,7 @@ function Get-GesherUpdate($InstallDirectory, [Threading.CancellationToken] $Canc
     Wait-Fixture $config.CheckDelay $CancellationToken
     if ($config.CheckFailure) { throw 'Fixture network failure' }
     $release = if ($config.CheckStatus -in 'Available', 'Current') {
-        [pscustomobject]@{ Version = '0.2.0'; Tag = 'v0.2.0'; Url = 'https://github.com/gesher-runtime/gesher/releases/tag/v0.2.0' }
+        [pscustomobject]@{ Version = '0.2.0'; Tag = 'v0.2.0'; Url = 'https://github.com/yosef220/gesher-hameitarim/releases/tag/v0.2.0' }
     } else { $null }
     [pscustomobject]@{ Status = $config.CheckStatus; CurrentVersion = (Get-GesherInstalledVersion $InstallDirectory); Release = $release }
 }
@@ -113,8 +113,9 @@ function Receive-GesherUpdate($Release, $DestinationDirectory, [Threading.Cancel
         throw
     }
 }
-function Start-GesherUpdateInstaller($Download, $InstallDirectory, [Threading.CancellationToken] $CancellationToken) {
+function Start-GesherUpdateInstaller($Download, $InstallDirectory, [Threading.CancellationToken] $CancellationToken, [switch] $Silent) {
     $config = Get-Fixture
+    if ($Silent) { [IO.File]::WriteAllText((Join-Path $InstallDirectory 'setup-silent'), 'silent fixture setup') }
     Wait-Fixture $config.ValidationDelay $CancellationToken
     if ($config.InstallFailure) { throw 'Fixture process start failure' }
     $CancellationToken.ThrowIfCancellationRequested()
@@ -132,10 +133,13 @@ function Start-GesherUpdateInstaller($Download, $InstallDirectory, [Threading.Ca
 }
 '@
     [IO.File]::WriteAllText((Join-Path $here 'gesher-update.ps1'), $fixtureHelper, [Text.UTF8Encoding]::new($true))
-    foreach ($name in 'updateVersionText', 'updateStatusText', 'automaticUpdateChecks', 'btnCheckUpdate', 'btnInstallUpdate', 'btnCancelUpdate', 'btnUpdateNotes', 'btnReopenPanel', 'updateProgress', 'btnToggleDevice', 'servicesCards', 'applicationsSection') {
+    foreach ($name in 'updateVersionText', 'updateStatusText', 'automaticUpdateChecks', 'automaticUpdateInstall', 'btnCheckUpdate', 'btnInstallUpdate', 'btnCancelUpdate', 'btnUpdateNotes', 'btnReopenPanel', 'updateProgress', 'btnToggleDevice', 'servicesCards', 'applicationsSection') {
         Set-Variable -Scope Script -Name $name -Value (New-FixtureControl)
     }
     $script:window = [pscustomobject]@{ AllowDrop = $true; IsActive = $true }
+    # גשר המיתרים: המקרים הקיימים בודקים את הזרימה עם אישור, ולכן ההתקנה האוטומטית כבויה בהם
+    Save-GesherUpdatePreferences -StateDirectory $script:UpdateDirectory -Preferences ([pscustomobject]@{ AutomaticChecks = $true; AutomaticInstall = $false; LastCheckUtc = $null })
+    $script:ViewState = @{ Device = $false }
     $script:UpdateState = New-PanelUpdateState (Get-GesherInstalledVersion $here) (Get-GesherUpdatePreferences $script:UpdateDirectory)
     Update-PanelUpdateView
 }
@@ -352,6 +356,39 @@ try {
             }
         }
     } else { 'SKIP: native WPF layout requires Windows (covered by the Windows CI job)' }
+    # גשר המיתרים: התקנה אוטומטית. עדכון זמין יורד לבד, מחכה כשאפליקציה פתוחה, ומותקן
+    # בשקט, בלי חלון אישור, כשאין אפליקציה פתוחה.
+    Reset-PanelUpdateFixture
+    Save-GesherUpdatePreferences -StateDirectory $script:UpdateDirectory -Preferences ([pscustomobject]@{ AutomaticChecks = $true; AutomaticInstall = $true; LastCheckUtc = $null })
+    $script:UpdateState.Preferences = Get-GesherUpdatePreferences $script:UpdateDirectory
+    Assert-Update ([bool]$script:UpdateState.Preferences.AutomaticInstall) 'Automatic installation preference did not load'
+    Start-PanelUpdateCheck -Automatic
+    Drain-Worker
+    Assert-Update ($script:UpdateState.Phase -eq 'Ready' -and $script:UpdateState.Download) 'An available update was not downloaded automatically'
+    Assert-Update ($script:UpdateState.AutoInstallPending -and -not $script:UpdateState.PromptPending) 'A downloaded update did not wait for automatic installation'
+    $script:ViewState.Device = $true
+    Invoke-PanelUpdateTick
+    Assert-Update ($null -eq $script:UpdateState.Worker -and -not $script:UpdateState.Installer) 'Automatic installation started while an app was open'
+    Assert-Update ($script:UpdateState.StatusKey -eq 'cp_update_waiting_for_apps') 'Waiting for open apps was not shown'
+    $script:ViewState.Device = $false
+    Invoke-PanelUpdateTick
+    Assert-Update ($script:UpdateState.Worker -and $script:UpdateState.Worker.Operation -eq 'Install' -and $script:UpdateState.Worker.Automatic) 'Automatic installation did not start when no app was open'
+    Drain-Installer
+    Assert-Update ($script:Confirmations -eq 0) 'Automatic installation asked for confirmation'
+    Assert-Update (Test-Path -LiteralPath (Join-Path $here 'setup-silent')) 'Automatic installation did not run setup silently'
+    Assert-Update ($script:UpdateState.Phase -eq 'Completed') 'Automatic installation did not complete'
+
+    # כיבוי ההתקנה האוטומטית נשמר, ועדכון זמין מחכה ללחיצה
+    Reset-PanelUpdateFixture
+    Set-PanelAutomaticUpdateInstall $true
+    Assert-Update ((Get-GesherUpdatePreferences $script:UpdateDirectory).AutomaticInstall -and $automaticUpdateInstall.IsChecked) 'Enabling automatic installation was not persisted'
+    Set-PanelAutomaticUpdateInstall $false
+    Assert-Update (-not (Get-GesherUpdatePreferences $script:UpdateDirectory).AutomaticInstall -and -not $automaticUpdateInstall.IsChecked) 'Disabling automatic installation was not persisted'
+    Assert-Update ((Get-GesherUpdatePreferences $script:UpdateDirectory).AutomaticChecks) 'Changing automatic installation changed automatic checks'
+    Start-PanelUpdateCheck
+    Drain-Worker
+    Assert-Update ($script:UpdateState.Phase -eq 'Available' -and -not $script:UpdateState.Download) 'An update was downloaded although automatic installation was off'
+
     "PASS: control panel update contracts ($script:Checks checks)"
 } finally {
     if ($script:UpdateState) {

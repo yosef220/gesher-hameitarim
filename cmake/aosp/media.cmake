@@ -124,6 +124,16 @@ target_compile_options(media_muxer_verify PRIVATE -Wall -Wextra -Werror -Wno-unu
   -Wno-deprecated-copy)
 set_target_properties(media_muxer_verify PROPERTIES CXX_STANDARD 23)
 
+# The actual pure helper, including unaligned and protected-page boundaries.
+# This default native target accompanies the unchanged ART/NDK muxer gates.
+add_executable(media_annexb_contracts
+  "${CMAKE_SOURCE_DIR}/tests/media/annexb_split_contracts.cc"
+  ${_media}/encode/codec_config.cc)
+target_include_directories(media_annexb_contracts PRIVATE "${CMAKE_SOURCE_DIR}")
+target_compile_options(media_annexb_contracts PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(media_annexb_contracts PRIVATE pthread)
+set_target_properties(media_annexb_contracts PROPERTIES CXX_STANDARD 23)
+
 add_library(gesher_media_player OBJECT
   ${_media}/jni/java_data_source.cc
   ${_media}/jni/media_codec_jni.cc
@@ -250,6 +260,15 @@ add_executable(media_yuv_rgba_test "${CMAKE_SOURCE_DIR}/tests/media/yuv_rgba_tes
 target_include_directories(media_yuv_rgba_test PRIVATE "${CMAKE_SOURCE_DIR}")
 target_compile_options(media_yuv_rgba_test PRIVATE -Wall -Wextra -Werror)
 
+# Actual full cropped-frame conversion and QueueSurface ownership. This links
+# the production renderer and hostgraphics objects, without host test adapters.
+add_executable(media_i420_crop_test "${CMAKE_SOURCE_DIR}/tests/media/i420_crop_test.cc")
+target_include_directories(media_i420_crop_test PRIVATE "${CMAKE_SOURCE_DIR}")
+target_compile_options(media_i420_crop_test PRIVATE
+  -Wall -Wextra -Werror -Wno-unused-parameter -Wno-deprecated-copy)
+target_link_libraries(media_i420_crop_test PRIVATE gesher_media_audio gesher_media_player_core gesher_elf)
+gesher_graphics_cxx(media_i420_crop_test)
+
 add_executable(wasapi_refill_test "${CMAKE_SOURCE_DIR}/tests/media/wasapi_refill_test.cc")
 target_include_directories(wasapi_refill_test PRIVATE "${CMAKE_SOURCE_DIR}")
 target_compile_options(wasapi_refill_test PRIVATE -Wall -Wextra -Werror)
@@ -291,3 +310,13 @@ target_compile_options(media_retriever_pixels_test PRIVATE
   -Wall -Wextra -Werror -Wno-unused-parameter)
 target_link_libraries(media_retriever_pixels_test PRIVATE skia)
 gesher_graphics_cxx(media_retriever_pixels_test)
+
+# The complete software encoder and the product's actual pinned AVC library.
+add_executable(media_soft_avc_reuse_test
+  "${CMAKE_SOURCE_DIR}/tests/media/soft_avc_reuse_test.cc")
+target_include_directories(media_soft_avc_reuse_test PRIVATE "${CMAKE_SOURCE_DIR}")
+target_include_directories(media_soft_avc_reuse_test SYSTEM PRIVATE ${GESHER_SOFT_AVCENC_INCLUDES})
+target_compile_definitions(media_soft_avc_reuse_test PRIVATE GESHER_MEDIA_STANDALONE)
+target_compile_options(media_soft_avc_reuse_test PRIVATE
+  -Wall -Wextra -Werror -Wno-unused-parameter)
+target_link_libraries(media_soft_avc_reuse_test PRIVATE avc pthread)

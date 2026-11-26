@@ -20,12 +20,17 @@
 
 [Setup]
 AppId={{6A1F3C2E-5B7D-4E8A-9C0F-1D2E3F4A5B6C}
-AppName=Gesher
+; גשר המיתרים: השם שמוצג באשף ובהוספה/הסרה של תוכניות, לפי שפת ההתקנה (tools/i18n/messages.json).
+; ה-AppId, תיקיית ההתקנה ותיקיית הפרופיל נשארים של Gesher, כדי שההתקנה תחליף את Gesher במקומו.
+AppName={cm:setup_app_name}
 AppVersion={#AppVersion}
 VersionInfoVersion={#AppVersion}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoProductTextVersion={#AppVersion}
-AppPublisher=Gesher
+AppPublisher=Gesher HaMeitarim
+; AppName מכיל קבוע, ולכן פרטי הגרסה של קובץ ההתקנה נקבעים כאן במפורש.
+VersionInfoProductName=Gesher HaMeitarim
+VersionInfoDescription=Gesher HaMeitarim Setup
 DefaultDirName={localappdata}\Programs\Gesher
 DisableDirPage=no
 DefaultGroupName=Gesher
@@ -43,7 +48,7 @@ OutputBaseFilename=gesher-setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayName=Gesher {#AppVersion}
+UninstallDisplayName={cm:setup_app_name} {#AppVersion}
 ; Gesher's icon (tools/icons/make-icons.py): Setup, Add/Remove Programs, the
 ; Start menu entries and the .apk file type.
 SetupIconFile=gesher.ico
@@ -60,8 +65,10 @@ UsePreviousLanguage=no
 [Languages]
 ; InfoBeforeFile: the security notice (docs/sandbox.md), shown before installing:
 ; Android apps run with the user's Windows permissions, not in a sandbox.
-Name: "en"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "security-notice.txt"
-Name: "he"; MessagesFile: "compiler:Languages\Hebrew.isl"; InfoBeforeFile: "security-notice.he.txt"
+; גשר המיתרים: מסך "אני מסכים" לרישיון (PolyForm Strict 1.0.0) לפני ההתקנה. הקבצים נבנים מ-LICENSE
+; ב-license_rtf.py. התקנה שקטה (/SILENT, ‏/VERYSILENT, כמו בעדכון האוטומטי) לא מציגה אותו.
+Name: "en"; MessagesFile: "compiler:Default.isl"; LicenseFile: "license.en.rtf"; InfoBeforeFile: "security-notice.txt"
+Name: "he"; MessagesFile: "compiler:Languages\Hebrew.isl"; LicenseFile: "license.he.rtf"; InfoBeforeFile: "security-notice.he.txt"
 
 #include "ui-messages.iss"
 
@@ -95,6 +102,10 @@ Source: "etc\permissions\android.test.mock.xml"; DestDir: "{app}\etc\permissions
 Source: "{#BuildDir}\android.test.runner.jar"; DestDir: "{app}"; Flags: ignoreversion
 Source: "etc\permissions\android.test.runner.xml"; DestDir: "{app}\etc\permissions"; Flags: ignoreversion
 Source: "licenses\JUNIT-CPL-NOTICES.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
+; גשר המיתרים: הרישיון של המוצר (PolyForm Strict 1.0.0), ו-Apache 2.0 של החלקים שמקורם ב-Gesher.
+; העותקים זהים ל-LICENSE ול-LICENSE-APACHE שבשורש (נבדק ב-tools/tests/test_portable_package.py).
+Source: "licenses\GESHER-HAMEITARIM-LICENSE.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
+Source: "licenses\GESHER-APACHE-LICENSE-2.0.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 Source: "etc\permissions\privapp-permissions-microg.xml"; DestDir: "{app}\etc\permissions"; Flags: ignoreversion
 Source: "{#BuildDir}\binderd.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\servicemanager.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -103,6 +114,8 @@ Source: "{#BuildDir}\gesher-exec.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; gesher-launch (compat/shell/gesher_launch.cc): what the apps' shortcuts, a
 ; double-clicked .apk and a toast click start: gesher-app with no console window.
 Source: "{#BuildDir}\gesher-launch.exe"; DestDir: "{app}"; Flags: ignoreversion
+; גשר המיתרים: הגופנים של הממשק (OFL, עם הרישיונות), לטעינה פרטית בלבד
+Source: "ui-fonts\*"; DestDir: "{app}\ui-fonts"; Flags: ignoreversion
 ; The .apk file type's icon handler (compat/shell/gesher_shellext.cc): an APK
 ; shows its app's icon in Explorer, which keeps it loaded: an update renames the
 ; loaded copy (PrepareToInstall) and writes the new one beside it.
@@ -116,6 +129,10 @@ Source: "{#BuildDir}\oatdump.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\lifecycle.apk"; DestDir: "{app}"; Flags: ignoreversion
 ; Gesher Camera (ADR 0051): ACTION_IMAGE_CAPTURE's app, installed by the Gesher device when the PC has a camera.
 Source: "{#BuildDir}\gesher-camera.apk"; DestDir: "{app}"; Flags: ignoreversion
+; Gesher Speech Recognition (docs/speech-recognition.md): the RecognitionService, installed by the Gesher device when Windows has speech recognizers.
+Source: "{#BuildDir}\gesher-stt.apk"; DestDir: "{app}"; Flags: ignoreversion
+; Gesher Text-to-speech (docs/tts.md): the TextToSpeechService engine, installed by the Gesher device when Windows has voices.
+Source: "{#BuildDir}\gesher-tts.apk"; DestDir: "{app}"; Flags: ignoreversion
 ; The boot image (docs/boot-image.md): the boot class path's classes, verified
 ; and linked by dex2oat, which dalvikvm maps instead of loading them one by one.
 Source: "{#BuildDir}\framework\x86_64\*"; DestDir: "{app}\framework\x86_64"; Flags: ignoreversion
@@ -139,7 +156,7 @@ Source: "{#BuildDir}\tzdata\*"; DestDir: "{app}\tzdata"; Flags: ignoreversion re
 Source: "{#BuildDir}\TZDATA-NOTICES.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 ; Networking (docs/network.md): Android's CA certificates, which dalvikvm joins
 ; with the roots Windows trusts as the system CAs ($ANDROID_ROOT/etc/security/cacerts),
-; and the licenses of BoringSSL, Conscrypt, OkHttp and BouncyCastle.
+; and the licenses of BoringSSL, Conscrypt, OkHttp, Brotli and BouncyCastle.
 Source: "{#BuildDir}\cacerts\*"; DestDir: "{app}\cacerts"; Flags: ignoreversion
 Source: "{#BuildDir}\NET-NOTICES.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 ; Gesher's default ringtone, notification and alarm sounds (docs/media.md):
@@ -158,6 +175,8 @@ Source: "gesher-panel-confirm.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-message.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-native.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-update.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; גשר המיתרים: סוכן העדכונים, ש-gesher-app מפעיל ברקע כשפותחים אפליקציה.
+Source: "gesher-update-agent.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-runtime-files.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-ui.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ui-messages.json"; DestDir: "{app}"; Flags: ignoreversion
@@ -193,6 +212,11 @@ Name: "{autoprograms}\{cm:setup_readme}"; Filename: "{app}\README.txt"; Check: n
 [InstallDelete]
 Type: files; Name: "{autoprograms}\Gesher Hello.lnk"; Check: not IsPortableInstall
 Type: files; Name: "{autoprograms}\גשר — דוגמה.lnk"; Check: not IsPortableInstall
+; גשר המיתרים: הקיצורים של Gesher בשמות הקודמים. התקנה מעל Gesher לא משאירה קיצור כפול.
+Type: files; Name: "{autoprograms}\Gesher Control Center.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\לוח הבקרה של גשר.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\Gesher README.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\גשר — מידע והוראות.lnk"; Check: not IsPortableInstall
 
 [Registry]
 ; The `.apk` association, per user (HKCU\Software\Classes). Gesher.Apk opens
@@ -256,6 +280,9 @@ Type: files; Name: "{autoprograms}\Gesher Hello.lnk"
 Type: files; Name: "{autoprograms}\גשר — דוגמה.lnk"
 ; Icon handlers an update moved aside (PrepareToInstall) while Explorer had them loaded.
 Type: files; Name: "{app}\gesher_shellext.*.old"
+; גשר המיתרים: מה שה-runtime מקמפל ליד האפליקציות לדוגמה שבתיקיית ההתקנה (oat\x86_64\*.vdex). ההסרה
+; לא מחקה אותו, ותיקיית ההתקנה נשארה אחריה (נמצא בבדיקת השדרוג, ריצה 45788361478).
+Type: filesandordirs; Name: "{app}\oat"
 
 [Code]
 const

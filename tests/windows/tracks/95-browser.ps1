@@ -52,3 +52,18 @@ Check 'services: restrict-background status is DISABLED (no restriction is enfor
     -Xint '-Xusejit:false' -cp (NoDrive "$Dir/services-tests.dex") gesher.services.RestrictBackgroundTest
 } @('RestrictBackgroundTest: getRestrictBackgroundStatus 1;',
   'RestrictBackgroundTest all passed')
+# country_detector (CountryDetectorService over WindowsCountry): this machine's Windows
+# "Country or region", or the default Locale's country without one, as
+# COUNTRY_SOURCE_LOCALE, through StandIn's generated ICountryDetector stub.
+Check 'services: CountryDetector reports Windows'' Country or region as the locale source' {
+  & "$Dir/dalvikvm.exe" "-Xbootclasspath:$bcpBrowser" "-Ximage:$(NoDrive "$root/system")/framework/boot.art" `
+    -Xint '-Xusejit:false' -cp (NoDrive "$Dir/services-tests.dex") gesher.services.CountryDetectorTest
+} @('CountryDetectorTest: detectCountry is ',
+  'CountryDetectorTest all passed')
+# Caption style (CaptioningBridge): Windows' ClosedCaptionProperties read through the
+# production natives and mapped to CaptioningManager's Settings.Secure keys. Read only.
+Check 'services: Windows caption style reads and maps to CaptioningManager''s settings' {
+  & "$Dir/dalvikvm.exe" "-Xbootclasspath:$bcpBrowser" "-Ximage:$(NoDrive "$root/system")/framework/boot.art" `
+    -Xint '-Xusejit:false' -cp (NoDrive "$Dir/services-tests.dex") gesher.services.CaptioningWindowsTest
+} @('CaptioningWindowsTest: Windows caption style ',
+  'CaptioningWindowsTest all passed')

@@ -16,9 +16,11 @@
 #include "memmem_search.h"
 
 #include <gesher/bionic_shim.h>
+#include <gesher/art_shim.h>
 #include <gesher/elf_loader.h>
 #include <gesher/clocks.h>
 #include <gesher/environment.h>
+#include <gesher/fork.h>
 
 #include <windows.h>
 // bcrypt.h needs windows.h first.
@@ -561,10 +563,29 @@ int* BIONIC_SYSV Errno() { return &errno; }
   std::fflush(stderr);
   std::abort();
 }
+void BIONIC_SYSV CxaFinalize(void* dso);
+
+// A forked child (ADR 0092) is the program's copy, with the host runtime's
+// state as the parent's other threads left it: it ends after the program's
+// own exit handlers and stdio, without the host's static destructors and DLL
+// detach routines (which could wait for those threads' locks). Only exit()
+// runs the handlers and flushes stdio; _exit flushes nothing, as on Linux
+// (the child's buffers are copies of what the parent had not written yet).
+[[noreturn]] void EndForkedChild(int code, bool exit_work) {
+  if (exit_work) {
+    CxaFinalize(nullptr);
+    std::fflush(nullptr);
+  }
+  TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code) & 0xff);
+  for (;;) Sleep(INFINITE);
+}
+
 [[noreturn]] void BIONIC_SYSV Exit(int code) {
+  if (gesher::InForkedChild()) EndForkedChild(code, true);
   std::exit(code);
 }
 [[noreturn]] void BIONIC_SYSV UnderscoreExit(int code) {
+  if (gesher::InForkedChild()) EndForkedChild(code, false);
   std::fflush(stdout);
   std::fflush(stderr);
   ExitProcess(static_cast<UINT>(code));
@@ -1342,9 +1363,47 @@ int64_t BIONIC_SYSV Syscall(int64_t nr, int64_t a1, int64_t a2, int64_t a3, int6
     converted.tv_nsec = static_cast<long>(guest->tv_nsec);
     host_timeout = &converted;
   }
-  return ::syscall(SYS_futex, reinterpret_cast<volatile int*>(a1), op,
-                   static_cast<int>(a3), host_timeout,
-                   reinterpret_cast<volatile int*>(a5), static_cast<int>(a6));
+  if (command != FUTEX_WAIT && command != FUTEX_WAIT_BITSET) {
+    return ::syscall(SYS_futex, reinterpret_cast<volatile int*>(a1), op,
+                     static_cast<int>(a3), host_timeout,
+                     reinterpret_cast<volatile int*>(a5), static_cast<int>(a6));
+  }
+  // A signal another thread directs at this one interrupts the wait, as on
+  // Linux: its handler runs here; then an untimed wait restarts if every
+  // handler that ran has SA_RESTART, and a timed one fails with EINTR (the
+  // kernel's -ERESTART_RESTARTBLOCK ignores SA_RESTART). An interruption that
+  // ran no handler restarts (a relative timeout counts from the start).
+  const bool relative = command == FUTEX_WAIT && host_timeout != nullptr;
+  const __int128 deadline = relative ? MonotonicNanos() +
+      static_cast<__int128>(converted.tv_sec) * 1000000000 + converted.tv_nsec : 0;
+  for (;;) {
+    ::gesher_futex_interrupt* cell = AttachSignalInterrupt();
+    long r = ::syscall(SYS_futex, reinterpret_cast<volatile int*>(a1), op,
+                       static_cast<int>(a3), host_timeout,
+                       reinterpret_cast<volatile int*>(a5), static_cast<int>(a6));
+    const int error = errno;
+    if (cell == nullptr) {
+      errno = error;
+      return r;
+    }
+    DetachSignalInterrupt();
+    // Also after a wake or timeout: a wake can overtake an interrupt request,
+    // and the signal it was for must not wait for some later delivery point.
+    const int ran = DeliverAfterInterrupt();
+    if (r != -1 || error != EINTR) {
+      errno = error;
+      return r;
+    }
+    if (ran == kHandlersWithoutRestart || (ran != kNoHandler && host_timeout != nullptr)) {
+      return errno = kEINTR, -1;
+    }
+    if (relative) {
+      const __int128 left = deadline - MonotonicNanos();
+      if (left <= 0) return errno = kETIMEDOUT, -1;
+      converted.tv_sec = static_cast<time_t>(left / 1000000000);
+      converted.tv_nsec = static_cast<long>(left % 1000000000);
+    }
+  }
 }
 
 void ReportUnresolved(const char* name) {
@@ -1611,9 +1670,11 @@ SymbolTable& Table() {
     RegisterPosix(*table);
     RegisterSocket(*table);
     RegisterDnsWire(*table);
+    RegisterCxx(*table);
     RegisterSignal(*table);
     RegisterTime(*table);
     RegisterSyscall(*table);
+    RegisterPtrace(*table);
     RegisterProcess(*table);  // last: it wraps entries already there
     return table;
   }();
@@ -1631,10 +1692,19 @@ void AddBionicSymbol(const char* name, void* address) { Table()[name] = address;
 
 void InstallBionicShim() {
   Table();
-  gesher::elf::SetBionicResolver([](const char* name) { return LookupBionicSymbol(name); });
+  gesher::elf::SetBionicResolver([](const char* name) {
+    // The arm64 stand-in libart.so's imports, only while it loads (ADR 0086).
+    if (void* p = ResolveArtShimImport(name)) return p;
+    return LookupBionicSymbol(name);
+  });
   gesher::elf::SetUnresolvedHandler(ReportUnresolved);
   gesher::elf::SetRawSyscallHandler(RawSyscallX64);
   InstallSignalHook(false);
 }
 
 }  // namespace gesher::bionic
+
+// fork (gesher/fork.h).
+GESHER_FORK_LOCK(gesher::kForkOrderSubsystem, std::mutex, gesher::bionic::g_aligned_mutex);
+GESHER_FORK_LOCK(gesher::kForkOrderSubsystem, std::mutex, gesher::bionic::g_random_mutex);
+GESHER_FORK_LOCK(gesher::kForkOrderSubsystem, std::mutex, gesher::bionic::g_atexit_mutex);

@@ -197,12 +197,6 @@ public final class PackageManagerService extends IPackageManager.Default {
         return mPermissions.isProtectedBroadcast(action);
     }
 
-    private boolean synthetic(String name) {
-        return GmsPackageSupport.isSyntheticPackage(name)
-                && (!GmsPackageSupport.PACKAGE_VENDING.equals(name)
-                        || get(GmsPackageSupport.PACKAGE_GMS) == null);
-    }
-
     private PackageInfo installedInfo(ApkPackage pkg, long flags) {
         PackageInfo info = mPermissions.annotate(pkg.packageInfo(flags));
         // The compatibility parser can collect an unverified signing block. In real
@@ -531,7 +525,7 @@ public final class PackageManagerService extends IPackageManager.Default {
     public boolean isPackageAvailable(String packageName, int userId) {
         if (userId != 0) return false;
         if ("android".equals(packageName)) return true;
-        return get(packageName) != null || synthetic(packageName)
+        return get(packageName) != null
                 || BrowserPackageSupport.isBrowserPackage(packageName);
     }
 
@@ -555,9 +549,6 @@ public final class PackageManagerService extends IPackageManager.Default {
         ApkPackage p = get(packageName);
         if (p != null) {
             return installedInfo(p, flags);
-        }
-        if (synthetic(packageName)) {
-            return GmsPackageSupport.createSyntheticPackageInfo(packageName, flags);
         }
         if (BrowserPackageSupport.isBrowserPackage(packageName)) {
             return BrowserPackageSupport.createPackageInfo(flags);
@@ -597,9 +588,6 @@ public final class PackageManagerService extends IPackageManager.Default {
         if (p != null) {
             return p.applicationInfo(flags);
         }
-        if (synthetic(packageName)) {
-            return GmsPackageSupport.createSyntheticApplicationInfo(packageName, flags);
-        }
         if (BrowserPackageSupport.isBrowserPackage(packageName)) {
             return BrowserPackageSupport.createApplicationInfo(flags);
         }
@@ -628,6 +616,9 @@ public final class PackageManagerService extends IPackageManager.Default {
     @Override
     public ActivityInfo getActivityInfo(ComponentName className, long flags, int userId) {
         if (isRemovalPending(className.getPackageName())) return null;
+        if (userId == 0 && PackageInstallerService.CONFIRM_ACTIVITY.equals(className)) {
+            return mInstallerService.confirmationInfo();
+        }
         ApkPackage p = get(className.getPackageName());
         if (p == null && userId == 0 && ExactAlarmAccessRequests.PACKAGE.equals(className.getPackageName())) {
             ActivityInfo nativeActivity = exactAlarmAccessRequests().activityInfo(className, flags);
@@ -671,6 +662,12 @@ public final class PackageManagerService extends IPackageManager.Default {
     // A query spanning multiple records must not straddle an atomic enabled-state
     // batch. These readers do metadata/filter work only, never application callbacks.
     private synchronized List<ResolveInfo> query(Intent intent, String resolvedType, long flags, int userId) {
+        if (userId == 0 && PackageInstallerService.isConfirmationIntent(intent)) {
+            ResolveInfo confirmation = new ResolveInfo();
+            confirmation.activityInfo = mInstallerService.confirmationInfo();
+            confirmation.isDefault = true;
+            return List.of(confirmation);
+        }
         if (ExactAlarmAccessRequests.handles(intent, resolvedType)) {
             if (userId != 0) return new ArrayList<>();
             Map<String, ApkPackage> packages = new LinkedHashMap<>(mPackages);
@@ -704,7 +701,7 @@ public final class PackageManagerService extends IPackageManager.Default {
         for (String removing : mRemoving.keySet()) packages.remove(removing);
         ApkPackage caller = packages.get(source);
         if (caller == null) return false;
-        PackageVisibility visibility = new PackageVisibility(packages, false, false, false,
+        PackageVisibility visibility = new PackageVisibility(packages, false,
                 mPermissions::isDeclaredProtectedBroadcast);
         // Package admission assigns isolated or authenticated shared identities
         // in both signature-spoofing modes.
@@ -717,9 +714,6 @@ public final class PackageManagerService extends IPackageManager.Default {
         for (ApkPackage p : intentPackages(intent, ApkPackage.ComponentKind.SERVICE)) {
             if (isRemovalPending(p.packageName)) continue;
             result.addAll(p.queryIntentServices(intent, resolvedType, flags));
-        }
-        if (result.isEmpty() && intent != null && get(GmsPackageSupport.PACKAGE_GMS) == null) {
-            result.addAll(GmsPackageSupport.querySyntheticServices(intent, resolvedType, flags));
         }
         return result;
     }
@@ -748,6 +742,17 @@ public final class PackageManagerService extends IPackageManager.Default {
     public ResolveInfo resolveService(Intent intent, String resolvedType, long flags,
             int userId) {
         List<ResolveInfo> all = services(intent, resolvedType, flags);
+        // microG's Chimera resolver asks PM for the first-party Games action,
+        // then binds the returned component with the original Games request.
+        if (all.isEmpty() && userId == 0 && intent != null && intent.getComponent() == null
+                && intent.getSelector() == null && "com.google.android.gms".equals(intent.getPackage())
+                && "com.google.android.play.games.service.START_1P".equals(intent.getAction())) {
+            ApkPackage addon = get(intent.getPackage());
+            if (addon != null && addon.isSystemAddon() && addon.uid() == Binder.getCallingUid()) {
+                Intent alias = new Intent(intent).setAction("com.google.android.gms.games.service.START");
+                all = services(alias, resolvedType, flags);
+            }
+        }
         return all.isEmpty() ? null : all.get(0);
     }
 
@@ -865,13 +870,6 @@ public final class PackageManagerService extends IPackageManager.Default {
         for (ApkPackage p : mPackages.values()) {
             result.add(installedInfo(p, flags));
         }
-        if (get(GmsPackageSupport.PACKAGE_GMS) == null) {
-            result.add(GmsPackageSupport.createSyntheticPackageInfo(GmsPackageSupport.PACKAGE_GMS, flags));
-        }
-        if (get(GmsPackageSupport.PACKAGE_VENDING) == null
-                && get(GmsPackageSupport.PACKAGE_GMS) == null) {
-            result.add(GmsPackageSupport.createSyntheticPackageInfo(GmsPackageSupport.PACKAGE_VENDING, flags));
-        }
         return new ParceledListSlice<>(result);
     }
 
@@ -907,13 +905,6 @@ public final class PackageManagerService extends IPackageManager.Default {
         for (ApkPackage p : mPackages.values()) {
             result.add(p.applicationInfo(flags));
         }
-        if (get(GmsPackageSupport.PACKAGE_GMS) == null) {
-            result.add(GmsPackageSupport.createSyntheticApplicationInfo(GmsPackageSupport.PACKAGE_GMS, flags));
-        }
-        if (get(GmsPackageSupport.PACKAGE_VENDING) == null
-                && get(GmsPackageSupport.PACKAGE_GMS) == null) {
-            result.add(GmsPackageSupport.createSyntheticApplicationInfo(GmsPackageSupport.PACKAGE_VENDING, flags));
-        }
         return new ParceledListSlice<>(result);
     }
 
@@ -929,9 +920,9 @@ public final class PackageManagerService extends IPackageManager.Default {
         ApkPackage installed = get(pkg);
         if (installed != null) return installed.componentEnabledState(componentName.getClassName());
         // As Settings.getComponentEnabledSettingLPr: an unknown package throws, an unknown
-        // class of a known package is DEFAULT. Gesher's synthetic GMS/Play and browser
-        // packages are known packages whose components keep their manifest state.
-        if (get(pkg) == null && !synthetic(pkg) && !BrowserPackageSupport.isBrowserPackage(pkg)) {
+        // class of a known package is DEFAULT. Gesher's browser package is a known
+        // package whose components keep their manifest state.
+        if (get(pkg) == null && !BrowserPackageSupport.isBrowserPackage(pkg)) {
             throw new IllegalArgumentException("Unknown package: " + pkg);
         }
         return PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
@@ -1145,8 +1136,7 @@ public final class PackageManagerService extends IPackageManager.Default {
         enforceCrossUser(userId);
         ApkPackage installed = get(packageName);
         if (installed != null) return installed.applicationEnabledState();
-        if (synthetic(packageName)
-                || BrowserPackageSupport.isBrowserPackage(packageName)) {
+        if (BrowserPackageSupport.isBrowserPackage(packageName)) {
             return PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
         }
         throw new IllegalArgumentException("Unknown package: " + packageName);
@@ -1157,7 +1147,11 @@ public final class PackageManagerService extends IPackageManager.Default {
      * (touchscreen and faketouch, matching {@link com.gesher.app.DeviceProfile#configuration()},
      * both orientations) whose launcher could host app widgets (apps reach
      * AppWidgetManager only on devices with app_widgets, and phone apps assume it).
-     * Telephony, Wi-Fi, sensors and the rest are absent. Bluetooth
+     * FEATURE_WIFI follows the real WLAN adapters (docs/wifi.md); no Wi-Fi Direct, Aware,
+     * RTT or Passpoint feature is claimed. Sensors follow the ones SensorManager lists
+     * ({@link #addSensorFeatures}). Telephony (docs/telephony.md) is there only when
+     * Windows reports a cellular (WWAN) modem at boot: telephony, subscription, radio
+     * access and data, plus GSM for a 3GPP modem; never calling or messaging. Bluetooth
      * (docs/bluetooth.md) is there when the host has a radio: FEATURE_BLUETOOTH with an
      * adapter, FEATURE_BLUETOOTH_LE when Windows reports LE support (apps such as
      * companion apps check it before anything else). Cameras follow the real devices
@@ -1170,6 +1164,15 @@ public final class PackageManagerService extends IPackageManager.Default {
      * WindowsLocation#hasGnssReceiver}). Google Play filters
      * on these (a RECORD_AUDIO or location permission implies the feature unless the app
      * marks it not required), so an absent one hides an app the device can run.
+     * The rest (docs/system-features.md lists every SDK feature and why it is or is not
+     * here) follow what Windows has when the system server starts: FEATURE_WEBVIEW with a
+     * WebView2 Runtime behind android.webkit.WebView ({@link #addWebViewFeature}),
+     * FEATURE_AUDIO_OUTPUT with an audio render endpoint or jack, FEATURE_ETHERNET with a
+     * wired Ethernet interface, the touchscreen's multitouch features with a touch
+     * digitizer's contacts ({@link #addHostHardwareFeatures}), and FEATURE_RAM_NORMAL as
+     * AOSP's SystemConfig adds it for a device that is not low-RAM. The OpenGL ES version
+     * is not a named feature ({@link #getSystemAvailableFeatures}).
+     * FEATURE_SECURE_LOCK_SCREEN follows Windows Hello ({@link #addSecureLockScreenFeature}).
      */
     static final android.util.ArrayMap<String, android.content.pm.FeatureInfo> FEATURES =
             new android.util.ArrayMap<>();
@@ -1178,11 +1181,7 @@ public final class PackageManagerService extends IPackageManager.Default {
         for (String name : new String[] {PackageManager.FEATURE_APP_WIDGETS,
                 PackageManager.FEATURE_TOUCHSCREEN,
                 PackageManager.FEATURE_FAKETOUCH, PackageManager.FEATURE_SCREEN_PORTRAIT,
-                PackageManager.FEATURE_SCREEN_LANDSCAPE,
-                // Gesher's built-in WebView (WebView2, ADR 0041; WebViewUpdateService). The
-                // WebView2 Runtime is the installer's prerequisite; without it WebViews
-                // stay empty and webviewupdate names no valid provider.
-                PackageManager.FEATURE_WEBVIEW}) {
+                PackageManager.FEATURE_SCREEN_LANDSCAPE}) {
             android.content.pm.FeatureInfo f = new android.content.pm.FeatureInfo();
             f.name = name;
             FEATURES.put(name, f);
@@ -1193,7 +1192,10 @@ public final class PackageManagerService extends IPackageManager.Default {
             // No runtime natives (a host JVM loading the class): no radio to report.
         }
         try {
-            addCameraFeatures(FEATURES, WindowsCamera.devices());
+            // The selected-image camera counts while the Control Center's setting is on at
+            // the device's start (CameraImageSource): an app may take a "photo" with it.
+            addCameraFeatures(FEATURES, CameraImageSource.withPicker(WindowsCamera.devices(),
+                    CameraImageFallback.enabled()));
         } catch (LinkageError e) {
             // No runtime natives (a host JVM loading the class): no cameras to report.
         }
@@ -1202,7 +1204,364 @@ public final class PackageManagerService extends IPackageManager.Default {
         } catch (LinkageError e) {
             // No runtime natives (a host JVM loading the class): no input to report.
         }
+        try {
+            addSensorFeatures(FEATURES, WindowsSensors.types());
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM loading the class): no sensors to report.
+        }
         addLocationFeatures(FEATURES, WindowsLocation.hasGnssReceiver());
+        try {
+            addPrintingFeature(FEATURES, PrintManagerService.supported());
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM loading the class): no printing to report.
+        }
+        try {
+            addSecureLockScreenFeature(FEATURES, DeviceCredential.system().supported());
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM loading the class): no verifier to report.
+        }
+        try {
+            // Probe the properties' natives first: ActivityManager's static initializer
+            // reads them, and failing there would break the class for the whole process.
+            android.os.SystemProperties.getBoolean("ro.config.low_ram", false);
+            addMemoryFeature(FEATURES, android.app.ActivityManager.isLowRamDeviceStatic());
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM or a bare test process): memory class unknown.
+        }
+        try {
+            addWebViewFeature(FEATURES, com.gesher.app.webview.WebView2Host.runtimeVersion());
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM loading the class): no WebView2 to report.
+        }
+        try {
+            addHostHardwareFeatures(FEATURES, WindowsHost.hardwareSummary());
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM loading the class): no hardware to report.
+        }
+        // Telephony only with a cellular modem Windows reported at boot (docs/telephony.md).
+        TelephonyService.addTelephonyFeatures(FEATURES, TelephonyService.bootSnapshot());
+        // WLAN census bounded to 5 s: a timeout, no wlanapi, a stopped WLAN service or no adapter
+        // leaves FEATURE_WIFI out (docs/wifi.md).
+        addWifiFeature(FEATURES, com.gesher.net.WindowsWifi.hardware());
+        // ro.opengles.version, set before app processes start (they may read it).
+        glEsVersion();
+    }
+
+    /**
+     * FEATURE_PRINTING when the runtime prints through Windows (PrintManagerService). It
+     * describes the print framework, as on Android, not whether a printer is installed:
+     * with none, Windows' print dialog says so and the job is canceled.
+     */
+    static void addPrintingFeature(
+            android.util.ArrayMap<String, android.content.pm.FeatureInfo> features, boolean supported) {
+        if (supported) addFeature(features, PackageManager.FEATURE_PRINTING);
+    }
+
+    /**
+     * FEATURE_RAM_LOW or FEATURE_RAM_NORMAL, the one that matches
+     * ActivityManager.isLowRamDevice(), as AOSP's SystemConfig adds them.
+     */
+    public static void addMemoryFeature(
+            android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
+            boolean lowRam) {
+        addFeature(features, lowRam ? PackageManager.FEATURE_RAM_LOW
+                : PackageManager.FEATURE_RAM_NORMAL);
+    }
+
+    /**
+     * FEATURE_WEBVIEW when the WebView2 Runtime that backs android.webkit.WebView
+     * (com.gesher.app.webview, docs/webview.md) is installed: {@code runtimeVersion} is
+     * its version, null without one (WebViews would stay empty, so none is claimed).
+     */
+    public static void addWebViewFeature(
+            android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
+            String runtimeVersion) {
+        if (runtimeVersion != null && !runtimeVersion.isEmpty()) {
+            addFeature(features, PackageManager.FEATURE_WEBVIEW);
+        }
+    }
+
+    /**
+     * The features of the Windows hardware in {@code summary} (WindowsHost.hardwareSummary:
+     * touch contacts, audio render endpoints, wired Ethernet interfaces; null or -1 when
+     * unknown, which claims nothing):
+     * <ul>
+     * <li>FEATURE_TOUCHSCREEN_MULTITOUCH and _DISTINCT with a touch digitizer of two or more
+     * contacts, _JAZZHAND with five or more: WM_POINTER touch reaches apps with each contact
+     * tracked as its own pointer id (compat/input/translate.cc, up to MAX_POINTERS).
+     * <li>FEATURE_AUDIO_OUTPUT with an audio output: a render endpoint that is active or
+     * a jack with nothing plugged in (CDD 7.8.2: a device with a speaker or an audio output
+     * port reports it). The audio engine's WASAPI sink plays to the default endpoint and,
+     * while there is none, retries and follows the one that appears.
+     * <li>FEATURE_ETHERNET with a wired Ethernet interface; ConnectivityManager reports its
+     * networks as TRANSPORT_ETHERNET.
+     * </ul>
+     */
+    public static void addHostHardwareFeatures(
+            android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
+            int[] summary) {
+        if (summary == null || summary.length < 3) return;
+        int contacts = summary[0];
+        if (contacts >= 2) {
+            addFeature(features, PackageManager.FEATURE_TOUCHSCREEN_MULTITOUCH);
+            addFeature(features, PackageManager.FEATURE_TOUCHSCREEN_MULTITOUCH_DISTINCT);
+        }
+        if (contacts >= 5) {
+            addFeature(features, PackageManager.FEATURE_TOUCHSCREEN_MULTITOUCH_JAZZHAND);
+        }
+        if (summary[1] > 0) addFeature(features, PackageManager.FEATURE_AUDIO_OUTPUT);
+        if (summary[2] > 0) addFeature(features, PackageManager.FEATURE_ETHERNET);
+    }
+
+    /** How long the system server waits for the OpenGL ES probe at boot (a Direct3D device). */
+    static final long GL_PROBE_TIMEOUT_MS = 5000;
+
+    /**
+     * {@code probe}'s answer, on a thread of its own, or -2 when it has not answered in
+     * {@code timeoutMillis} (a hung display driver must not stop the system server's
+     * start; the thread is left to finish or hang, a daemon). An answer that comes after
+     * the timeout goes to {@code late}, on the probe's thread. A LinkageError from the probe
+     * is thrown here; another failure gives -1.
+     *
+     * The probe runs while this class is being initialized (FEATURES' static block), so
+     * the thread's code (ProbeRun, NativeGlEsProbe) is in classes of their own that never
+     * touch PackageManagerService: a static method of this class called from another
+     * thread would wait for that initialization to finish, which waits for the probe.
+     */
+    static int boundedProbe(java.util.function.IntSupplier probe, long timeoutMillis,
+            java.util.function.IntConsumer late) {
+        ProbeRun run = new ProbeRun(probe, late);
+        Thread thread = new Thread(run, "gesher-gles-probe");
+        thread.setDaemon(true);
+        thread.start();
+        final long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
+        synchronized (run.lock) {
+            while (run.state == ProbeRun.WAITING) {
+                long left = (deadline - System.nanoTime()) / 1_000_000L;
+                if (left <= 0) {
+                    run.state = ProbeRun.TIMED_OUT;
+                    SystemServer.log("OpenGL ES probe: no answer in " + timeoutMillis
+                            + " ms; no OpenGL ES version declared until it answers");
+                    return -2;
+                }
+                try {
+                    run.lock.wait(left);
+                } catch (InterruptedException e) {
+                    run.state = ProbeRun.TIMED_OUT;
+                    Thread.currentThread().interrupt();
+                    return -2;
+                }
+            }
+            if (run.failure instanceof LinkageError) throw (LinkageError) run.failure;
+            if (run.failure != null) {
+                SystemServer.log("OpenGL ES probe failed: " + run.failure);
+                return -1;
+            }
+            return run.answer;
+        }
+    }
+
+    /** The probe thread's body (boundedProbe); it references nothing of PackageManagerService. */
+    static final class ProbeRun implements Runnable {
+        static final int WAITING = 0, ANSWERED = 1, TIMED_OUT = 2;
+        final Object lock = new Object();
+        private final java.util.function.IntSupplier mProbe;
+        private final java.util.function.IntConsumer mLate;
+        int state = WAITING;  // guarded by lock
+        int answer;           // guarded by lock
+        Throwable failure;    // guarded by lock
+
+        ProbeRun(java.util.function.IntSupplier probe, java.util.function.IntConsumer late) {
+            mProbe = probe;
+            mLate = late;
+        }
+
+        @Override
+        public void run() {
+            int value;
+            try {
+                value = mProbe.getAsInt();
+            } catch (Throwable e) {
+                synchronized (lock) {
+                    failure = e;
+                    if (state == WAITING) state = ANSWERED;
+                    lock.notifyAll();
+                }
+                return;
+            }
+            boolean afterTimeout;
+            synchronized (lock) {
+                afterTimeout = state == TIMED_OUT;
+                answer = value;
+                if (!afterTimeout) state = ANSWERED;
+                lock.notifyAll();
+            }
+            if (afterTimeout && mLate != null) mLate.accept(value);
+        }
+    }
+
+    /** WindowsHost.glEsVersion, as a class of its own (see boundedProbe). */
+    static final class NativeGlEsProbe implements java.util.function.IntSupplier {
+        @Override
+        public int getAsInt() {
+            return WindowsHost.glEsVersion();
+        }
+    }
+
+    /** The late handler, as a class of its own; it runs once initialization is over. */
+    static final class LateGlEsVersion implements java.util.function.IntConsumer {
+        @Override
+        public void accept(int probed) {
+            lateGlEsVersion(probed);
+        }
+    }
+
+    /**
+     * A ro.opengles.version the policy serves: 0x30000 or 0x20000
+     * (compat/bionic/egl_gles_version.h, Declaration). Any other preset value (an explicit
+     * build.prop line such as 0x30001) is not a declaration: EGL's display choice ignores it
+     * as well, and the probed version is declared instead (the ro property cannot change).
+     */
+    static boolean servedDeclaration(int version) {
+        return version == 0x30000 || version == 0x20000;
+    }
+
+    /**
+     * The probe's answer after its timeout: from now on it is declared (the property for
+     * processes started after it, getSystemAvailableFeatures and getDeviceConfigurationInfo);
+     * processes started before saw none declared. Nothing changes once a version is known.
+     */
+    static void lateGlEsVersion(int probed) {
+        if (probed <= 0) return;
+        synchronized (PackageManagerService.class) {
+            if (sGlEsVersionKnown
+                    && sGlEsVersion != android.content.pm.FeatureInfo.GL_ES_VERSION_UNDEFINED) {
+                return;
+            }
+            int declared = probed;
+            try {
+                int property = android.os.SystemProperties.getInt("ro.opengles.version", 0);
+                if (property == 0) {
+                    android.os.SystemProperties.set("ro.opengles.version", Integer.toString(probed));
+                } else if (servedDeclaration(property)) {
+                    // Already declared (another process of this boot): stay equal to it.
+                    declared = property;
+                }
+            } catch (RuntimeException | LinkageError e) {
+                SystemServer.log("ro.opengles.version not set: " + e);
+            }
+            probed = declared;
+            sGlEsVersion = declared;
+            sGlEsVersionKnown = true;
+        }
+        SystemServer.log("OpenGL ES probe answered after its timeout: 0x" + Integer.toHexString(probed)
+                + " declared from now on");
+    }
+
+    // Guarded by PackageManagerService.class. No initializers: FEATURES' static block,
+    // above, calls glEsVersion before this point of the class's initialization.
+    private static boolean sGlEsVersionKnown;
+    private static int sGlEsVersion;
+    // The boot probe: how long it took (-1 not run) and whether it ran past its bound.
+    private static long sGlProbeMillis;
+    private static boolean sGlProbeRan;
+    private static boolean sGlProbeTimedOut;
+
+    /**
+     * The OpenGL ES version the device supports, as AOSP reads it: ro.opengles.version,
+     * else FeatureInfo.GL_ES_VERSION_UNDEFINED. On a device the vendor build sets the
+     * property; here the first call sets it (for every process of this boot) from what
+     * Android's default EGL display runs on (WindowsHost.glEsVersion,
+     * docs/system-features.md): ES 3.0 only on a hardware Direct3D 11 device that gives it,
+     * ES 2.0 on WARP (capped there, so EGL gives no more) or a GPU without ES 3.0, nothing
+     * without ANGLE or a Direct3D device, or while the probe has not answered (it is waited
+     * for GL_PROBE_TIMEOUT_MS; a later answer is declared then, lateGlEsVersion). A preset
+     * property other than 0x30000/0x20000 is not a declaration (servedDeclaration).
+     */
+    public static synchronized int glEsVersion() {
+        if (sGlEsVersionKnown) return sGlEsVersion;
+        int version = android.content.pm.FeatureInfo.GL_ES_VERSION_UNDEFINED;
+        try {
+            int preset = android.os.SystemProperties.getInt("ro.opengles.version", version);
+            if (servedDeclaration(preset)) {
+                version = preset;
+            } else {
+                if (preset != android.content.pm.FeatureInfo.GL_ES_VERSION_UNDEFINED) {
+                    SystemServer.log("ro.opengles.version 0x" + Integer.toHexString(preset)
+                            + " is not a version Gesher serves (0x30000, 0x20000); declaring the probed one");
+                }
+                long start = System.nanoTime();
+                int probed = boundedProbe(new NativeGlEsProbe(), GL_PROBE_TIMEOUT_MS,
+                        new LateGlEsVersion());
+                sGlProbeMillis = (System.nanoTime() - start) / 1_000_000L;
+                sGlProbeRan = true;
+                sGlProbeTimedOut = probed == -2;
+                if (probed > 0) {
+                    version = probed;
+                    if (preset == android.content.pm.FeatureInfo.GL_ES_VERSION_UNDEFINED) {
+                        try {
+                            android.os.SystemProperties.set("ro.opengles.version",
+                                    Integer.toString(probed));
+                        } catch (RuntimeException e) {
+                            SystemServer.log("ro.opengles.version not set: " + e);
+                        }
+                    }
+                }
+            }
+        } catch (LinkageError e) {
+            // No runtime natives (a host JVM or a bare test process): no properties, no GL.
+            version = android.content.pm.FeatureInfo.GL_ES_VERSION_UNDEFINED;
+        }
+        sGlEsVersion = version;
+        sGlEsVersionKnown = true;
+        return version;
+    }
+
+    /**
+     * FEATURE_SENSOR_* for the sensor types SensorManager lists (Windows.Devices.Sensors'
+     * accelerometer, gyrometer, magnetometer and light sensor, docs/devices.md), so
+     * hasSystemFeature agrees with getDefaultSensor. A rotation vector has no feature.
+     * {@link WindowsSensors#types} leaves out Gesher's stationary accelerometer: it is a
+     * desktop default, not hardware, so no FEATURE_SENSOR_ACCELEROMETER comes from it.
+     */
+    public static void addSensorFeatures(android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
+            int[] types) {
+        if (types == null) return;
+        for (int type : types) {
+            switch (type) {
+                case android.hardware.Sensor.TYPE_ACCELEROMETER:
+                    addFeature(features, PackageManager.FEATURE_SENSOR_ACCELEROMETER);
+                    break;
+                case android.hardware.Sensor.TYPE_GYROSCOPE:
+                    addFeature(features, PackageManager.FEATURE_SENSOR_GYROSCOPE);
+                    break;
+                case android.hardware.Sensor.TYPE_MAGNETIC_FIELD:
+                    addFeature(features, PackageManager.FEATURE_SENSOR_COMPASS);
+                    break;
+                case android.hardware.Sensor.TYPE_LIGHT:
+                    addFeature(features, PackageManager.FEATURE_SENSOR_LIGHT);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    /** FEATURE_WIFI when Windows enumerates at least one real WLAN interface. */
+    static void addWifiFeature(android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
+            com.gesher.net.WindowsWifi.Hardware hardware) {
+        if (hardware != null && hardware.present()) addFeature(features, PackageManager.FEATURE_WIFI);
+    }
+
+    /**
+     * FEATURE_SECURE_LOCK_SCREEN when Windows has a credential verifier Gesher can use
+     * (Windows Hello on build 22000 or later, set up by the user or not), decided once
+     * when the system server starts ({@link DeviceCredential#supported}, ADR 0094).
+     */
+    static void addSecureLockScreenFeature(
+            android.util.ArrayMap<String, android.content.pm.FeatureInfo> features,
+            boolean supported) {
+        if (supported) addFeature(features, PackageManager.FEATURE_SECURE_LOCK_SCREEN);
     }
 
     /** Whether the audio input has a real device (AudioSystem, compat/media/audio/capture.cc). */
@@ -1280,16 +1639,13 @@ public final class PackageManagerService extends IPackageManager.Default {
 
     @Override
     public ParceledListSlice<android.content.pm.FeatureInfo> getSystemAvailableFeatures() {
-        // As AOSP's: the named features, then an unnamed one carrying the OpenGL ES
-        // version (ro.opengles.version), which PackageManager.getSystemAvailableFeatures
-        // callers read as reqGlEsVersion.
-        ArrayList<android.content.pm.FeatureInfo> features = new ArrayList<>(FEATURES.size() + 1);
-        features.addAll(FEATURES.values());
+        // As AOSP: the named features, then one unnamed entry with the OpenGL ES version.
+        ArrayList<android.content.pm.FeatureInfo> list = new ArrayList<>(FEATURES.size() + 1);
+        list.addAll(FEATURES.values());
         android.content.pm.FeatureInfo gles = new android.content.pm.FeatureInfo();
-        gles.reqGlEsVersion = android.os.SystemProperties.getInt("ro.opengles.version",
-                android.content.pm.FeatureInfo.GL_ES_VERSION_UNDEFINED);
-        features.add(gles);
-        return new ParceledListSlice<>(features);
+        gles.reqGlEsVersion = glEsVersion();
+        list.add(gles);
+        return new ParceledListSlice<>(list);
     }
 
     @Override
@@ -1399,19 +1755,14 @@ public final class PackageManagerService extends IPackageManager.Default {
 
     private PackageVisibility packageVisibility() {
         Map<String, ApkPackage> packages;
-        boolean browser, gms, vending;
+        boolean browser;
         synchronized (this) {
             packages = new LinkedHashMap<>(mPackages);
             for (String removing : mRemoving.keySet()) packages.remove(removing);
             browser = !mPackages.containsKey(BrowserPackageSupport.PACKAGE)
                     && !mRemoving.containsKey(BrowserPackageSupport.PACKAGE);
-            gms = !mPackages.containsKey(GmsPackageSupport.PACKAGE_GMS)
-                    && !mRemoving.containsKey(GmsPackageSupport.PACKAGE_GMS);
-            vending = !mPackages.containsKey(GmsPackageSupport.PACKAGE_VENDING)
-                    && !mPackages.containsKey(GmsPackageSupport.PACKAGE_GMS)
-                    && !mRemoving.containsKey(GmsPackageSupport.PACKAGE_VENDING);
         }
-        return new PackageVisibility(packages, browser, gms, vending,
+        return new PackageVisibility(packages, browser,
                 mPermissions::isDeclaredProtectedBroadcast);
     }
 
@@ -1491,19 +1842,52 @@ public final class PackageManagerService extends IPackageManager.Default {
 
     @Override
     public boolean canRequestPackageInstalls(String packageName, int userId) {
-        if (userId != 0 || packageName == null || isRemovalPending(packageName)) {
-            return false;
+        if (userId != 0 || packageName == null) return false;
+        // The answer reveals a user decision. Authenticate the attached installation,
+        // not merely its numeric UID: a retired process retains that UID after reinstall.
+        // Capture the ATM identity before taking PM, then read one current generation.
+        int callingUid = Binder.getCallingUid();
+        // Standalone mode serves the app in this process; a local PID is not authority.
+        if (callingUid != android.os.Process.SYSTEM_UID
+                && callingUid != android.os.Process.ROOT_UID) {
+            ApkPackage caller = installSourceCaller(callingUid);
+            synchronized (this) {
+                ApkPackage owner = get(packageName);
+                if (caller == null || owner == null || get(caller.packageName) != caller
+                        || isRemovalPending(caller.packageName) || caller.uid() != callingUid
+                        || !sameInstallSourceIdentity(caller, owner)) {
+                    throw new SecurityException("Caller does not own package " + packageName);
+                }
+                return canRequestPackageInstallsInternal(packageName);
+            }
         }
+        return canRequestPackageInstallsInternal(packageName);
+    }
+
+    /** canRequestPackageInstalls for the server's own use (no caller to check). */
+    boolean canRequestPackageInstallsInternal(String packageName) {
+        if (packageName == null || isRemovalPending(packageName)) return false;
         if ("android".equals(packageName)) {
             return true;
         }
         ApkPackage pkg = get(packageName);
-        // Android exposes this capability only to installers targeting O or later.
-        // Gesher permits the request; PackageInstallerService still asks the host
-        // for fresh consent on every commit, regardless of this query's result.
-        return pkg != null && pkg.parsed.getTargetSdkVersion() >= android.os.Build.VERSION_CODES.O
-                && pkg.parsed.getRequestedPermissions()
-                .contains(android.Manifest.permission.REQUEST_INSTALL_PACKAGES);
+        // Android exposes this capability only to installers targeting O or later that
+        // request REQUEST_INSTALL_PACKAGES. As in AOSP (canRequestPackageInstallsInternal,
+        // ExternalSourcesPolicy) an INSTALL_PACKAGES holder may; any other app only once
+        // the user allowed "Install unknown apps" (OP_REQUEST_INSTALL_PACKAGES MODE_ALLOWED),
+        // which Gesher's Control Center offers (SpecialAccess). PackageInstallerService
+        // still asks the host for fresh consent on every commit, whatever this answers.
+        if (pkg == null || pkg.parsed.getTargetSdkVersion() < android.os.Build.VERSION_CODES.O
+                || !pkg.parsed.getRequestedPermissions()
+                        .contains(android.Manifest.permission.REQUEST_INSTALL_PACKAGES)) {
+            return false;
+        }
+        if (mPermissions.checkPermission(packageName, android.Manifest.permission.INSTALL_PACKAGES)
+                == PackageManager.PERMISSION_GRANTED) {
+            return true;
+        }
+        return appOps().checkRawMode(android.app.AppOpsManager.OP_REQUEST_INSTALL_PACKAGES,
+                pkg.uid(), packageName) == android.app.AppOpsManager.MODE_ALLOWED;
     }
 
     @Override
@@ -1530,7 +1914,7 @@ public final class PackageManagerService extends IPackageManager.Default {
         synchronized (this) {
             ApkPackage target = get(packageName);
             if (isRemovalPending(packageName) || (target == null && !"android".equals(packageName)
-                    && !synthetic(packageName) && !BrowserPackageSupport.isBrowserPackage(packageName))) {
+                    && !BrowserPackageSupport.isBrowserPackage(packageName))) {
                 return null;
             }
             // Revalidate the authenticated caller under the same lock as target, source, UID and
@@ -1635,7 +2019,7 @@ public final class PackageManagerService extends IPackageManager.Default {
     }
 
     /** Called with PM locked after checking current installations; admission verified shared signers. */
-    private static boolean sameInstallSourceIdentity(ApkPackage first, ApkPackage second) {
+    static boolean sameInstallSourceIdentity(ApkPackage first, ApkPackage second) {
         if (first == second) return true;
         String group = first.sharedUserId();
         return first.uid() == second.uid() && group != null && !group.isEmpty()
@@ -1668,6 +2052,10 @@ public final class PackageManagerService extends IPackageManager.Default {
     }
 
     private final PackageInstallerService mInstallerService = new PackageInstallerService(this);
+
+    PackageInstallerService packageInstallerService() {
+        return mInstallerService;
+    }
 
     private java.io.File appMetadata(String packageName, int userId) {
         if (userId != 0) throw new SecurityException("Only user 0 is supported");

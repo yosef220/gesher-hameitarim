@@ -54,12 +54,17 @@
 #include <algorithm>
 #include <atomic>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <vector>
 
 #include "binder_internal.h"
 #include "internal.h"
+// The fork set (gesher/fork.h); absent where a host test compiles this file alone.
+#if __has_include(<gesher/fork.h>)
+#include <gesher/fork.h>
+#endif
 #include "revocable_internal.h"
 
 // Dedicated failure object only; normal production route is fixed Win32.
@@ -160,6 +165,11 @@ struct Region {
   // A shared view of a memfd mapped after a write seal: mprotect may never make
   // it writable (Linux clears its VM_MAYWRITE; memfd_seals.cc).
   bool deny_write = false;
+  // A writable shared view of a memfd: the lease that keeps F_SEAL_WRITE from
+  // being added while any such view lives (memfd_seals.cc). Pieces of a view
+  // share it; the last piece to give up its pages (munmap, MAP_FIXED, mremap)
+  // releases it, so every path that turns a view into a hole must reset it.
+  std::shared_ptr<void> write_lease;
   std::vector<bool> live;     // one entry per page
   std::vector<Origin> origins;  // logical origin; independent of Kind/MEM_PRIVATE
   size_t live_pages = 0;
@@ -311,6 +321,7 @@ void* SharedAlias(State& s, uintptr_t begin, size_t old_size, size_t length, int
   Region alias;
   alias.kind = Kind::kView;
   alias.shared = true;
+  alias.write_lease = from.write_lease;  // another view of the same writable mapping
   alias.shared_alias = true;
   alias.offset = from.offset;
   alias.view_protection = protection;
@@ -509,6 +520,7 @@ std::map<uintptr_t, Region>::iterator PunchView(State& s, std::map<uintptr_t, Re
   it->second.kind = Kind::kHole;
   it->second.view = nullptr;
   it->second.mapping = nullptr;
+  it->second.write_lease.reset();  // the pieces that stay take it back from `view`
   std::fill(it->second.live.begin(), it->second.live.end(), false);
   it->second.live_pages = 0;
   // Split the placeholder at x and y, and map the pieces that stay.
@@ -520,6 +532,14 @@ std::map<uintptr_t, Region>::iterator PunchView(State& s, std::map<uintptr_t, Re
     if (to - from != view.size) {
       VirtualFree(reinterpret_cast<void*>(from), to - from, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER);
     }
+    bool any_live = false;
+    for (uintptr_t p = from; p < to; p += page) {
+      if (saved[(p - start) / page].live) {
+        any_live = true;
+        break;
+      }
+    }
+    if (!any_live) return;  // already-unmapped pages stay a Kind::kHole placeholder without a view or lease
     HANDLE mapping = nullptr;
     DuplicateHandle(GetCurrentProcess(), view.mapping, GetCurrentProcess(), &mapping, 0, FALSE,
                     DUPLICATE_SAME_ACCESS);
@@ -539,6 +559,7 @@ std::map<uintptr_t, Region>::iterator PunchView(State& s, std::map<uintptr_t, Re
     r.offset = offset;
     r.view_protection = view.view_protection;
     r.shared = view.shared;
+    r.write_lease = view.write_lease;
     r.live_pages = 0;
     for (uintptr_t p = from; p < to; p += page) {
       const SavedPage& sp = saved[(p - start) / page];
@@ -625,6 +646,7 @@ std::map<uintptr_t, Region>::iterator Punch(State& s, uintptr_t begin, uintptr_t
           r.kind = Kind::kHole;
           r.view = nullptr;
           r.mapping = nullptr;
+          r.write_lease.reset();
           std::fill(r.live.begin(), r.live.end(), false);
           r.live_pages = 0;
         } else if (PunchView(s, it, x, y) == s.regions.end()) {
@@ -1563,6 +1585,12 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
   // likewise cannot alter the session or a committed snapshot.
   gesher::DescriptorSnapshotPtr snapshot;
   const bool binder_mapping = (flags & MAP_ANONYMOUS) == 0 && gesher::IsBinderFd(fd);
+  // A binder fd a forked child inherited maps nothing there (Linux's binder
+  // refuses an mmap from a process other than the one that opened it).
+  if (binder_mapping && !gesher::BinderFdOwnedHere(fd)) {
+    errno = EINVAL;
+    return MAP_FAILED;
+  }
   if ((flags & MAP_ANONYMOUS) == 0 && !binder_mapping) {
     snapshot = gesher::CaptureDescriptor(fd);
     if (!snapshot) return MAP_FAILED;
@@ -1596,18 +1624,22 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
   } else {
     // A memfd's write seals (memfd_seals.cc): no writable shared mapping, and a
     // shared mapping made after the seal can never become writable.
+    // A writable one holds a lease on the file until its pages are unmapped, and
+    // releases it here if the mapping cannot be made.
     bool deny_write = false;
+    std::shared_ptr<void> write_lease;
     if (type != MAP_PRIVATE) {
-      if (const int sealed = gesher::MemfdSharedMapHandleError(snapshot->handle, (prot & PROT_WRITE) != 0, &deny_write)) {
+      if (const int sealed = gesher::MemfdSharedMapHandleError(snapshot->handle, (prot & PROT_WRITE) != 0, &deny_write, &write_lease)) {
         errno = sealed;
         return MAP_FAILED;
       }
     }
     result = MapFile(s, addr, length, prot, flags, snapshot->handle, offset);
-    if (result != MAP_FAILED && deny_write) {
+    if (result != MAP_FAILED && (deny_write || write_lease)) {
       const uintptr_t begin_view = reinterpret_cast<uintptr_t>(result);
       for (auto it = FindRegion(s, begin_view); it != s.regions.end() && it->first < begin_view + length; ++it) {
-        it->second.deny_write = true;
+        if (deny_write) it->second.deny_write = true;
+        if (it->second.kind == Kind::kView) it->second.write_lease = write_lease;
       }
     }
   }
@@ -1691,6 +1723,7 @@ int Unmap(State& s, uintptr_t begin, uintptr_t end) {
       region.kind = Kind::kHole;
       region.view = nullptr;
       region.mapping = nullptr;
+      region.write_lease.reset();
     } else if (region.kind == Kind::kAnon) {
       if (!VirtualFree(reinterpret_cast<void*>(from), to - from, MEM_DECOMMIT))
         return gesher::FailWithLastError();
@@ -2172,3 +2205,36 @@ void* mremap(void* old_address, size_t old_size, size_t new_size, int flags, ...
 }
 
 }  // extern "C"
+
+#ifdef GESHER_FORK_LOCK
+// fork (gesher/fork.h): mmap/munmap/mprotect in a forked child.
+GESHER_FORK_LOCK(gesher::kForkOrderSubsystem, std::mutex, state().lock);
+// The child inherited every writable memfd mapping: each lease (once per
+// mapping, shared by its views) is taken again by the child, so F_SEAL_WRITE
+// stays EBUSY while the child maps the file, as on Linux.
+namespace {
+bool LeasesTry(void*) { return true; }
+void LeasesUnlock(void*) {}
+void LeasesChild(void*) {
+  std::set<void*> renewed;
+  for (auto& entry : state().regions) {
+    void* lease = entry.second.write_lease.get();
+    if (lease != nullptr && renewed.insert(lease).second) gesher::RenewMemfdWriteLeaseInChild(lease);
+  }
+}
+const gesher::ForkLockOps kLeaseForkOps = {&LeasesTry, &LeasesUnlock, &LeasesChild};
+int g_lease_fork_anchor = 0;
+const gesher::ForkLockRegistration g_fork_memfd_leases(gesher::kForkOrderLeaf, "memfd write leases",
+                                                       []() -> void* { return &g_lease_fork_anchor; },
+                                                       &kLeaseForkOps);
+}  // namespace
+
+namespace gesher {
+bool ForkHasMemfdWriteLeases() {
+  for (auto& entry : state().regions) {
+    if (entry.second.write_lease) return true;
+  }
+  return false;
+}
+}  // namespace gesher
+#endif
