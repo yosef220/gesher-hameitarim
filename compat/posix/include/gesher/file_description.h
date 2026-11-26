@@ -41,6 +41,11 @@ int FileDescriptionIoFlags(const DescriptorSnapshotPtr& snapshot);
 // Call only for a freshly created, unpublished synchronous pipe endpoint.
 // Its access and wait mode are supplied by the creator, before any I/O.
 int InitializePipeDescription(const DescriptorSnapshotPtr& snapshot, int flags);
+// Call only for a freshly created, unpublished POSIX FIFO pipe endpoint.
+int InitializeFifoDescription(const DescriptorSnapshotPtr& snapshot, int flags,
+                              uint32_t fifo_vol, uint32_t fifo_idx_hi, uint32_t fifo_idx_lo,
+                              uint32_t fifo_mode, uint64_t writer_gen,
+                              const char* pipe_gate, HANDLE write_handle);
 bool FileDescriptionIsRevocable(const DescriptorSnapshotPtr& snapshot);
 bool FileDescriptionIsMemfd(const DescriptorSnapshotPtr& snapshot);
 // Consumes both owned handles on every outcome. Used after a broker has

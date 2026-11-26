@@ -52,8 +52,8 @@ function Assert-TransportThrows([scriptblock] $Action, [string] $Message) {
 }
 $send = [Gesher.Updates.Transport].GetMethod('Send', [Reflection.BindingFlags]'NonPublic,Static')
 if (-not $send) { throw 'Cannot inspect production transport request boundary' }
-$latest = [uri]'https://api.github.com/repos/gesher-runtime/gesher/releases/latest'
-$asset = [uri]'https://github.com/gesher-runtime/gesher/releases/download/v0.2.0/gesher-setup-0.2.0.exe'
+$latest = [uri]'https://api.github.com/repos/yosef220/gesher-hameitarim/releases/latest'
+$asset = [uri]'https://github.com/yosef220/gesher-hameitarim/releases/download/v0.2.0/gesher-setup-0.2.0.exe'
 function New-HttpFixture {
     $handler = New-Object GesherUpdateTests.HttpFixture
     [PSCustomObject]@{ Handler = $handler; Client = [Net.Http.HttpClient]::new($handler) }
