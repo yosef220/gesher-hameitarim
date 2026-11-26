@@ -3,6 +3,14 @@ Gesher HaMeitarim: Android apps on Windows
 
 Requirements: Windows 10 or 11, x64. Nothing else needs installing.
 
+
+The original Gesher
+-------------------
+Gesher HaMeitarim is based on Gesher, created by palmoni5, who started it in October 2026 and
+wrote the overwhelming majority of it, with other contributors. On 25 November 2026 Gesher moved
+to a proprietary license and its repository was closed. Gesher HaMeitarim continues from its last
+version released under the Apache License 2.0. Thank you to palmoni5 and every contributor.
+
 Security
 --------
 Android apps are not isolated from Windows. Gesher HaMeitarim runs each app

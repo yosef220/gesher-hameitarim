@@ -37,6 +37,12 @@
 - **קובץ חדש שלנו** מקבל את הכותרת `Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0`.
 - **את הטקסט של PolyForm לא משנים.** העותקים שבמתקין (`tools/package/licenses/GESHER-*.txt`) זהים ל-`LICENSE` ול-`LICENSE-APACHE`, וזה נבדק ב-`tools/tests/test_portable_package.py`.
 
+## קרדיט ל-Gesher המקורי
+
+- **‏Gesher נוצר על ידי palmoni5**, שפתח אותו ב-19.10.2026 וכתב את רובו המכריע, עם תורמים נוספים. ב-25.11.2026 הוא עבר לרישיון קנייני והמאגר שלו נסגר, וגשר המיתרים ממשיך מהגרסה האחרונה שלו תחת Apache 2.0.
+- **הקרדיט הזה מופיע** בראש `README.md`, ב-`NOTICE.md`, בהוראות שמותקנות עם התוכנה (`tools/package/README*.txt`) ובדף של כל גרסה (`tools/ci/release-notes/`). כשיהיה מסך "אודות" במרכז הבקרה, גם בו.
+- **מכבדים:** ניסוח עובדתי, בלי ביקורת על ההחלטה שלהם לסגור.
+
 ## אינטגרציה של PRs
 
 - מיזוג עם היסטוריה (`git merge --no-ff`), כדי שהקרדיט של כל תורם יישמר.
