@@ -67,6 +67,21 @@ def main() -> None:
         'com/gesher/server/MicrogAddons.java': '''package com.gesher.server; public class MicrogAddons {
             public static ApkPackage stagedAddon(String pkg, String path) { return null; }
         }''',
+        # גשר המיתרים: ‏#415 עבר ב-AppShell ל-libcore.util.HexEncoding. זה המימוש של AOSP
+        # (libcore/luni/src/main/java/libcore/util/HexEncoding.java), כדי שהבדיקה תריץ את התמציות האמיתיות.
+        'libcore/util/HexEncoding.java': '''package libcore.util; public final class HexEncoding {
+            private static final char[] LOWER = "0123456789abcdef".toCharArray();
+            private static final char[] UPPER = "0123456789ABCDEF".toCharArray();
+            public static String encodeToString(byte[] data, boolean upperCase) {
+                char[] digits = upperCase ? UPPER : LOWER;
+                char[] result = new char[data.length * 2];
+                for (int i = 0; i < data.length; i++) {
+                    result[2 * i] = digits[(data[i] >> 4) & 0x0f];
+                    result[2 * i + 1] = digits[data[i] & 0x0f];
+                }
+                return new String(result);
+            }
+        }''',
     }
     with tempfile.TemporaryDirectory(prefix='gesher-portable-shell-') as temporary:
         work = Path(temporary)
