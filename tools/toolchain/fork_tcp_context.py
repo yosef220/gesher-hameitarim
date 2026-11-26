@@ -16,6 +16,27 @@ from receipt_identity import exact_run
 
 CANONICAL = 'gesher-runtime/gesher'
 CANONICAL_ID = '1426153186'
+# גשר המיתרים: ‏upstream (gesher-runtime/gesher) כבר לא ציבורי, ו-GitHub העביר את רשת הפורקים
+# לשורש אחר. מאז אף פורק כבר לא נראה "פורק של upstream". הריפו של גשר המיתרים, לפי השם ומספר
+# הזהות שלו, מתקבל גם כשהמקור של הרשת שלו השתנה. כל שאר הבדיקות לא השתנו.
+PRODUCT_REPOSITORY = 'yosef220/gesher-hameitarim'
+PRODUCT_REPOSITORY_ID = '1471523850'
+
+
+# גשר המיתרים: גרסה נבנית בהפעלה ידנית של ה-CI על תג vX.Y.Z (docs/he/07-upstream-sync.md). רק בריפו
+# של גשר המיתרים, ורק לתג כזה. בכל מקרה אחר נדרש ענף, כמו קודם.
+RELEASE_TAG = re.compile(r'refs/tags/v(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})')
+
+
+def release_tag(repo, repo_id, ref):
+    return repo == PRODUCT_REPOSITORY and repo_id == PRODUCT_REPOSITORY_ID and RELEASE_TAG.fullmatch(ref) is not None
+
+
+def ref_name(ref):
+    for prefix in ('refs/heads/', 'refs/tags/'):
+        if ref.startswith(prefix):
+            return ref[len(prefix):]
+    return None
 WORKFLOW = 'ci'
 WORKFLOW_PATH = '.github/workflows/ci.yml'
 SCHEMA = 'gesher-tcp-fork-context-v1'
@@ -53,7 +74,8 @@ def envelope(env, checkout, job):
             'Fork TCP checkout/workflow/authorized source differs')
     require(env['GITHUB_EVENT_NAME'] == 'workflow_dispatch', 'Fork TCP requires manual dispatch')
     ref = env['GITHUB_REF']
-    require(ref.startswith('refs/heads/') and len(ref) > len('refs/heads/'), 'Fork TCP requires a branch')
+    require((ref.startswith('refs/heads/') and len(ref) > len('refs/heads/')) or
+            release_tag(repo, context['GITHUB_REPOSITORY_ID'], ref), 'Fork TCP requires a branch')
     require(env['GITHUB_WORKFLOW'] == WORKFLOW and
             env['GITHUB_WORKFLOW_REF'] == repo + '/' + WORKFLOW_PATH + '@' + ref and
             env['GESHER_COHERENT_TCP_POLICY_REF'] == repo + '/' + WORKFLOW_PATH + '@' + source,
@@ -83,13 +105,15 @@ def validate(env, event, repository, run, checkout, job):
                 record.get('full_name') == context['GITHUB_REPOSITORY'] and record.get('fork') is True,
                 'Fork TCP event/API repository differs')
     source = repository.get('source', {})
-    require(type(source.get('id')) is int and str(source['id']) == CANONICAL_ID and
-            source.get('full_name') == CANONICAL, 'Fork TCP repository has a different upstream')
+    product = (context['GITHUB_REPOSITORY'] == PRODUCT_REPOSITORY and
+               context['GITHUB_REPOSITORY_ID'] == PRODUCT_REPOSITORY_ID)
+    require(product or (type(source.get('id')) is int and str(source['id']) == CANONICAL_ID and
+                        source.get('full_name') == CANONICAL), 'Fork TCP repository has a different upstream')
     require(exact_run(run, context['GITHUB_RUN_ID'], context['GITHUB_RUN_ATTEMPT'], context['GITHUB_SHA'],
                       context['GITHUB_REPOSITORY_ID'], context['GITHUB_REPOSITORY_ID'],
                       context['GITHUB_REPOSITORY'], WORKFLOW), 'Fork TCP API run identity differs')
     require(run.get('event') == value['event'] and run.get('path') == WORKFLOW_PATH and
-            run.get('head_branch') == value['ref'][len('refs/heads/'):] and
+            run.get('head_branch') == ref_name(value['ref']) and
             run.get('head_repository', {}).get('full_name') == context['GITHUB_REPOSITORY'],
             'Fork TCP API event/workflow/branch/head repository differs')
     return value

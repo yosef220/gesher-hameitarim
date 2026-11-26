@@ -8,11 +8,13 @@ from unittest.mock import patch
 
 from github_read import GitHubReadError
 import publish_release as pub
-from release_version import API, REPOSITORY, REPOSITORY_ID, build_version, installer_name, stable_version
+from release_version import API, REPOSITORY, REPOSITORY_ID, build_version, installer_name, portable_name, stable_version
 
 
 HEAD = 'a' * 40
 MAIN = 'b' * 40
+# גשר המיתרים: ראש ענף המוצר, שממנו יוצאות הגרסאות.
+PRODUCT = '9' * 40
 BLOB = 'c' * 40
 ANNOTATED = 'd' * 40
 TAG = 'v0.2.1'
@@ -34,6 +36,7 @@ SOURCE = pub.Source(TAG, HEAD, RUN, ATTEMPT, SUITE)
 ISSUER = pub.Issuer(WORKFLOW, PUBLISH_RUN, 2, MAIN)
 PREVIOUS = pub.Issuer(WORKFLOW, PUBLISH_RUN, 1, MAIN)
 PAYLOAD = b'tested installer bytes; never executed by the publisher'
+PORTABLE_PAYLOAD = b'tested portable ZIP bytes; never executed by the publisher'
 
 
 def release_row(identity, tag, *, draft=False, prerelease=False):
@@ -74,12 +77,21 @@ class BuildVersionTests(unittest.TestCase):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 build_version(dict(self.env, GITHUB_REF=f'refs/tags/{tag}'), self.read)
 
-    def test_main_pr_and_manual_tag_dispatch_use_highest_eligible_release(self):
+    def test_main_pr_and_manual_branch_dispatch_use_highest_eligible_release(self):
         self.assertEqual(build_version(self.env, self.read), '0.2.10.526')
         self.assertEqual(build_version(dict(self.env, GITHUB_REF='refs/pull/11/merge',
                                             GITHUB_EVENT_NAME='pull_request'), self.read), '0.2.10.526')
-        self.assertEqual(build_version(dict(self.env, GITHUB_REF='refs/tags/v9.0.0',
+        self.assertEqual(build_version(dict(self.env, GITHUB_REF='refs/heads/product',
                                             GITHUB_EVENT_NAME='workflow_dispatch'), self.read), '0.2.10.526')
+
+    def test_manual_dispatch_on_a_release_tag_builds_that_release(self):
+        # גשר המיתרים: בפורק, גרסה נבנית בהפעלה ידנית של ה-CI על התג.
+        dispatch = dict(self.env, GITHUB_REF='refs/tags/v9.0.0', GITHUB_EVENT_NAME='workflow_dispatch')
+        self.assertEqual(build_version(dispatch, lambda _: self.fail('Tag build must not use the release feed')), '9.0.0')
+        for tag in ('v0.1.65535', 'v9.0.0-rc1'):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                build_version(dict(dispatch, GITHUB_REF=f'refs/tags/{tag}'), self.read)
+        self.assertEqual(build_version(dict(dispatch, GITHUB_EVENT_NAME='schedule'), self.read), '0.2.10.526')
 
     def test_standalone_fork_has_canonical_public_baseline_even_on_tag_push(self):
         fork = dict(self.env, GITHUB_REPOSITORY='fork/gesher', GITHUB_REPOSITORY_ID='55',
@@ -105,6 +117,10 @@ class StubGitHub:
         self.calls = []
         self.tag = {'ref': f'refs/tags/{TAG}', 'object': {'type': 'tag', 'sha': ANNOTATED}}
         self.comparison = {'status': 'ahead', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': HEAD}}
+        # כברירת מחדל הקומיט שנבדק לא בענף המוצר. הבדיקות של המוצר משנות את זה.
+        self.product_comparison = {'status': 'diverged', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': MAIN}}
+        self.product_exists = True
+        self.product_ci_definition = {'type': 'file', 'path': pub.CI_PATH, 'sha': BLOB}
         self.ci_definition = {'type': 'file', 'path': pub.CI_PATH, 'sha': BLOB}
         self.ci_run = {'id': RUN, 'run_attempt': ATTEMPT, 'check_suite_id': SUITE, 'head_sha': HEAD,
                        'name': 'ci', 'workflow_id': pub.CI_ID, 'path': pub.CI_PATH, 'event': 'push',
@@ -120,6 +136,9 @@ class StubGitHub:
                 'head_branch': TAG, 'head_sha': HEAD,
             },
         }
+        self.extra_artifacts = []
+        self.artifact_total = None
+        self.issuer_event = 'workflow_run'
         self.releases = []
         self.on_upload = lambda: None
         self.on_patch = lambda: None
@@ -142,15 +161,27 @@ class StubGitHub:
             return {'ref': 'refs/heads/main', 'object': {'sha': MAIN, 'type': 'commit'}}
         if endpoint == f'{API}/compare/{HEAD}...{MAIN}':
             return deepcopy(self.comparison)
+        if endpoint == f'{API}/git/ref/heads/product':
+            if not self.product_exists:
+                raise GitHubReadError('Not Found')
+            return {'ref': 'refs/heads/product', 'object': {'sha': PRODUCT, 'type': 'commit'}}
+        if endpoint == f'{API}/compare/{HEAD}...{PRODUCT}':
+            return deepcopy(self.product_comparison)
+        if endpoint == f'{API}/contents/{pub.CI_PATH}?ref=product':
+            return deepcopy(self.product_ci_definition)
         if endpoint == f'{API}/compare/{MAIN}...{MAIN}':
             return {'status': 'identical', 'base_commit': {'sha': MAIN}, 'merge_base_commit': {'sha': MAIN}}
         if endpoint == f'{API}/contents/{pub.CI_PATH}?ref={HEAD}':
             return deepcopy(self.ci_definition)
-        if endpoint == f'{API}/actions/runs/{RUN}/artifacts?per_page=100':
-            return {'total_count': 1, 'artifacts': [deepcopy(self.artifact)]}
+        if endpoint.startswith(f'{API}/actions/runs/{RUN}/artifacts?per_page=100&page='):
+            # גשר המיתרים: כמו GitHub, ‏100 בכל דף. אחרי הרצות חוזרות יש בריצה artifacts מכל הניסיונות.
+            rows = [deepcopy(self.artifact)] + deepcopy(self.extra_artifacts)
+            page = int(endpoint.rsplit('=', 1)[1])
+            total = len(rows) if self.artifact_total is None else self.artifact_total
+            return {'total_count': total, 'artifacts': rows[(page - 1) * 100:page * 100]}
         if endpoint == f'{API}/actions/runs/{PUBLISH_RUN}/attempts/1':
             return {'id': PUBLISH_RUN, 'run_attempt': 1, 'workflow_id': WORKFLOW, 'path': self.issuer_path,
-                    'name': pub.PUBLISH_NAME, 'head_branch': 'main', 'head_sha': MAIN, 'event': 'workflow_run',
+                    'name': pub.PUBLISH_NAME, 'head_branch': 'main', 'head_sha': MAIN, 'event': self.issuer_event,
                     'status': 'completed', 'repository': REPO, 'head_repository': REPO}
         if endpoint == f'{API}/releases?per_page=100&page=1':
             return deepcopy(self.releases)
@@ -181,8 +212,13 @@ class StubGitHub:
         directory.mkdir()
         installer = directory / installer_name(SOURCE.version)
         installer.write_bytes(PAYLOAD)
+        archive = directory / portable_name(SOURCE.version)
+        archive.write_bytes(PORTABLE_PAYLOAD)
         checksum = hashlib.sha256(PAYLOAD).hexdigest() if not self.corrupt_checksum else 'b' * 64
-        (directory / pub.CHECKSUM_NAME).write_bytes(f'{checksum}  {installer.name}\r\n'.encode('ascii'))
+        portable_checksum = hashlib.sha256(PORTABLE_PAYLOAD).hexdigest()
+        portable_line = f'{portable_checksum}  {archive.name}\r\n'
+        (directory / (archive.name + '.sha256')).write_bytes(portable_line.encode('ascii'))
+        (directory / pub.CHECKSUM_NAME).write_bytes((f'{checksum}  {installer.name}\r\n' + portable_line).encode('ascii'))
 
     def mutate(self, method, endpoint, *, body=None, file=None):
         self.calls.append((method, endpoint))
@@ -208,13 +244,15 @@ class StubGitHub:
         return deepcopy(self.own)
 
     def asset_row(self, name, data, public):
-        return {'id': 600 if name.endswith('.exe') else 601, 'name': name, 'state': 'uploaded',
+        names = [installer_name(SOURCE.version), portable_name(SOURCE.version),
+                 portable_name(SOURCE.version) + '.sha256', pub.CHECKSUM_NAME]
+        return {'id': 600 + names.index(name), 'name': name, 'state': 'uploaded',
                 'size': len(data), 'digest': 'sha256:' + hashlib.sha256(data).hexdigest(),
                 'browser_download_url': f"https://github.com/{REPOSITORY}/releases/download/{TAG if public else 'untagged-abc'}/{name}"}
 
     def add_owned(self, marker):
         row = release_row(DRAFT, TAG, draft=True)
-        row.update(author=pub.BOT, name='Gesher 0.2.1', body=marker + '\n\nGenerated release notes', assets=[])
+        row.update(author=pub.BOT, name=pub.release_name(SOURCE), body=marker + '\n\nGenerated release notes', assets=[])
         self.releases.append(row)
 
     def mark_public(self):
@@ -264,17 +302,100 @@ class PublisherTests(unittest.TestCase):
         self.assertIn('Publication confirmed', self.publish())
         self.assertFalse(self.api.own['draft'])
         methods = [method for method, _ in self.mutations]
-        self.assertEqual(methods, ['POST', 'POST', 'POST', 'PATCH'])
+        self.assertEqual(methods, ['POST', 'POST', 'POST', 'POST', 'POST', 'PATCH'])
+        self.assertEqual({asset['name'] for asset in self.api.own['assets']},
+                         {installer_name(SOURCE.version), portable_name(SOURCE.version),
+                          portable_name(SOURCE.version) + '.sha256', pub.CHECKSUM_NAME})
         self.assertRegex(self.emit.call_args.args[0], rf'^GESHER_RELEASE_DRAFT id={DRAFT} claim=[0-9a-f]{{64}}$')
         patch_index = self.api.calls.index(('PATCH', f'{API}/releases/{DRAFT}'))
         self.assertEqual(self.api.calls[patch_index - 1], ('GET', f'{API}/git/ref/tags/{TAG}'))
+
+    def test_product_history_release(self):
+        # גשר המיתרים: קומיט מענף המוצר, שלא נמצא ב-main, מתפרסם.
+        self.api.comparison['status'] = 'diverged'
+        self.api.product_comparison = {'status': 'ahead', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': HEAD}}
+        self.assertIn('Publication confirmed', self.publish())
+        self.assertFalse(self.api.own['draft'])
+        self.assertEqual(self.api.own['name'], 'גשר המיתרים 0.2.1')
+
+    def test_outside_main_and_product_or_missing_product_fails_without_mutation(self):
+        for change in ('diverged', 'missing', 'other-base'):
+            with self.subTest(change=change):
+                self.api = StubGitHub()
+                self.api.comparison['status'] = 'diverged'
+                if change == 'missing':
+                    self.api.product_exists = False
+                elif change == 'other-base':
+                    self.api.product_comparison = {'status': 'ahead', 'base_commit': {'sha': MAIN},
+                                                   'merge_base_commit': {'sha': HEAD}}
+                with self.assertRaises(pub.ReleaseError):
+                    self.publish()
+                self.assertFalse(self.api.download_called)
+                self.assertEqual(self.mutations, [])
+
+    def test_product_ci_definition_with_queued_tests(self):
+        # גשר המיתרים: ה-ci.yml של המוצר כולל שלבים שה-PRs שבתור הוסיפו. הוא מתקבל רק כשהוא
+        # זהה לזה שבראש product, ורק לקומיט מההיסטוריה של product.
+        product_ahead = {'status': 'ahead', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': HEAD}}
+        for change in ('accepted', 'product-tip-differs', 'not-in-product'):
+            with self.subTest(change=change):
+                self.api = StubGitHub()
+                self.api.comparison['status'] = 'diverged'
+                self.api.ci_definition['sha'] = ANNOTATED
+                self.api.product_ci_definition['sha'] = ANNOTATED
+                self.api.product_comparison = deepcopy(product_ahead)
+                if change == 'accepted':
+                    self.assertIn('Publication confirmed', self.publish())
+                    continue
+                if change == 'product-tip-differs':
+                    self.api.product_ci_definition['sha'] = BLOB
+                else:
+                    self.api.product_comparison['status'] = 'diverged'
+                with self.assertRaises(pub.ReleaseError):
+                    self.publish()
+                self.assertFalse(self.api.download_called)
+                self.assertEqual(self.mutations, [])
+
+    def test_release_name_and_hebrew_install_notes(self):
+        self.assertIn('Publication confirmed', self.publish())
+        body = self.api.own['body']
+        lines = body.splitlines()
+        self.assertTrue(lines[0].startswith(pub.MARKER))
+        self.assertEqual(sum(line.startswith(pub.MARKER) for line in lines), 1)
+        self.assertIn(installer_name(SOURCE.version), body)
+        self.assertIn('הפעל בכל זאת', body)
+        self.assertIn(pub.CHECKSUM_NAME, body)
+        self.assertIn(f'https://github.com/{REPOSITORY}/blob/main/docs/he/08-install-guide.md', body)
+
+    def test_manual_dispatch_on_the_tag_publishes(self):
+        # גשר המיתרים: ה-CI של גרסה רץ בהפעלה ידנית על התג.
+        self.api.ci_run['event'] = 'workflow_dispatch'
+        self.assertIn('Publication confirmed', self.publish())
+        self.assertFalse(self.api.own['draft'])
+
+    def test_release_notes_follow_the_install_instructions(self):
+        # גשר המיתרים: "מה חדש" מ-tools/ci/release-notes/vX.Y.Z.md, אחרי הוראות ההתקנה.
+        with tempfile.TemporaryDirectory() as root:
+            notes = Path(root)
+            (notes / 'v0.2.1.md').write_text('### מה חדש\n\n- סוכן עדכונים\n', encoding='utf-8')
+            with patch.object(pub, 'RELEASE_NOTES', notes):
+                intro = pub.release_intro(SOURCE)
+                self.assertLess(intro.index('הפעל בכל זאת'), intro.index('### מה חדש'))
+                (notes / 'v0.2.1.md').write_text(pub.MARKER + 'x -->', encoding='utf-8')
+                with self.assertRaises(pub.ReleaseError):
+                    pub.release_intro(SOURCE)
+                (notes / 'v0.2.1.md').write_bytes(b'x' * (pub.MAX_RELEASE_NOTES + 1))
+                with self.assertRaises(pub.ReleaseError):
+                    pub.release_intro(SOURCE)
+            with patch.object(pub, 'RELEASE_NOTES', notes / 'missing'):
+                self.assertNotIn('### מה חדש', pub.release_intro(SOURCE))
 
     def test_lightweight_tag(self):
         self.api.tag['object'] = {'sha': HEAD, 'type': 'commit'}
         self.assertIn('Publication confirmed', self.publish())
 
     def test_untrusted_or_wrong_workflow_event_and_attempt_fail_without_mutation(self):
-        for change in [{'run_attempt': 3}, {'event': 'workflow_dispatch'}, {'event': 'pull_request'},
+        for change in [{'run_attempt': 3}, {'event': 'schedule'}, {'event': 'pull_request'},
                        {'workflow_id': 45}, {'head_repository': {'id': 42, 'full_name': 'fork/gesher'}},
                        {'head_branch': 'main'}, {'conclusion': 'failure'}]:
             with self.subTest(change=change):
@@ -327,6 +448,57 @@ class PublisherTests(unittest.TestCase):
                 self.assertFalse(self.api.download_called)
                 self.assertEqual(self.mutations, [])
 
+    def artifact(self, artifact_id, created_at, name=None):
+        return dict(deepcopy(self.api.artifact), id=artifact_id, created_at=created_at,
+                    name=name or pub.ARTIFACT_NAME)
+
+    def test_rerun_inventory_is_paged_and_the_installer_is_from_the_exact_attempt(self):
+        # גשר המיתרים: ריצה עם ארבעה ניסיונות. ‏artifacts של ניסיונות קודמים, גם מתקינים, לפני עבודת ה-package.
+        self.api.extra_artifacts = [self.artifact(1000 + n, '2026-01-18T12:00:00Z', name=f'other-{n}') for n in range(180)]
+        self.api.extra_artifacts += [self.artifact(2000 + n, f'2026-01-18T12:{10 + n}:00Z') for n in range(3)]
+        _, artifact_id, digest = pub.confirm_producer(self.api, SOURCE)
+        self.assertEqual((artifact_id, digest), (ARCHIVE, DIGEST))
+        pages = [call for call in self.api.calls if '/artifacts?' in call[1]]
+        self.assertEqual(len(pages), 2)
+
+    def test_two_installers_of_the_exact_attempt_are_ambiguous(self):
+        self.api.extra_artifacts = [self.artifact(3000, CREATED)]
+        with self.assertRaisesRegex(pub.ReleaseError, 'Missing or ambiguous installer artifact'):
+            pub.confirm_producer(self.api, SOURCE)
+
+    def test_incomplete_artifact_inventory_fails_without_mutation(self):
+        self.api.extra_artifacts = [self.artifact(1000 + n, CREATED, name=f'other-{n}') for n in range(150)]
+        for total in (300, 120):
+            with self.subTest(total=total):
+                self.api.artifact_total = total
+                with self.assertRaisesRegex(pub.ReleaseError, 'Incomplete artifact inventory'):
+                    self.publish()
+                self.assertFalse(self.api.download_called)
+                self.assertEqual(self.mutations, [])
+
+    def test_manual_publication_reads_the_ci_run_from_github(self):
+        event = {'repository': {'id': REPOSITORY_ID, 'full_name': REPOSITORY, 'default_branch': 'main'}}
+        environ = {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'PUBLISH_CI_RUN_ID': str(RUN)}
+        self.assertEqual(pub.Source.from_run(pub.source_run(self.api, environ, event)), SOURCE)
+        for run_id in ('', '0', '12a', ' 101', '101 ', '-101', '1' * 21):
+            with self.subTest(run_id=run_id), self.assertRaisesRegex(pub.ReleaseError, 'needs the CI run id'):
+                pub.source_run(self.api, dict(environ, PUBLISH_CI_RUN_ID=run_id), event)
+        fork = {'repository': {'id': 42, 'full_name': 'fork/gesher', 'default_branch': 'main'}}
+        with self.assertRaisesRegex(pub.ReleaseError, 'canonical repository'):
+            pub.source_run(self.api, environ, fork)
+        failed = dict(self.api.ci_run, conclusion='failure')
+        self.api.ci_run = failed
+        with self.assertRaises(pub.ReleaseError):
+            pub.Source.from_run(pub.source_run(self.api, environ, event))
+
+    def test_manual_publisher_run_is_a_canonical_issuer(self):
+        self.api.issuer_event = 'workflow_dispatch'
+        PREVIOUS.validate(self.api)
+        for event in ('push', 'schedule', 'pull_request_target'):
+            with self.subTest(event=event), self.assertRaisesRegex(pub.ReleaseError, 'canonical protected publisher'):
+                self.api.issuer_event = event
+                PREVIOUS.validate(self.api)
+
     def test_manual_or_forged_draft_is_untouched(self):
         self.api.releases.append(release_row(DRAFT, TAG, draft=True))
         with self.assertRaisesRegex(pub.ReleaseError, 'publisher marker'):
@@ -343,6 +515,8 @@ class PublisherTests(unittest.TestCase):
         self.owned_draft((0,))
         self.assertIn('Publication confirmed', self.publish())
         self.assertEqual(self.mutations, [
+            ('POST', f'https://uploads.github.com/{API}/releases/{DRAFT}/assets?name={portable_name(SOURCE.version)}'),
+            ('POST', f'https://uploads.github.com/{API}/releases/{DRAFT}/assets?name={portable_name(SOURCE.version)}.sha256'),
             ('POST', f'https://uploads.github.com/{API}/releases/{DRAFT}/assets?name=SHA256SUMS.txt'),
             ('PATCH', f'{API}/releases/{DRAFT}'),
         ])
@@ -365,6 +539,32 @@ class PublisherTests(unittest.TestCase):
         with self.assertRaisesRegex(pub.ReleaseError, 'does not match'):
             self.publish()
         self.assertEqual(self.mutations, [])
+
+    def test_portable_payload_failures_leave_releases_untouched(self):
+        for problem in ('missing', 'bytes', 'individual-checksum', 'combined-checksum', 'wrong-version', 'extra'):
+            with self.subTest(problem=problem):
+                self.api = StubGitHub()
+                download = self.api.download
+                def corrupt(identity, digest, directory):
+                    download(identity, digest, directory)
+                    archive = directory / portable_name(SOURCE.version)
+                    if problem == 'missing':
+                        archive.unlink()
+                    elif problem == 'bytes':
+                        archive.write_bytes(PORTABLE_PAYLOAD + b'changed')
+                    elif problem == 'individual-checksum':
+                        (directory / (archive.name + '.sha256')).write_bytes(b'wrong\n')
+                    elif problem == 'combined-checksum':
+                        checksum = directory / pub.CHECKSUM_NAME
+                        checksum.write_bytes(checksum.read_bytes().splitlines()[0] + b'\n')
+                    elif problem == 'wrong-version':
+                        archive.rename(directory / 'gesher-0.2.2-portable.zip')
+                    else:
+                        (directory / 'unverified.zip').write_bytes(PORTABLE_PAYLOAD)
+                self.api.download = corrupt
+                with self.assertRaises(pub.ReleaseError):
+                    self.publish()
+                self.assertEqual(self.mutations, [])
 
     def test_tag_moved_or_deleted_after_upload_leaves_draft(self):
         for updated in (None, {'ref': f'refs/tags/{TAG}', 'object': {'type': 'commit', 'sha': MAIN}}):
@@ -411,7 +611,7 @@ class PublisherTests(unittest.TestCase):
         self.assertFalse(self.api.own['draft'])
 
     def test_exact_published_release_is_idempotent_after_newer_release(self):
-        self.owned_draft((0, 1), public=True)
+        self.owned_draft((0, 1, 2, 3), public=True)
         self.api.releases.append(release_row(901, 'v0.3.0'))
         self.assertIn('Publication already confirmed', self.publish())
         self.assertEqual(self.mutations, [])
