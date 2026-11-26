@@ -398,9 +398,12 @@ public final class SystemServer {
             env.addAll(com.gesher.net.ProxySetting.environment(packageName));
             // One window for the app's tasks, or one each (ADR 0088).
             env.addAll(atm.appWindowsEnvironment(packageName, startSeq));
+            // ProcessList's runtime flags for the app (ptrace: ADR 0093).
+            int runtimeFlags = com.gesher.app.ProcessSpecialization.runtimeFlagsFor(
+                    pkg.applicationInfo(0));
             String command = Zygote.commandLine(vm, APP_PROCESS, List.of("--package",
                     packageName, "--start-seq", String.valueOf(startSeq), "--target-sdk",
-                    String.valueOf(targetSdk)));
+                    String.valueOf(targetSdk), "--runtime-flags", String.valueOf(runtimeFlags)));
             // Experimental (ADR 0090): the package's own AppContainer.
             if (AppSandbox.enabled()) {
                 return AppSandbox.spawn(command, env, logFile, pkg, packageName,
@@ -477,6 +480,8 @@ public final class SystemServer {
             ControlCenter.clearResults(Device.dataDir());
             // The camera app, when the PC has a camera (hwsvc2, ADR 0051).
             CameraApp.sync(mInstaller, mServices.pm);
+            // The speech recognition service, when Windows has recognizers (docs/speech-recognition.md).
+            SttEngineApp.sync(mInstaller, mServices.pm);
             trackLauncherRecords(mServices.pm);
             // The launcher waits for this file: the services are registered.
             File ready = Device.readyFile();
@@ -535,6 +540,11 @@ public final class SystemServer {
         @Override
         public String[] install(String apk) throws Exception {
             return mInstaller.install(apk);
+        }
+
+        @Override
+        public String[] install(String apk, boolean explicitInstall) throws Exception {
+            return mInstaller.install(apk, explicitInstall);
         }
 
         @Override

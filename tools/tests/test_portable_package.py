@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -14,6 +15,34 @@ SHELL = os.environ.get('GESHER_POWERSHELL') or shutil.which('powershell') or shu
 VERSION = '0.9.1'
 NAME = f'gesher-{VERSION}-portable.zip'
 
+
+
+class ProjectLicenseTests(unittest.TestCase):
+    """גשר המיתרים: המתקין והחבילה הניידת מפיצים בדיוק את הרישיונות שבשורש המאגר."""
+
+    def test_shipped_licenses_are_the_repository_licenses(self):
+        licenses = ROOT / 'tools/package/licenses'
+        for shipped, source in (('GESHER-HAMEITARIM-LICENSE.txt', 'LICENSE'),
+                                ('GESHER-APACHE-LICENSE-2.0.txt', 'LICENSE-APACHE')):
+            with self.subTest(shipped=shipped):
+                self.assertEqual((licenses / shipped).read_bytes(), (ROOT / source).read_bytes())
+
+    def test_installer_license_page_is_built_from_the_license(self):
+        # מסך "אני מסכים" של המתקין (license.he.rtf, ‏license.en.rtf) נבנה מ-LICENSE ב-license_rtf.py.
+        result = subprocess.run([sys.executable, str(ROOT / 'tools/package/license_rtf.py'), '--check'],
+                                capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = (ROOT / 'tools/package/gesher.iss').read_text(encoding='utf-8-sig')
+        for language in ('en', 'he'):
+            self.assertRegex(manifest, rf'(?m)^Name: "{language}";.*; LicenseFile: "license\.{language}\.rtf";')
+
+    def test_project_license_is_polyform_strict_and_the_installer_ships_both(self):
+        text = (ROOT / 'LICENSE').read_text(encoding='utf-8')
+        self.assertIn('\n# PolyForm Strict License 1.0.0\n', text)
+        self.assertTrue((ROOT / 'LICENSE-APACHE').read_text(encoding='utf-8').lstrip().startswith('Apache License'))
+        manifest = (ROOT / 'tools/package/gesher.iss').read_text(encoding='utf-8-sig')
+        for name in ('GESHER-HAMEITARIM-LICENSE.txt', 'GESHER-APACHE-LICENSE-2.0.txt'):
+            self.assertIn(f'Source: "licenses\\{name}"; DestDir: "{{app}}\\licenses"', manifest)
 
 @unittest.skipUnless(SHELL, 'PowerShell is required to execute the production packager')
 class PortablePackageTests(unittest.TestCase):
@@ -31,7 +60,7 @@ class PortablePackageTests(unittest.TestCase):
             'org.apache.http.legacy.jar com.android.location.provider.jar android.test.base.jar '
             'android.test.mock.jar android.test.runner.jar binderd.exe '
             'servicemanager.exe gesher-exec.exe gesher-launch.exe gesher_shellext.dll '
-            'dex2oat.exe profman.exe oatdump.exe lifecycle.apk gesher-camera.apk libEGL.dll '
+            'dex2oat.exe profman.exe oatdump.exe lifecycle.apk gesher-camera.apk gesher-stt.apk libEGL.dll '
             'libGLESv2.dll gesher_arm64.dll ANGLE-NOTICES.txt DYNARMIC-NOTICES.txt '
             'FONTS-NOTICES.txt TZDATA-NOTICES.txt NET-NOTICES.txt '
             'framework/x86_64/boot.art fonts/Roboto-Regular.ttf fonts/fonts.xml '
@@ -72,6 +101,7 @@ class PortablePackageTests(unittest.TestCase):
             for name in ('Gesher.exe', 'portable.marker', 'Data/', 'README.txt', 'security-notice.txt',
                          'security-notice.he.txt', 'App/gesher-panel-native.ps1',
                          'App/licenses/ANGLE-NOTICES.txt', 'App/licenses/APKSIG-LICENSE.txt',
+                         'App/licenses/GESHER-HAMEITARIM-LICENSE.txt', 'App/licenses/GESHER-APACHE-LICENSE-2.0.txt',
                          'App/etc/permissions/org.apache.http.legacy.xml',
                          'App/tzdata/etc/tz/tzdata', 'App/media/audio/notifications/Test.ogg',
                          'App/framework/x86_64/boot.art'):

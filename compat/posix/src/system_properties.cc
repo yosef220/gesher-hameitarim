@@ -5,6 +5,7 @@
 
 #include <gesher/system_properties.h>
 #include <gesher/environment.h>
+#include <gesher/gles_version_property.h>
 
 #include <windows.h>
 
@@ -274,6 +275,9 @@ Snapshot Initial() {
     bool optional = !key.empty() && key.back() == '?';
     if (optional) key = Trim(key.substr(0, key.size() - 1));
     std::string value = Trim(line.substr(equal + 1));
+    // The rule every build.prop loader shares: ro.opengles.version only as a
+    // version Gesher serves, else unset so the probe declares it.
+    if (!ServedBuildProperty(key, value)) continue;
     if (Valid(key, value) && (!optional || !values.count(key))) values[key] = {std::move(value), 1};
   }
   pc_identity();
@@ -559,3 +563,15 @@ bool Wait(const std::string* name, uint32_t old_serial, uint32_t* new_serial,
 }
 
 } // namespace gesher::properties
+
+// The fork set (gesher/fork.h); absent where a host test compiles this file
+// alone. Included here, after the code, so that this file's source
+// transitions above keep their line numbers.
+#if __has_include(<gesher/fork.h>)
+#include <gesher/fork.h>
+#endif
+
+#ifdef GESHER_FORK_LOCK
+// fork (gesher/fork.h): property reads in a forked child.
+GESHER_FORK_LOCK(gesher::kForkOrderSubsystem, std::mutex, gesher::properties::LocalMutex());
+#endif

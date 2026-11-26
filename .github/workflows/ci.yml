@@ -3,9 +3,9 @@ name: ci
 on:
   push:
     branches: [main]
-    # Canonical tag pushes build and test a release. The protected default
-    # branch publisher is separate from this read-only workflow.
-    tags: ['v[0-9]*.[0-9]*.[0-9]*']
+    # גשר המיתרים: גרסה נבנית בהפעלה ידנית על התג (gh workflow run ci.yml --ref vX.Y.Z), ולא
+    # בדחיפה שלו. בפורק, בדיקות הראיות של upstream עוברות רק בהפעלה ידנית, ודחיפה של תג
+    # הייתה מריצה CI שנכשל בהן (docs/he/07-upstream-sync.md). הפרסום עצמו נפרד, מ-main.
   pull_request:
   workflow_dispatch:
 
@@ -39,7 +39,7 @@ jobs:
       # The tag filter's * also matches e.g. v1.2.3-rc1. Stop such a run here,
       # before every build job (they all depend on this one), not hours later.
       - name: Validate pushed version tag
-        if: ${{ github.repository == 'gesher-runtime/gesher' && github.event_name == 'push' && github.ref_type == 'tag' }}
+        if: ${{ github.repository == 'yosef220/gesher-hameitarim' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_type == 'tag' }}
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -128,6 +128,20 @@ jobs:
         run: |
           & .\query-pool-test.exe
           if ($LASTEXITCODE -ne 0) { throw 'Actual UIA query pool lifecycle controls failed' }
+      - name: Build actual Windows speech recognition contracts (docs/speech-recognition.md)
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 /Icompat\devices tests\speech\speech_recognition_windows_test.cc compat\devices\speech_recognition_win.cc /Fe:speech-recognition-windows.exe ole32.lib uuid.lib
+      - name: SAPI recognizers enumerate and recognize handed-over PCM without a microphone
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          & .\speech-recognition-windows.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows speech recognition contracts failed' }
+      - name: Speech recognition service contracts on Windows' JVM (docs/speech-recognition.md)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python tools/test_speech_recognition_engine_contracts.py --java-home "$JAVA_HOME"
       - name: Java DNS admission and completion ownership on Windows
         if: ${{ !cancelled() }}
         shell: bash
@@ -166,6 +180,21 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: tests/windows/clipboard/Publication.ps1
+      - name: Print jobs and the PrintDocumentAdapter lifecycle (host harness)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python tools/test_print_spooler_contracts.py --java-home "$JAVA_HOME"
+      - name: Build actual Windows printer enumeration, capabilities and PDF printing
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /DNOGDI /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0A00 /Icompat\devices compat\print\print_win32.cc compat\devices\winrt.cc tests\print\print_windows_test.cc /Fe:print-windows-test.exe winspool.lib comdlg32.lib gdi32.lib user32.lib ole32.lib
+      - name: Print a generated PDF to Microsoft Print to PDF without UI
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          & .\print-windows-test.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows print host contracts failed' }
       - name: Build actual Windows Hello verifier contracts (ADR 0091)
         if: ${{ !cancelled() }}
         shell: cmd
@@ -239,6 +268,7 @@ jobs:
           tests/windows/shell/UpdateChecks.ps1
           tests/windows/shell/UpdateTransportChecks.ps1
           tests/windows/shell/ControlPanelUpdateChecks.ps1
+          tests/windows/shell/UpdateAgentChecks.ps1
           tests/windows/shell/RuntimeFileChecks.ps1
           tests/windows/shell/InstallErrorChecks.ps1
           tests/windows/shell/NativeStderrChecks.ps1
@@ -599,6 +629,8 @@ jobs:
           python3 tools/test_bluetooth_watch_contracts.py --java-home "$JAVA_HOME"
           python3 tools/test_handwriting_callbacks_host.py --java-home "$JAVA_HOME"
 
+      - name: Speech recognition service contracts (docs/speech-recognition.md)
+        run: python3 tools/test_speech_recognition_engine_contracts.py --java-home "$JAVA_HOME"
       - name: Biometric and device-credential auth service contracts (ADR 0091)
         run: python3 tools/test_auth_service_contracts.py --java-home "$JAVA_HOME"
 
@@ -1227,6 +1259,7 @@ jobs:
           tests/windows/shell/UpdateChecks.ps1
           tests/windows/shell/UpdateTransportChecks.ps1
           tests/windows/shell/ControlPanelUpdateChecks.ps1
+          tests/windows/shell/UpdateAgentChecks.ps1
           tests/windows/shell/RuntimeFileChecks.ps1
           tests/windows/shell/InstallErrorChecks.ps1
           tests/windows/shell/NativeStderrChecks.ps1
@@ -1305,7 +1338,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Crash dialog host/Windows checks failed' }
           python tools/test_app_crash_runtime.py --runtime "$app" --fixture dist/crashnotice.apk --output out/crash-notice-art
           if ($LASTEXITCODE -ne 0) { throw 'Crash notice Windows/ART checks failed' }
-          foreach ($file in 'gesher-update.ps1', 'gesher-version.ini', 'gesher-runtime-files.ps1', 'gesher-panel-actions.ps1', 'gesher-panel-view.ps1', 'gesher-panel-dashboard.xaml', 'gesher-panel-confirm.xaml', 'gesher-panel-message.xaml') {
+          foreach ($file in 'gesher-update.ps1', 'gesher-update-agent.ps1', 'gesher-version.ini', 'gesher-runtime-files.ps1', 'gesher-panel-actions.ps1', 'gesher-panel-view.ps1', 'gesher-panel-dashboard.xaml', 'gesher-panel-confirm.xaml', 'gesher-panel-message.xaml') {
             if (-not (Test-Path -LiteralPath (Join-Path $app $file) -PathType Leaf)) { throw "The installer left out $file" }
           }
           powershell -NoProfile -STA -ExecutionPolicy Bypass -File tests/windows/shell/ControlPanelPresentationChecks.ps1 -PackageDirectory $app
@@ -1337,7 +1370,7 @@ jobs:
           # gesher-app and the framework it runs on are installed, and the
           # installed copy takes the bundled app to onResume.
           foreach ($f in 'gesher-app.cmd', 'framework.jar', 'framework-res.apk', 'gesher-app.jar', 'org.apache.http.legacy.jar', 'etc\permissions\org.apache.http.legacy.xml', 'android.test.base.jar', 'android.test.mock.jar', 'android.test.runner.jar', 'etc\permissions\android.test.runner.xml', 'licenses\JUNIT-CPL-NOTICES.txt', 'libEGL.dll', 'libGLESv2.dll', 'licenses\ANGLE-NOTICES.txt', 'gesher-exec.exe', 'dex2oat.exe', 'profman.exe', 'oatdump.exe',
-                      'tzdata\etc\tz\versioned\9\tzdata', 'tzdata\etc\tz\versioned\9\icu\zoneinfo64.res', 'licenses\TZDATA-NOTICES.txt', 'licenses\BIONIC-GDTOA-NOTICES.txt', 'gesher-camera.apk') {
+                      'tzdata\etc\tz\versioned\9\tzdata', 'tzdata\etc\tz\versioned\9\icu\zoneinfo64.res', 'licenses\TZDATA-NOTICES.txt', 'licenses\BIONIC-GDTOA-NOTICES.txt', 'gesher-camera.apk', 'gesher-stt.apk') {
             if (-not (Test-Path "$app\$f")) { throw "The installer left out $f" }
           }
           $oatdumpOutput = & "$app\oatdump.exe" "--oat-file=$app/framework/x86_64/boot-framework.oat" --header-only --no-disassemble 2>&1 | Out-String
@@ -1649,7 +1682,9 @@ jobs:
           $sizes = @(Read-Ico "$app\gesher.ico" | ForEach-Object Width)
           foreach ($s in 16, 32, 48, 256) { if ($sizes -notcontains $s) { throw "gesher.ico has no ${s}x$s image ($($sizes -join ', '))" } }
           if (Test-Path "$programs\Gesher Hello.lnk") { throw 'Gesher Hello shortcut should not be created' }
-          if ($wsh.CreateShortcut("$programs\Gesher Control Center.lnk").IconLocation -ne "$app\gesher.ico,0") { throw 'The Gesher Control Center shortcut lacks Gesher''s icon' }
+          # גשר המיתרים: הקיצור בשם החדש, והקיצור בשם של Gesher לא נשאר.
+          if ($wsh.CreateShortcut("$programs\Gesher HaMeitarim Control Center.lnk").IconLocation -ne "$app\gesher.ico,0") { throw 'The Gesher HaMeitarim Control Center shortcut lacks its icon' }
+          if (Test-Path "$programs\Gesher Control Center.lnk") { throw 'The Control Center shortcut under the old Gesher name was left behind' }
           'PASS  installer: .apk files get their icons from Gesher''s icon handler (DefaultIcon %1, gesher_shellext.dll); the Start menu entries get gesher.ico' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           # The installed lifecycle.apk, as the shell names its icon (IExtractIcon through
           # SHGetFileInfo): the app's .ico. Reported, not required: a runner's shell may
@@ -1989,6 +2024,16 @@ jobs:
           Remove-Item $sentinel
           'PASS  installer: uninstall removes the Gesher Apps Start menu folder with the apps'' shortcuts, and nothing else of the Start menu' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           'PASS  installer: installs, runs Hello and gesher-app, uninstalls' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+
+      # גשר המיתרים: התקנה במקום Gesher. ‏Gesher 0.2.0 (הגרסה שפורסמה תחת Apache 2.0) עם
+      # אפליקציה ונתונים, ומעליו המתקין שנבדק כאן. רץ אחרי ההסרה, על מכונה נקייה.
+      - name: שדרוג מ-Gesher 0.2.0 שומר את האפליקציות, הנתונים וההגדרות
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = (Get-ChildItem installer\gesher-setup-*.exe).FullName
+          tests/windows/shell/UpgradeFromGesherChecks.ps1 -InstallerPath $setup -Version $env:GESHER_PACKAGE_VERSION
 
       - name: Preserve portable Windows runtime and Setup evidence
         if: always()

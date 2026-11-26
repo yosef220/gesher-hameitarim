@@ -136,7 +136,10 @@ order):
   equal to it with Linux's zero `CNTVOFF_EL2`, and `arm64_smoke_test` checks
   it.
 
-- **`fork()` in arm64 code fails with `EAGAIN`.** Ijiami's runtime check
+- **`fork()` in arm64 code fails with `EAGAIN`** (superseded 2026-11-24 by
+  [0092](0092-arm64-guest-fork.md): guest fork now makes a real child
+  process, where both checks below run as on a device and end only the child;
+  `arm64_fork_exec` runs both shapes). Ijiami's runtime check
   (`libijmdetect-drisk.so`, arm64) forks twice: a child that installs a
   SIGABRT handler (one that SIGKILLs itself) and sends itself SIGABRT with a
   raw `kill`, and a child that compares `sigaction` with raw `rt_sigaction`
@@ -170,6 +173,12 @@ error occurred"); with the check off it returns a 32-character key. That APK
 carries no Anker certificate, so a phone gives the same result; with Anker's
 APK the check passes.
 
+**Amended 2026-11-24 ([0093](0093-cross-process-ptrace.md)):** ptrace is
+now real between Gesher processes. Nothing above depends on the old stub:
+`PTRACE_TRACEME` still succeeds once and then fails with `EPERM`, and
+`/proc/self/status` now names the parent as `TracerPid` after it, as a device
+does. The guest `fork`/`vfork` `EAGAIN` above is unchanged by 0093.
+
 ## Consequences
 
 - An Ijiami-packed app can get its method bodies as on an Android 16 device.
@@ -200,8 +209,9 @@ APK the check passes.
   both ABIs and checks integer, floating-point, stack and variadic arguments;
   controlled OS/VM boundaries cover failure cleanup, retries and concurrent
   publication, including rejection of unsupported or incomplete ELF headers.
-  The ARM64 smoke test calls both guest `fork` and `vfork` bindings
-  and requires `-1` with `EAGAIN`.
+  The ARM64 smoke test calls the guest `fork`, `vfork` and `_Fork`
+  bindings without the shim's clone and requires `-1` with `ENOSYS`; the
+  real children are tested by `arm64_fork_exec` (0092).
 - **Not covered:** the `LoadMethod` fallbacks (no such function exists in
   Android 16's ART), and any packer that resolves ART symbols through
   `dl_iterate_phdr` or `dlopen("libart.so")` instead of `/proc/self/maps`.

@@ -47,6 +47,11 @@
 #include "system_linker.h"
 
 #include <gesher/process_name.h>
+#include <gesher/ptrace_state.h>
+// The fork set (gesher/fork.h); absent where a host test compiles this file alone.
+#if __has_include(<gesher/fork.h>)
+#include <gesher/fork.h>
+#endif
 
 namespace gesher {
 namespace procfs {
@@ -282,9 +287,9 @@ std::string Status(DWORD tid) {
   s += "Umask:\t0022\n";
   s += Format("State:\t%c (%s)\n", process ? 'R' : ThreadState(tid),
               (process || ThreadState(tid) == 'R') ? "running" : "sleeping");
-  s += Format("Tgid:\t%lu\nNgid:\t0\nPid:\t%lu\nPPid:\t%d\nTracerPid:\t0\n",
+  s += Format("Tgid:\t%lu\nNgid:\t0\nPid:\t%lu\nPPid:\t%d\nTracerPid:\t%d\n",
               static_cast<unsigned long>(pid), static_cast<unsigned long>(process ? pid : tid),
-              static_cast<int>(getppid()));
+              static_cast<int>(getppid()), gesher::ptrace::TracerPid());
   s += Format("Uid:\t%u\t%u\t%u\t%u\nGid:\t%u\t%u\t%u\t%u\n", uid, uid, uid, uid, gid, gid, gid, gid);
   s += Format("FDSize:\t%llu\nGroups:\t\n",
               static_cast<unsigned long long>(std::max<size_t>(64, OpenFds().size())));
@@ -752,8 +757,9 @@ std::string ReadOrCreateBootId(const std::wstring& data, const std::wstring& key
 
 // Each device boot has an independently persisted ID. A process outside a
 // device has its own ID. Never return a private ID for an admitted device.
+std::mutex g_boot_id_lock;
 std::string BootId() {
-  static std::mutex lock;
+  std::mutex& lock = g_boot_id_lock;
   static std::string standalone_id, device_id;
   static std::wstring device_session;
   const std::wstring binder = EnvironmentValue(L"GESHER_BINDER");
@@ -1122,3 +1128,9 @@ extern "C" void gesher_set_process_argv0(const char* name) {
   std::lock_guard<std::mutex> lock(gesher::procfs::g_argv0_mutex);
   gesher::procfs::g_argv0 = name != nullptr ? name : "";
 }
+
+#ifdef GESHER_FORK_LOCK
+// fork (gesher/fork.h).
+GESHER_FORK_LOCK(gesher::kForkOrderLeaf, std::mutex, gesher::procfs::g_argv0_mutex);
+GESHER_FORK_LOCK(gesher::kForkOrderLeaf, std::mutex, gesher::procfs::g_boot_id_lock);
+#endif

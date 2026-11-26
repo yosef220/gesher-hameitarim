@@ -14,6 +14,10 @@ namespace gesher_arm64 {
 // The host table the loader gave gesher_arm64_init.
 extern const gesher_arm64_host* g_host;
 
+// The exit code of a death by signal `signo` (the shim's
+// __gesher_signal_exit_code: a forked child's own code); null without it.
+extern unsigned (GESHER_SYSV* g_signal_exit_code)(int);
+
 // A guest trampoline (guest code: `SVC #n; RET`) that calls System V host
 // function `fn`; one per function. va_list_index >= 0 marks argument
 // `va_list_index` as a va_list to convert from AAPCS64 to System V.
@@ -63,6 +67,15 @@ void* GuestSymbol(const char* name);
 // diagnostic, when guest code it requires cannot be bound or emitted.
 bool InitGuestLibc();
 
+// Memory another process wrote into this one (a ptrace tracer's POKEs, ADR
+// 0093), as the host publishes it: each Jit drops what it translated from
+// those ranges at its next dispatch.
+void SetExternalCodeWrites(const void* writes);
+// Makes every running Jit return to its dispatcher (it then drops those
+// translations). The host's ptrace guard calls it with every other thread
+// suspended: it takes no lock and allocates nothing.
+void GESHER_SYSV HaltForExternalWrites();
+
 // The calling guest thread's actual FPCR, including changes made by MSR.
 // Host callbacks run outside Jit::Run; setters take effect before resuming.
 uint32_t GuestFpcr();
@@ -73,6 +86,16 @@ void SetGuestFpsr(uint32_t value);
 // A raw `SVC #0` in guest code: Linux arm64 syscall `nr` with x0..x5. Returns
 // the raw kernel result (-errno on failure).
 int64_t GuestRawSyscall(uint64_t nr, const uint64_t args[6]);
+
+// fork (guest_libc.cc, ADR 0092): the bionic shim calls these with its fork
+// set held. TryForkPrepare takes every translator lock or none (1 / 0);
+// ForkParent releases them; ForkChild makes them anew in the child.
+int GESHER_SYSV TryForkPrepare();
+// Releases the Envs of threads that left (their TLS blocks, monitor ids):
+// called before a fork, as well as when a thread takes an Env.
+void ReleaseRetiredForFork();
+void GESHER_SYSV ForkParent();
+void GESHER_SYSV ForkChild();
 
 // Linux signal numbers, for the crash report.
 constexpr int kSigIll = 4;

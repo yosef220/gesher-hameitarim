@@ -32,6 +32,8 @@ add_library(gesher_posix STATIC
   ${CMAKE_CURRENT_LIST_DIR}/src/path.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/pipe_io.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/process.cc
+  ${CMAKE_CURRENT_LIST_DIR}/src/fork_locks.cc
+  ${CMAKE_CURRENT_LIST_DIR}/src/spawn_broker.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/record_lock_descriptors.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/record_lock_duplicate.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/record_lock_liveness.cc
@@ -39,6 +41,7 @@ add_library(gesher_posix STATIC
   ${CMAKE_CURRENT_LIST_DIR}/src/record_lock_registry.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/record_lock_wait.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/procfs.cc
+  ${CMAKE_CURRENT_LIST_DIR}/src/ptrace_state.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/resume.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/revocable_file.cc
   ${CMAKE_CURRENT_LIST_DIR}/src/pthread.cc
@@ -84,6 +87,9 @@ target_link_options(gesher_posix INTERFACE -Wl,-u,gesher_crash_reporter_anchor)
 # Every process keeps a signal mailbox for kill() from other processes
 # (src/process.cc), which nothing calls either.
 target_link_options(gesher_posix INTERFACE -Wl,-u,gesher_signal_mailbox_anchor)
+# ... and a ptrace state with the guard that stops it for a tracer
+# (src/ptrace_state.cc, ADR 0093).
+target_link_options(gesher_posix INTERFACE -Wl,-u,gesher_ptrace_state_anchor_v1)
 # DLL callers resolve the futex queue in the executable. Force a private anchor:
 # an import library can satisfy the public owner symbol without extracting it.
 target_link_options(gesher_posix INTERFACE -Wl,-u,gesher_futex_owner_anchor_v1)
