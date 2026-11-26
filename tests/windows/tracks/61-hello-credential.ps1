@@ -48,7 +48,9 @@ DevCheck 'hello credential: createConfirmDeviceCredentialIntent is null on a dev
 # NO_DEVICE_CREDENTIAL (14). Never a success.
 $hcStrong = if ($hcOut -match 'hellocred: prompt: strong: error (\d+)') { $Matches[1] } else { '?' }
 $hcCredential = if ($hcOut -match 'hellocred: prompt: credential: error (\d+)') { $Matches[1] } else { '?' }
-if (($hcStrong -eq '12' -and $hcCredential -eq '14') -or ($hcStrong -eq '5' -and $hcCredential -eq '5')) {
+# גשר המיתרים: כל בקשה נבדקת לבד. ב-CI הבקשה הראשונה רצה לפעמים כשהחלון ברקע (5) והשנייה
+# כשהוא בחזית (14), כפי שהאפליקציה מדווחת ('window focus'). שתי התשובות נכונות, ואף פעם לא הצלחה.
+if ($hcStrong -in '12', '5' -and $hcCredential -in '14', '5') {
   Write-Host "PASS  hello credential: BiometricPrompt ends with Android's unavailable errors (biometric-only $hcStrong, credential $hcCredential), no success"
 } else {
   Write-Host "FAIL  hello credential: BiometricPrompt errors: biometric-only $hcStrong (12, or 5 in the background), credential $hcCredential (14, or 5 in the background)"
