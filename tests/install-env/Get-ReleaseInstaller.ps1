@@ -25,7 +25,10 @@ if ($RunId) {
     gh run download $RunId --repo $Repository --name gesher-setup --dir $Destination
     if ($LASTEXITCODE -ne 0) { throw "אין artifact בשם gesher-setup בריצה $RunId" }
     $setup = @(Get-ChildItem -LiteralPath $Destination -Filter 'gesher-setup-*.exe')
-    if ($setup.Count -ne 1 -or $setup[0].Name -notmatch '^gesher-setup-(\d+\.\d+\.\d+)\.exe$') { throw "בריצה $RunId אין בדיוק מתקין אחד" }
+    # בבנייה של CI שאינה תג, הגרסה היא הגרסה האחרונה ועוד מספר הריצה (tools/ci/release_version.py).
+    if ($setup.Count -ne 1 -or $setup[0].Name -notmatch '^gesher-setup-(\d+(?:\.\d+){2,3})\.exe$') {
+        throw "בריצה $RunId אין בדיוק מתקין אחד בשם gesher-setup-<גרסה>.exe: $(($setup | ForEach-Object Name) -join ', ')"
+    }
     $version = $Matches[1]
     $names = @($setup[0].Name)
     if ($IncludePortable) { $names += "gesher-$version-portable.zip" }
