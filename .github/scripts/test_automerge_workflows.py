@@ -51,14 +51,16 @@ class QueueWorkflows(unittest.TestCase):
         identity = ci['jobs']['source-identity']['steps'][1]
         self.assertEqual(identity['name'], 'Validate pushed version tag')
         self.assertEqual(identity['if'], "${{ github.repository == 'yosef220/gesher-hameitarim' && "
-                         "github.event_name == 'push' && github.ref_type == 'tag' }}")
+                         "(github.event_name == 'push' || github.event_name == 'workflow_dispatch') && "
+                         "github.ref_type == 'tag' }}")
         publisher = yaml.safe_load((ROOT / '.github/workflows/publish-release.yml').read_text(encoding='utf-8'))
         self.assertEqual(publisher[True], {'workflow_run': {'workflows': ['ci'], 'types': ['completed']}})
         self.assertEqual(publisher['permissions'], {})
         job = publisher['jobs']['publish']
         self.assertEqual(set(publisher['jobs']), {'publish'})
         self.assertIn("publish-release.yml@refs/heads/main'", job['if'])
-        self.assertIn("github.event.workflow_run.event == 'push'", job['if'])
+        self.assertIn("(github.event.workflow_run.event == 'push' || "
+                      "github.event.workflow_run.event == 'workflow_dispatch')", job['if'])
         self.assertIn("github.event.workflow_run.conclusion == 'success'", job['if'])
         self.assertEqual(job['permissions'], {'actions': 'read', 'contents': 'write'})
         checkout, invocation = job['steps']
@@ -66,6 +68,26 @@ class QueueWorkflows(unittest.TestCase):
         self.assertEqual(checkout['with']['ref'], '${{ github.workflow_sha }}')
         self.assertFalse(checkout['with']['persist-credentials'])
         self.assertEqual(invocation['run'], 'python3 tools/ci/publish_release.py')
+
+    def test_release_tag_runs_only_from_main_and_takes_inputs_through_env(self):
+        # גשר המיתרים: יצירת תג הגרסה. רק הפעלה ידנית מ-main בריפו שלנו, רק contents: write,
+        # והקלט עובר דרך משתני סביבה ולא נכתב לתוך הסקריפט.
+        doc = yaml.safe_load((ROOT / '.github/workflows/release-tag.yml').read_text(encoding='utf-8'))
+        self.assertEqual(set(doc[True]), {'workflow_dispatch'})
+        self.assertEqual(set(doc[True]['workflow_dispatch']['inputs']), {'version', 'commit'})
+        self.assertEqual(doc['permissions'], {})
+        self.assertEqual(set(doc['jobs']), {'tag'})
+        job = doc['jobs']['tag']
+        self.assertEqual(job['permissions'], {'contents': 'write'})
+        for guard in ("github.repository == 'yosef220/gesher-hameitarim'",
+                      "github.repository_id == '1471523850'", "github.ref == 'refs/heads/main'"):
+            self.assertIn(guard, job['if'])
+        (step,) = job['steps']
+        self.assertNotIn('uses', step)
+        self.assertNotIn('${{', step['run'])
+        self.assertEqual(step['env']['VERSION'], '${{ inputs.version }}')
+        self.assertEqual(step['env']['COMMIT'], '${{ inputs.commit }}')
+        self.assertIn('git/ref/heads/product', step['run'])
 
     def test_no_controller_polling_or_direct_merging(self):
         doc = yaml.safe_load((ROOT / '.github/workflows/automerge.yml').read_text())

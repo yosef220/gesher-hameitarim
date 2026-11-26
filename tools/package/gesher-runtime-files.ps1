@@ -62,6 +62,91 @@ function Get-GesherControlPanelName {
     return 'Local\Gesher.ControlPanel.' + ([BitConverter]::ToString($digest) -replace '-', '')
 }
 
+# גשר המיתרים: שמות המנעולים של העדכון האוטומטי (gesher-update-agent.ps1), לפי אותו כלל כמו
+# מרכז הבקרה: שם קבוע לפרופיל ברירת המחדל, ושם עם תמצית הנתיב לכל פרופיל אחר.
+#   UpdateAgent    סוכן אחד לכל פרופיל
+#   UpdateInstall  מוחזק בזמן שהמתקין רץ. ‏gesher-app מחכה לו לפני שהוא פותח אפליקציה
+function Get-GesherUpdateLockName {
+    param(
+        [Parameter(Mandatory = $true)][string] $ProfileDirectory,
+        [Parameter(Mandatory = $true)][ValidateSet('UpdateAgent', 'UpdateInstall')][string] $Kind
+    )
+    return (Get-GesherControlPanelName $ProfileDirectory).Replace('\Gesher.ControlPanel', '\Gesher.' + $Kind)
+}
+
+# גשר המיתרים: עדכון שמותקן ברגע זה. האפליקציה נפתחת כשהוא מסתיים, מהגרסה החדשה, ולא
+# באמצע החלפת הקבצים. הסוכן מחזיק את המנעול רק בזמן שהמתקין רץ, והמתקין עצמו מריץ רק
+# shutdown ו-install, כך שהוא אף פעם לא מחכה כאן. מחזירה $true כשהגרסה המותקנת השתנתה
+# בזמן ההמתנה: הקוד שכבר נטען שייך לגרסה הקודמת, והקורא מריץ את הפקודה מחדש.
+function Wait-GesherUpdateInstall {
+    param(
+        [Parameter(Mandatory = $true)][string] $ProfileDirectory,
+        [Parameter(Mandatory = $true)][string] $InstallDirectory,
+        [TimeSpan] $Timeout = [TimeSpan]::FromMinutes(10)
+    )
+    $lock = $null
+    try {
+        if (-not [Threading.Mutex]::TryOpenExisting((Get-GesherUpdateLockName $ProfileDirectory 'UpdateInstall'), [ref] $lock)) { return $false }
+        $versionFile = Join-Path $InstallDirectory 'gesher-version.ini'
+        $before = [IO.File]::GetLastWriteTimeUtc($versionFile)
+        $acquired = $false
+        try { $acquired = $lock.WaitOne($Timeout) } catch [Threading.AbandonedMutexException] { $acquired = $true }
+        if ($acquired) { $lock.ReleaseMutex() }
+        return [IO.File]::GetLastWriteTimeUtc($versionFile) -ne $before
+    } catch {
+        return $false
+    } finally {
+        if ($lock) { $lock.Dispose() }
+    }
+}
+
+# אף אחד לא קורא את הפלט של התהליך הזה דרך צינור או קובץ: מסוף רגיל, או בלי handles בכלל
+# (כמו ש-gesher-launch מפעיל את gesher-app מתפריט התחל). תהליך שיורש handle של צינור היה
+# משאיר את הקורא מחכה גם לו.
+function Test-GesherOutputUnread {
+    return (-not [Console]::IsOutputRedirected -or [object]::ReferenceEquals([Console]::OpenStandardOutput(), [IO.Stream]::Null)) -and
+        (-not [Console]::IsErrorRedirected -or [object]::ReferenceEquals([Console]::OpenStandardError(), [IO.Stream]::Null))
+}
+
+# גשר המיתרים: בדיקת עדכונים ברקע, לכל היותר פעם ביום, כשמשתמש פותח אפליקציה מתפריט התחל
+# או מקובץ APK (רק אז gesher-launch מגדיר GESHER_LAUNCH_DETACH=1). כך מתעדכן גם מי שלא
+# פותח את מרכז הבקרה. סוכן העדכונים (gesher-update-agent.ps1) רץ בתהליך נפרד בלי חלון,
+# ההפעלה לא מחכה לו, ותקלה בהפעלה שלו לא נוגעת באפליקציה. הוא מופעל כשקובץ ההגדרות לא
+# השתנה יום שלם (כל בדיקה כותבת אותו), או כשיש הורדה שמחכה להתקנה (updates\agent). ההחלטה
+# עצמה, לפי ההגדרות שבמרכז הבקרה, היא של הסוכן. ‏GESHER_UPDATE_AGENT=0 מכבה אותו.
+# מחזירה $true כשהסוכן הופעל. ‏HostPath: ה-PowerShell שמריץ אותו (ברירת המחדל: זה שרץ עכשיו).
+function Start-GesherUpdateAgentIfDue {
+    param(
+        [Parameter(Mandatory = $true)][string] $ProfileDirectory,
+        [Parameter(Mandatory = $true)][string] $InstallDirectory,
+        [string] $HostPath = ''
+    )
+    try {
+        if ($env:GESHER_LAUNCH_DETACH -ne '1' -or $env:GESHER_UPDATE_AGENT -eq '0') { return $false }
+        $agentScript = Join-Path $InstallDirectory 'gesher-update-agent.ps1'
+        if (-not [IO.File]::Exists($agentScript) -or -not (Test-GesherOutputUnread)) { return $false }
+        $state = Join-Path $ProfileDirectory 'updates'
+        $age = [DateTime]::UtcNow - [IO.File]::GetLastWriteTimeUtc((Join-Path $state 'update-settings.json'))
+        if ($age.TotalHours -lt 24 -and $age.TotalHours -ge 0 -and -not [IO.Directory]::Exists((Join-Path $state 'agent'))) { return $false }
+        $self = [Diagnostics.Process]::GetCurrentProcess()
+        try {
+            $start = New-Object Diagnostics.ProcessStartInfo
+            $start.FileName = if ($HostPath) { $HostPath } else { $self.MainModule.FileName }
+            $start.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $agentScript + '" -LauncherProcessId ' +
+                $self.Id + ' -LauncherStart ' + $self.StartTime.ToFileTimeUtc()
+            $start.UseShellExecute = $false
+            $start.CreateNoWindow = $true
+            $start.WorkingDirectory = [IO.Path]::GetTempPath()
+            # המשתנים של ההפעלה הזאת לא עוברים לסוכן, למתקין שהוא מריץ ול-gesher-app shutdown
+            # שהמתקין מריץ: קובץ השגיאה כבר נקרא, וההפעלה המנותקת היא של האפליקציה הזאת בלבד.
+            foreach ($name in 'GESHER_LAUNCH_ERROR_FILE', 'GESHER_LAUNCH_DETACH') { $null = $start.EnvironmentVariables.Remove($name) }
+            $agent = [Diagnostics.Process]::Start($start)
+            if ($agent) { $agent.Dispose() }
+            return $true
+        } finally { $self.Dispose() }
+    } catch { return $false }
+}
+
 function New-GesherRuntimeSync {
     param(
         [Parameter(Mandatory = $true)][string] $InstallDirectory,

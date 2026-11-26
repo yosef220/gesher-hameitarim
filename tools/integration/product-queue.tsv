@@ -7,7 +7,26 @@ lev-app-compat	origin:refs/heads/topic/lev-app-compat	2c0f496ceef606e222172a546f
 pr-403	upstream:refs/pull/403/head	e9f4035c39f7f36b974bc72397c55905666169e7	402,403	1	Wi-Fi: בדיקות WifiManager כמו באנדרואיד (‏#402), ובקשות רשת והצעות רשת דרך אישור המשתמש (‏#403, מכיל את #402)
 pr-427	upstream:refs/pull/427/head	950dc2dbee2454d35e0f7265d50d146f41638264	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל
 pr-475	upstream:refs/pull/475/head	63f8c46640b2a7e901d1088c3597677d6b132968	340,470,471,475	1	סדרת Windows Hello: הרשאות AuthService ‏(‏#340), ‏Windows Hello עסוק (‏#470), המתנה תחומה אחרי ביטול (‏#471) ותיעוד (‏#475, מכיל את כולם)
-pr-484	upstream:refs/pull/484/head	4b0eae2fa38cbf7aa1ad2d55b741ede900b953cf	484	1	abort דרך ה-abort של bionic, וכיסוי libstdc++.so
+# הוצא ב-25.11: ‏main כבר מממש את הייצוא של libstdc++.so ב-compat/bionic/cxx_bionic.cc (מ-#432, התיקון של Dreame),
+# כולל SIGABRT למטפל של האפליקציה (tests/native2/libstdcxx_fatal_test.cpp). ‏#484 מוסיף מימוש שני של אותן
+# פונקציות ב-shim.cc, ושני מימושים יחד היו מתנגשים.
+# pr-484	upstream:refs/pull/484/head	4b0eae2fa38cbf7aa1ad2d55b741ede900b953cf	484	1	abort דרך ה-abort של bionic, וכיסוי libstdc++.so
+# מוזגו ב-upstream אחרי המעבר לרישיון קנייני (25.11). נכנסים מהגרסה של התורם מלפני השינוי
+# (refs/apache-snapshot/pr/*), שנשמרה כענף נושא topic/pr-<מספר>.
+pr-416	origin:refs/heads/topic/pr-416	10e75d8bdbe46fdea1c3e3ec591d61a9c8384367	416	2	DownloadManager: ‏content://downloads והורדות שהשרת של המערכת מריץ (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-451	origin:refs/heads/topic/pr-451	d9e2ad871a485a7758529543e7b3d78d5ddd5a42	451	2	הקראת טקסט (Text-to-speech) בקולות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-473	origin:refs/heads/topic/pr-473	59c46d223b32cda7c8cc6435738eb2135dae768e	473	3	Passkeys דרך ה-WebAuthn של Windows (Credential Manager) (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-450	origin:refs/heads/topic/pr-450	0ff8f9bde10e7972e8c1236626852b121171664f	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-468	origin:refs/heads/topic/pr-468	0944c1433c779b29a8a3392ef18ceb5d7f6f3342	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-256	origin:refs/heads/topic/pr-256	0aa2b1c40fd00c2beb943ce5dcfd19c69e9344a2	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
+# ‏pr-403 ממתין: מול main יש 60 מקטעים בהתנגשות (כ-2,200 שורות), בעיקר WifiConnections.java (28 מקטעים),
+# ‏PackageManagerService.java ובדיקות השירות. גם כאן main קיבל עבודה קודמת על Wi-Fi בדרך אחרת. צריך ענף נושא ייעודי.
+# ‏pr-475 ממתין: ‏main קיבל את השלב הקודם של סדרת Windows Hello בגרסה אחרת (#366, ‏e074b67b2), וה-PR המשיך
+# מאותה נקודה בכיוון אחר. מול main יש 75 מקטעים בהתנגשות (כ-1,800 שורות), רובם בלוגיקה של AuthService,
+# ‏WindowsHello ו-PackageManagerService. צריך ענף נושא ייעודי שעובר על כל מקטע ומבין את שני הצדדים.
+# ‏pr-256 ממתין: ההתנגשויות שלו כוללות את הנעיצות בהכשרת המקורות (ofd-stream-source.json ו-OFD_QUALIFICATION_SHA256
+# ב-test-selected-policy.py). אחרי פתרון pipe_io.cc ו-pipe_io_host_test.cc.in צריך להפיק מחדש את שרשרת הנעיצות
+# (OFD, ‏memfd-lease, ‏shared-stdio), כמו ש-upstream עשה ב-303bb835d, ולוודא ש-test-selected-policy.py עובר.
 # מושבת ב-25.11: הגרסה של #500 מלפני המעבר של upstream לרישיון קנייני משנה שישה קבצים נעוצים בהכשרת
 # המקורות (internal.h, ‏socket.cc, ‏system.cc, ‏unistd.cc, ‏fsops.cc, ‏posix.cmake) בלי לעדכן את הנעיצות, והעדכון
 # שלהן ב-PR הגיע רק אחרי השינוי. כדי להחזיר: ענף נושא שמפיק מחדש את הנעיצות. ‏#312 מטופל חלקית ע"י #332.

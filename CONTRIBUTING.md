@@ -97,9 +97,13 @@ it is removed or redesigned.
   code generated with AI. Generated explanations and passing tests are not
   substitutes for reviewing its behavior.
 
-Submit contributions under the applicable project license. Gesher uses
-[Apache License 2.0](LICENSE); see also the
-[licensing decision](docs/decisions/0001-license.md). Identify third-party code,
+Gesher HaMeitarim is offered under the [PolyForm Strict License 1.0.0](LICENSE),
+which does not permit making changes or new works based on the software. Ask the
+repository owner before preparing a contribution: a contribution is accepted only
+under a separate written agreement that lets the owner offer it under the
+project's license. The parts that come from Gesher remain under the
+[Apache License 2.0](LICENSE-APACHE) (see [NOTICE.md](NOTICE.md) and the original
+[licensing decision](docs/decisions/0001-license.md)). Identify third-party code,
 its source and license, retain required notices, and ensure you have the right
 to contribute it, including any necessary employer permission. Follow the
 licensing decision's restrictions on copying code from other projects.

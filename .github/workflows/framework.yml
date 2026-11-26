@@ -9,6 +9,7 @@ name: framework
 # ci.yml calls this workflow too. Every input is cached, so a run after a
 # tools/framework change goes straight to the build. Caches are per branch
 # (plus main's): the first run on a new branch builds the host tools.
+# גשר המיתרים: הפעולות נעוצות לאותם קומיטים, שנשמרו בריפו שלנו בענף pinned/upstream-actions.
 on:
   # Pushes to the framework branches that touch its inputs run it too.
   push:
@@ -56,7 +57,7 @@ jobs:
     outputs:
       runner: ${{ steps.route.outputs.runner }}
     steps:
-      - uses: gesher-runtime/gesher/.github/actions/runner-route@5d76cae649c2257c376aaf87a5283099c99f111c
+      - uses: yosef220/gesher-hameitarim/.github/actions/runner-route@5d76cae649c2257c376aaf87a5283099c99f111c
         id: route
         with:
           requested: ${{ inputs.local-runner }}
@@ -77,7 +78,7 @@ jobs:
           persist-credentials: false
       - name: Initialize local build inputs
         if: runner.environment == 'self-hosted'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: initialize
 
@@ -109,7 +110,7 @@ jobs:
 
       - name: Cache AOSP sources
         if: steps.reuse.outputs.build == 'true'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: third_party/aosp
@@ -122,7 +123,7 @@ jobs:
 
       - name: Save fetched AOSP inputs
         if: steps.reuse.outputs.build == 'true'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: third_party/aosp
@@ -140,7 +141,7 @@ jobs:
       # Restored and saved separately, so a failed build keeps its objects.
       - name: Restore compiler output
         if: steps.reuse.outputs.build == 'true' && runner.environment != 'self-hosted'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: ~/.cache/ccache
@@ -173,7 +174,7 @@ jobs:
 
       - name: Save compiler output
         if: always() && steps.reuse.outputs.build == 'true' && runner.environment != 'self-hosted'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: ~/.cache/ccache
@@ -204,7 +205,7 @@ jobs:
           persist-credentials: false
       - name: Initialize local build inputs
         if: runner.environment == 'self-hosted'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: initialize
 
@@ -244,7 +245,7 @@ jobs:
 
       - name: Restore AOSP sources
         id: aosp
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: third_party/aosp
@@ -273,7 +274,7 @@ jobs:
       # after it is built.
       - name: Restore the framework's JVM tools (kotlinc, JavaPoet, Guava)
         id: jvm
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: out/framework/jvm-tools
@@ -281,7 +282,7 @@ jobs:
 
       - name: Restore the coremod
         id: coremod
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: out/coremod
@@ -295,7 +296,7 @@ jobs:
 
       - name: Save the coremod
         if: steps.coremod.outputs.cache-hit != 'true'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: out/coremod
@@ -303,7 +304,7 @@ jobs:
 
       - name: Restore framework-res
         id: res
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: out/framework-res
@@ -314,7 +315,7 @@ jobs:
       # with retries, as dl.google.com fails now and then.
       - name: Restore build-tools
         id: bt
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: work/build-tools-36.1
@@ -335,7 +336,7 @@ jobs:
 
       - name: Save build-tools
         if: steps.bt.outputs.cache-hit != 'true'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: work/build-tools-36.1
@@ -347,7 +348,7 @@ jobs:
 
       - name: Save framework-res
         if: steps.res.outputs.cache-hit != 'true'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: out/framework-res
@@ -513,6 +514,11 @@ jobs:
             --framework-res out/framework-res/framework-res.apk \
             --framework-classes out/framework/classes --core-classes out/coremod \
             --app-classes out/app/gesher-app-classes.jar
+          # Gesher Text-to-speech (docs/tts.md): the TextToSpeechService engine over Windows' voices.
+          BUILD_TOOLS_DIR="$PWD/work/build-tools-36.1" APP_DIR="$PWD/app/gesher-tts" tests/apps/lifecycle/build.sh out/app \
+            --framework-res out/framework-res/framework-res.apk \
+            --framework-classes out/framework/classes --core-classes out/coremod \
+            --app-classes out/app/gesher-app-classes.jar
           BUILD_TOOLS_DIR="$PWD/work/build-tools-36.1" tests/apps/popupapp/build.sh out/app \
             --framework-res out/framework-res/framework-res.apk \
             --framework-classes out/framework/classes --core-classes out/coremod
@@ -647,7 +653,7 @@ jobs:
 
       - name: Cache public SDK 36 API reference
         id: sdk-contract-reference
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: restore
           path: work/sdk-36/android.jar
@@ -666,7 +672,7 @@ jobs:
 
       - name: Save public SDK 36 API reference
         if: steps.sdk-contract-reference.outputs.cache-hit != 'true'
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: work/sdk-36/android.jar
@@ -938,6 +944,7 @@ jobs:
           cp out/app/split-package-fixtures.zip dist-framework/
           cp out/app/gesher-camera.apk dist-framework/
           cp out/app/gesher-stt.apk dist-framework/
+          cp out/app/gesher-tts.apk dist-framework/
           cp out/app/rtlapp.apk dist-framework/
           cp out/app/imeapp.apk dist-framework/
           cp out/app/lifeapp.apk dist-framework/
@@ -986,7 +993,7 @@ jobs:
 
       - name: Save the framework's JVM tools
         if: always() && steps.jvm.outputs.cache-hit != 'true' && hashFiles('out/framework/jvm-tools/kotlinc/bin/kotlinc') != ''
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: out/framework/jvm-tools
@@ -1001,7 +1008,7 @@ jobs:
 
       - name: Save AOSP sources
         if: always() && !cancelled() && steps.after.outputs.sparse != '' && (steps.aosp.outputs.cache-matched-key != format('{0}-{1}', env.AOSP_KEY, steps.after.outputs.sparse))
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@e5eb64d95271bc83c4eb40c9a069a2a45acac11c
         with:
           phase: save
           path: third_party/aosp

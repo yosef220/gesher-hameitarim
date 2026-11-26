@@ -13,6 +13,8 @@ from release_version import API, REPOSITORY, REPOSITORY_ID, build_version, insta
 
 HEAD = 'a' * 40
 MAIN = 'b' * 40
+# גשר המיתרים: ראש ענף המוצר, שממנו יוצאות הגרסאות.
+PRODUCT = '9' * 40
 BLOB = 'c' * 40
 ANNOTATED = 'd' * 40
 TAG = 'v0.2.1'
@@ -75,12 +77,21 @@ class BuildVersionTests(unittest.TestCase):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 build_version(dict(self.env, GITHUB_REF=f'refs/tags/{tag}'), self.read)
 
-    def test_main_pr_and_manual_tag_dispatch_use_highest_eligible_release(self):
+    def test_main_pr_and_manual_branch_dispatch_use_highest_eligible_release(self):
         self.assertEqual(build_version(self.env, self.read), '0.2.10.526')
         self.assertEqual(build_version(dict(self.env, GITHUB_REF='refs/pull/11/merge',
                                             GITHUB_EVENT_NAME='pull_request'), self.read), '0.2.10.526')
-        self.assertEqual(build_version(dict(self.env, GITHUB_REF='refs/tags/v9.0.0',
+        self.assertEqual(build_version(dict(self.env, GITHUB_REF='refs/heads/product',
                                             GITHUB_EVENT_NAME='workflow_dispatch'), self.read), '0.2.10.526')
+
+    def test_manual_dispatch_on_a_release_tag_builds_that_release(self):
+        # גשר המיתרים: בפורק, גרסה נבנית בהפעלה ידנית של ה-CI על התג.
+        dispatch = dict(self.env, GITHUB_REF='refs/tags/v9.0.0', GITHUB_EVENT_NAME='workflow_dispatch')
+        self.assertEqual(build_version(dispatch, lambda _: self.fail('Tag build must not use the release feed')), '9.0.0')
+        for tag in ('v0.1.65535', 'v9.0.0-rc1'):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                build_version(dict(dispatch, GITHUB_REF=f'refs/tags/{tag}'), self.read)
+        self.assertEqual(build_version(dict(dispatch, GITHUB_EVENT_NAME='schedule'), self.read), '0.2.10.526')
 
     def test_standalone_fork_has_canonical_public_baseline_even_on_tag_push(self):
         fork = dict(self.env, GITHUB_REPOSITORY='fork/gesher', GITHUB_REPOSITORY_ID='55',
@@ -106,6 +117,10 @@ class StubGitHub:
         self.calls = []
         self.tag = {'ref': f'refs/tags/{TAG}', 'object': {'type': 'tag', 'sha': ANNOTATED}}
         self.comparison = {'status': 'ahead', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': HEAD}}
+        # כברירת מחדל הקומיט שנבדק לא בענף המוצר. הבדיקות של המוצר משנות את זה.
+        self.product_comparison = {'status': 'diverged', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': MAIN}}
+        self.product_exists = True
+        self.product_ci_definition = {'type': 'file', 'path': pub.CI_PATH, 'sha': BLOB}
         self.ci_definition = {'type': 'file', 'path': pub.CI_PATH, 'sha': BLOB}
         self.ci_run = {'id': RUN, 'run_attempt': ATTEMPT, 'check_suite_id': SUITE, 'head_sha': HEAD,
                        'name': 'ci', 'workflow_id': pub.CI_ID, 'path': pub.CI_PATH, 'event': 'push',
@@ -143,6 +158,14 @@ class StubGitHub:
             return {'ref': 'refs/heads/main', 'object': {'sha': MAIN, 'type': 'commit'}}
         if endpoint == f'{API}/compare/{HEAD}...{MAIN}':
             return deepcopy(self.comparison)
+        if endpoint == f'{API}/git/ref/heads/product':
+            if not self.product_exists:
+                raise GitHubReadError('Not Found')
+            return {'ref': 'refs/heads/product', 'object': {'sha': PRODUCT, 'type': 'commit'}}
+        if endpoint == f'{API}/compare/{HEAD}...{PRODUCT}':
+            return deepcopy(self.product_comparison)
+        if endpoint == f'{API}/contents/{pub.CI_PATH}?ref=product':
+            return deepcopy(self.product_ci_definition)
         if endpoint == f'{API}/compare/{MAIN}...{MAIN}':
             return {'status': 'identical', 'base_commit': {'sha': MAIN}, 'merge_base_commit': {'sha': MAIN}}
         if endpoint == f'{API}/contents/{pub.CI_PATH}?ref={HEAD}':
@@ -222,7 +245,7 @@ class StubGitHub:
 
     def add_owned(self, marker):
         row = release_row(DRAFT, TAG, draft=True)
-        row.update(author=pub.BOT, name='Gesher 0.2.1', body=marker + '\n\nGenerated release notes', assets=[])
+        row.update(author=pub.BOT, name=pub.release_name(SOURCE), body=marker + '\n\nGenerated release notes', assets=[])
         self.releases.append(row)
 
     def mark_public(self):
@@ -280,12 +303,92 @@ class PublisherTests(unittest.TestCase):
         patch_index = self.api.calls.index(('PATCH', f'{API}/releases/{DRAFT}'))
         self.assertEqual(self.api.calls[patch_index - 1], ('GET', f'{API}/git/ref/tags/{TAG}'))
 
+    def test_product_history_release(self):
+        # גשר המיתרים: קומיט מענף המוצר, שלא נמצא ב-main, מתפרסם.
+        self.api.comparison['status'] = 'diverged'
+        self.api.product_comparison = {'status': 'ahead', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': HEAD}}
+        self.assertIn('Publication confirmed', self.publish())
+        self.assertFalse(self.api.own['draft'])
+        self.assertEqual(self.api.own['name'], 'גשר המיתרים 0.2.1')
+
+    def test_outside_main_and_product_or_missing_product_fails_without_mutation(self):
+        for change in ('diverged', 'missing', 'other-base'):
+            with self.subTest(change=change):
+                self.api = StubGitHub()
+                self.api.comparison['status'] = 'diverged'
+                if change == 'missing':
+                    self.api.product_exists = False
+                elif change == 'other-base':
+                    self.api.product_comparison = {'status': 'ahead', 'base_commit': {'sha': MAIN},
+                                                   'merge_base_commit': {'sha': HEAD}}
+                with self.assertRaises(pub.ReleaseError):
+                    self.publish()
+                self.assertFalse(self.api.download_called)
+                self.assertEqual(self.mutations, [])
+
+    def test_product_ci_definition_with_queued_tests(self):
+        # גשר המיתרים: ה-ci.yml של המוצר כולל שלבים שה-PRs שבתור הוסיפו. הוא מתקבל רק כשהוא
+        # זהה לזה שבראש product, ורק לקומיט מההיסטוריה של product.
+        product_ahead = {'status': 'ahead', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': HEAD}}
+        for change in ('accepted', 'product-tip-differs', 'not-in-product'):
+            with self.subTest(change=change):
+                self.api = StubGitHub()
+                self.api.comparison['status'] = 'diverged'
+                self.api.ci_definition['sha'] = ANNOTATED
+                self.api.product_ci_definition['sha'] = ANNOTATED
+                self.api.product_comparison = deepcopy(product_ahead)
+                if change == 'accepted':
+                    self.assertIn('Publication confirmed', self.publish())
+                    continue
+                if change == 'product-tip-differs':
+                    self.api.product_ci_definition['sha'] = BLOB
+                else:
+                    self.api.product_comparison['status'] = 'diverged'
+                with self.assertRaises(pub.ReleaseError):
+                    self.publish()
+                self.assertFalse(self.api.download_called)
+                self.assertEqual(self.mutations, [])
+
+    def test_release_name_and_hebrew_install_notes(self):
+        self.assertIn('Publication confirmed', self.publish())
+        body = self.api.own['body']
+        lines = body.splitlines()
+        self.assertTrue(lines[0].startswith(pub.MARKER))
+        self.assertEqual(sum(line.startswith(pub.MARKER) for line in lines), 1)
+        self.assertIn(installer_name(SOURCE.version), body)
+        self.assertIn('הפעל בכל זאת', body)
+        self.assertIn(pub.CHECKSUM_NAME, body)
+        self.assertIn(f'https://github.com/{REPOSITORY}/blob/main/docs/he/08-install-guide.md', body)
+
+    def test_manual_dispatch_on_the_tag_publishes(self):
+        # גשר המיתרים: ה-CI של גרסה רץ בהפעלה ידנית על התג.
+        self.api.ci_run['event'] = 'workflow_dispatch'
+        self.assertIn('Publication confirmed', self.publish())
+        self.assertFalse(self.api.own['draft'])
+
+    def test_release_notes_follow_the_install_instructions(self):
+        # גשר המיתרים: "מה חדש" מ-tools/ci/release-notes/vX.Y.Z.md, אחרי הוראות ההתקנה.
+        with tempfile.TemporaryDirectory() as root:
+            notes = Path(root)
+            (notes / 'v0.2.1.md').write_text('### מה חדש\n\n- סוכן עדכונים\n', encoding='utf-8')
+            with patch.object(pub, 'RELEASE_NOTES', notes):
+                intro = pub.release_intro(SOURCE)
+                self.assertLess(intro.index('הפעל בכל זאת'), intro.index('### מה חדש'))
+                (notes / 'v0.2.1.md').write_text(pub.MARKER + 'x -->', encoding='utf-8')
+                with self.assertRaises(pub.ReleaseError):
+                    pub.release_intro(SOURCE)
+                (notes / 'v0.2.1.md').write_bytes(b'x' * (pub.MAX_RELEASE_NOTES + 1))
+                with self.assertRaises(pub.ReleaseError):
+                    pub.release_intro(SOURCE)
+            with patch.object(pub, 'RELEASE_NOTES', notes / 'missing'):
+                self.assertNotIn('### מה חדש', pub.release_intro(SOURCE))
+
     def test_lightweight_tag(self):
         self.api.tag['object'] = {'sha': HEAD, 'type': 'commit'}
         self.assertIn('Publication confirmed', self.publish())
 
     def test_untrusted_or_wrong_workflow_event_and_attempt_fail_without_mutation(self):
-        for change in [{'run_attempt': 3}, {'event': 'workflow_dispatch'}, {'event': 'pull_request'},
+        for change in [{'run_attempt': 3}, {'event': 'schedule'}, {'event': 'pull_request'},
                        {'workflow_id': 45}, {'head_repository': {'id': 42, 'full_name': 'fork/gesher'}},
                        {'head_branch': 'main'}, {'conclusion': 'failure'}]:
             with self.subTest(change=change):

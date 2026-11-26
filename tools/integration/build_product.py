@@ -355,7 +355,7 @@ def do_build(root, items, base, upstream, trailers, skip_conflicts=False):
         print("  " + line)
     if waiting:
         print(f"ממתינים ({len(waiting)}): " + ", ".join(waiting) +
-              ". כשהתורם יעדכן: --fetch ונעיצה מחדש. אחרת: --topic.")
+              ". הפתרון בענף נושא: --topic (עדכונים של התורם מאחרי השינוי ברישיון אסורים).")
 
 
 def do_topic(items, item_id, upstream, onto_candidate):

@@ -25,8 +25,17 @@
 - **`main`** הוא upstream ועוד מה שאנחנו כתבנו. PR שעוד לא אושר ב-upstream לא נכנס אליו.
 - **`product`** נבנה מ-`main` ומהתור `tools/integration/product-queue.tsv`, עם `tools/integration/build_product.py`. ממנו יוצאות הגרסאות. מוסיפים PR לתור, ולא ממזגים אותו ביד. התנגשות נפתרת בענף נושא `topic/<מזהה>`.
 - **upstream קפוא (פרויקט עצמאי, הוחלט ב-25.11):** ‏upstream עבר לרישיון קנייני ב-25.11.2026 ב-11:39 לפי UTC (#503). **אסור למזג ממנו שום דבר אחרי `303bb835d`**, ולא ללחוץ על "Sync fork". מ-PRs משתמשים רק בגרסה מלפני השינוי (`refs/apache-snapshot/pr/*`). ‏`build_product.py` דוחה קוד מאחרי השינוי. פירוט ב-`NOTICE.md` וב-`docs/he/07-upstream-sync.md`.
+- **upstream כבר לא ציבורי (מערב 25.11):** אין גישה לריפו שלו, ו-GitHub העביר את רשת הפורקים לשורש אחר. העותקים של ה-PRs (`refs/apache-snapshot/pr/*`) קיימים רק מקומית, כי דחיפה של מרחב השמות הזה נדחית ב-403. PR שנכנס לתור נשמר כענף נושא `topic/pr-<מספר>`. פעולות ה-CI הנעוצות שמורות בענף `pinned/upstream-actions`, ובדיקות הזהות של ההרצה האבחונית מקבלות את הריפו שלנו לפי השם ומספר הזהות.
+- **פרסום גרסה:** תג `vX.Y.Z` על הראש של `product`, ואחריו הפעלה ידנית של ה-CI על התג (`gh workflow run ci.yml --ref vX.Y.Z`). דחיפה של תג לא מריצה CI. הפרסום עצמו רץ מ-`main`. הצעדים ב-`docs/he/07-upstream-sync.md`. **לא מפרסמים גרסה בלי אישור מפורש של בעל הריפו.**
 - **לפני כל דחיפה:** לוודא ש-`git remote get-url origin` הוא `https://github.com/yosef220/gesher-hameitarim`. הפעלה מחדש של הסשן מחזירה אותו לפעמים ל-APK.
 - **קרדיט:** הקומיטים נרשמים על שם `yosef220` בכתובת החסויה של GitHub, ו-Claude מופיע בשורת `Co-Authored-By`.
+
+## רישיון
+
+- **מ-26.11.2026:** גשר המיתרים מופץ לפי PolyForm Strict 1.0.0 (`LICENSE`). מותר שימוש לא מסחרי בלבד, בלי הפצה, בלי שינויים ובלי גרסאות נגזרות. שימוש בעסק צריך רישיון נפרד בכתב מבעל המאגר. ההחלטה והנימוקים: `docs/he/09-license.md`.
+- **Apache 2.0 (`LICENSE-APACHE`)** חל על הקוד של Gesher עד `303bb835d`, על התרומות שהוגשו ל-Gesher, על הענף של Lev-Good, ועל כל מה שהמאגר פרסם עד `1f29fef7a`. לא משנים כותרות Apache בקבצים שמקורם ב-Gesher.
+- **קובץ חדש שלנו** מקבל את הכותרת `Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0`.
+- **את הטקסט של PolyForm לא משנים.** העותקים שבמתקין (`tools/package/licenses/GESHER-*.txt`) זהים ל-`LICENSE` ול-`LICENSE-APACHE`, וזה נבדק ב-`tools/tests/test_portable_package.py`.
 
 ## אינטגרציה של PRs
 
