@@ -72,4 +72,13 @@
 
 החדש ב-`main`: מיזוג ענף העיצוב (`design/foundation`: הטוקנים, הגופנים, מסך הפתיחה והאייקון, שעד עכשיו לא היו ב-`main` ולכן גם לא במוצר), ותג גרסה בהרצה האבחונית.
 
-**אימות:** ריצה [45725332541](https://github.com/yosef220/gesher-hameitarim/actions/runs/45725332541). עוד רצה.
+**אימות:** ריצה [45725332541](https://github.com/yosef220/gesher-hameitarim/actions/runs/45725332541) **נכשלה** בכשל אחד. מה שעבר בה מאמת את התיקונים הקודמים:
+- **עברו:** חוזי Windows בשתי הגרסאות (הכתוביות מול Windows אמיתי, החבילה הניידת ובדיקת סוכן העדכונים), ובדיקות הזהות של ההרצה האבחונית (‏`compile-selected-minimum`, ‏`linux-reference`, ‏`native2`, ‏`runner-route`). הקומפילציה של ה-framework עברה.
+- **נכשל:** חוזי ה-receivers (`tools/test_receiver_exports.py`). ‏`BroadcastController.deliverToSystemReceivers` מ-#450 חיפש מקבלים של המערכת לפי הפעולה של השידור, ושידור בלי פעולה הפיל אותו ב-`NullPointerException`. תוקן ב-`topic/pr-450`: שידור בלי פעולה לא מתאים לאף מקבל של המערכת, והפונקציה חוזרת לפני החיפוש.
+- **לא רץ:** החבילה, ה-e2e ושאר העבודות שתלויות ב-framework.
+
+### 26.11.2026: המועמד עם התיקון לשידור בלי פעולה
+
+**המועמד:** `cad8f8e74`, על `main` בקומיט `b8b1d5d98`.
+
+**אימות:** ריצה [45781883989](https://github.com/yosef220/gesher-hameitarim/actions/runs/45781883989). עוד רצה.
