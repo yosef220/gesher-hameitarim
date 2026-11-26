@@ -1,6 +1,7 @@
 // Message-type kernel pipes with byte-stream reads preserve PIPE_BUF admission.
 // Windows owns capacity, peer lifetime and waiter completion across processes.
 #include "pipe_io.h"
+#include "fifo_internal.h"
 #include "internal.h"
 #include "record_lock_descriptors.h"
 #include "ofd_internal.h"
@@ -417,6 +418,12 @@ int CreatePipeDescriptors(int descriptors[2], int flags) {
 namespace {
 int TransferPipeBody(const DescriptorSnapshotPtr& snapshot, void* bytes, unsigned count,
                      bool writing, HANDLE canceled, HANDLE interrupted) {
+  // FIFO (#256): העברה דרך named pipe עם OVERLAPPED, במסלול נפרד (fifo.cc). היא לא עוברת
+  // בלולאה למטה, ולכן עצירה של ptrace לא מתחילה אותה מחדש.
+  if (snapshot->description->IsFifo()) {
+    if (Signaled(canceled) || Signaled(interrupted)) return errno = EINTR, -1;
+    return TransferFifo(snapshot, bytes, count, writing, canceled, interrupted);
+  }
   unsigned written = 0;  // a blocking write's bytes already in the pipe
   for (;;) {
     if (Signaled(canceled) || Signaled(interrupted)) {
@@ -495,6 +502,9 @@ int ReadPipeDescriptionInterruptible(const DescriptorSnapshotPtr& snapshot, void
 
 int PollPipeHandle(const DescriptorSnapshotPtr& snapshot, short events, short* ready) {
   *ready = 0;
+  if (snapshot->description->IsFifo()) {
+    return PollFifoHandle(snapshot, events, ready);
+  }
   PipeAdmission admission;
   if (admission.Acquire(snapshot, false) < 0) return -1;
   const int flags = snapshot->description->Flags();
@@ -516,6 +526,9 @@ int PollPipeHandle(const DescriptorSnapshotPtr& snapshot, short events, short* r
 
 int PipeBytesAvailable(const DescriptorSnapshotPtr& snapshot, int* bytes) {
   if (!bytes) return errno = EFAULT, -1;
+  if (snapshot->description->IsFifo()) {
+    return FifoBytesAvailable(snapshot, bytes);
+  }
   PipeAdmission admission;
   if (admission.Acquire(snapshot, false) < 0) return -1;
   // The writer's quota is not the queue length, especially while a reader
