@@ -119,8 +119,10 @@
 **הצעדים לגרסה:**
 
 1. `product` מקודם מ-`product-candidate` שה-CI המלא שלו עבר (`build_product.py --promote`), ונדחף.
-2. תג על הראש של `product`: ‏`git tag -a vX.Y.Z -m "גשר המיתרים X.Y.Z" product`, ודחיפה שלו.
-3. הפעלה ידנית של ה-CI על התג: `gh workflow run ci.yml --ref vX.Y.Z`.
+2. תג על הראש של `product`, בשתי דרכים:
+   - **מ-GitHub:** ‏Actions ← "יצירת תג גרסה" ← Run workflow, מ-`main`, עם מספר הגרסה ועם ה-SHA המלא של הראש של `product`. או: `gh workflow run release-tag.yml --ref main -f version=X.Y.Z -f commit=<SHA>`. התהליך (`release-tag.yml`) יוצר את התג רק אם ה-SHA הוא בדיוק הראש של `product` ורק אם התג עוד לא קיים, ומדווח רק על מה שקרא בחזרה מ-GitHub. כך יוצרים תג גם מסשן שחסום מדחיפת תגים.
+   - **עם git:** ‏`git tag -a vX.Y.Z -m "גשר המיתרים X.Y.Z" product`, ודחיפה שלו.
+3. הפעלה ידנית של ה-CI על התג: `gh workflow run ci.yml --ref vX.Y.Z`. יצירת התג לא מריצה אותו.
 4. כשה-CI עובר, ‏`publish-release.yml` רץ לבד מ-`main`, מאמת את המתקין שנבדק ומפרסם אותו.
 
 **לא אומת עדיין:** ריצה אמיתית של הצעדים האלה. היא תיעשה עם גרסה A.

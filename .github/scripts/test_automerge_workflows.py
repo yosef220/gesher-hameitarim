@@ -69,6 +69,26 @@ class QueueWorkflows(unittest.TestCase):
         self.assertFalse(checkout['with']['persist-credentials'])
         self.assertEqual(invocation['run'], 'python3 tools/ci/publish_release.py')
 
+    def test_release_tag_runs_only_from_main_and_takes_inputs_through_env(self):
+        # גשר המיתרים: יצירת תג הגרסה. רק הפעלה ידנית מ-main בריפו שלנו, רק contents: write,
+        # והקלט עובר דרך משתני סביבה ולא נכתב לתוך הסקריפט.
+        doc = yaml.safe_load((ROOT / '.github/workflows/release-tag.yml').read_text(encoding='utf-8'))
+        self.assertEqual(set(doc[True]), {'workflow_dispatch'})
+        self.assertEqual(set(doc[True]['workflow_dispatch']['inputs']), {'version', 'commit'})
+        self.assertEqual(doc['permissions'], {})
+        self.assertEqual(set(doc['jobs']), {'tag'})
+        job = doc['jobs']['tag']
+        self.assertEqual(job['permissions'], {'contents': 'write'})
+        for guard in ("github.repository == 'yosef220/gesher-hameitarim'",
+                      "github.repository_id == '1471523850'", "github.ref == 'refs/heads/main'"):
+            self.assertIn(guard, job['if'])
+        (step,) = job['steps']
+        self.assertNotIn('uses', step)
+        self.assertNotIn('${{', step['run'])
+        self.assertEqual(step['env']['VERSION'], '${{ inputs.version }}')
+        self.assertEqual(step['env']['COMMIT'], '${{ inputs.commit }}')
+        self.assertIn('git/ref/heads/product', step['run'])
+
     def test_no_controller_polling_or_direct_merging(self):
         doc = yaml.safe_load((ROOT / '.github/workflows/automerge.yml').read_text())
         # The only schedule is recovery of labeled PRs stuck after finished CI.
