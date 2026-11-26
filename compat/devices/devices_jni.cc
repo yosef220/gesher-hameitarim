@@ -212,6 +212,7 @@ int register_gesher_speech(JNIEnv* env);  // speech_jni.cc
 int register_gesher_webauthn(JNIEnv* env);  // webauthn_jni.cc
 int register_gesher_captions(JNIEnv* env);  // caption_jni.cc
 int register_gesher_hello(JNIEnv* env);  // hello_jni.cc
+int register_gesher_hello_key(JNIEnv* env);  // hello_key_jni.cc
 
 int register_gesher_devices(JNIEnv* env) {
   register_gesher_sensors(env);
@@ -223,6 +224,7 @@ int register_gesher_devices(JNIEnv* env) {
   register_gesher_webauthn(env);
   register_gesher_captions(env);
   register_gesher_hello(env);
+  register_gesher_hello_key(env);
   RegisterGesherNatives(env, "com/gesher/server/WindowsCamera", gWindowsCameraMethods,
                         NELEM(gWindowsCameraMethods));
   RegisterGesherNatives(env, "com/gesher/server/WindowsLocation", gWindowsLocationMethods,
