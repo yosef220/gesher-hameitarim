@@ -28,6 +28,9 @@ CI_ID = 430092261
 PUBLISH_PATH = '.github/workflows/publish-release.yml'
 PUBLISH_NAME = 'Publish Gesher release'
 PUBLISH_REF = f'{REPOSITORY}/{PUBLISH_PATH}@refs/heads/main'
+# גשר המיתרים: גם הפעלה ידנית, על ריצת CI על תג שכבר הצליחה (source_run).
+PUBLISH_EVENTS = ('workflow_run', 'workflow_dispatch')
+CI_RUN_ID = re.compile(r'[1-9][0-9]{0,19}')
 RELEASE_STEP = 'Validate pushed version tag'
 UPLOAD_STEP = 'Upload tested installer artifact'
 PUBLISH_STEP = 'Verify and publish the exact tested installer'
@@ -265,6 +268,21 @@ def job_identity(job, run, attempt, head):
             and job['run_attempt'] == attempt and job['head_sha'] == head)
 
 
+def artifact_inventory(api, run, max_pages=20):
+    """כל ה-artifacts של ריצה, בכל הדפים. רשימה חלקית או רשימה שהשתנתה בזמן הקריאה נדחות."""
+    rows, total = [], None
+    for page in range(1, max_pages + 1):
+        inventory = api.get(f'{API}/actions/runs/{run}/artifacts?per_page=100&page={page}')
+        require(type(inventory.get('total_count')) is int and (total is None or inventory['total_count'] == total),
+                'Incomplete artifact inventory')
+        total = inventory['total_count']
+        rows.extend(inventory['artifacts'])
+        if len(rows) >= total or not inventory['artifacts']:
+            break
+    require(len(rows) == total and len({row['id'] for row in rows}) == len(rows), 'Incomplete artifact inventory')
+    return rows
+
+
 def confirm_producer(api, source):
     jobs = api.jobs(f'{API}/actions/runs/{source.run}/attempts/{source.attempt}/jobs')['jobs']
     verified = {}
@@ -279,9 +297,12 @@ def confirm_producer(api, source):
     upload = exactly_one(job['steps'], UPLOAD_STEP, 'Missing or ambiguous installer upload step')
     require(completed(upload, UPLOAD_STEP), 'Exact package job did not upload its tested installer')
 
-    inventory = api.get(f'{API}/actions/runs/{source.run}/artifacts?per_page=100')
-    require(inventory['total_count'] == len(inventory['artifacts']), 'Incomplete artifact inventory')
-    artifact = exactly_one(inventory['artifacts'], ARTIFACT_NAME, 'Missing or ambiguous installer artifact')
+    # גשר המיתרים: אחרי הרצה חוזרת יש בריצה artifacts מכל הניסיונות, ולכן הרשימה נקראת בכל הדפים,
+    # והמתקין הוא היחיד שנוצר בזמן עבודת ה-package של הניסיון שנבדק. מתקין מניסיון אחר לא נבחר.
+    started, finished = timestamp(job['started_at']), timestamp(job['completed_at'])
+    produced = [row for row in artifact_inventory(api, source.run)
+                if row.get('name') == ARTIFACT_NAME and started <= timestamp(row['created_at']) <= finished]
+    artifact = exactly_one(produced, ARTIFACT_NAME, 'Missing or ambiguous installer artifact')
     origin = artifact['workflow_run']
     require(positive(artifact['id']) and positive(artifact['size_in_bytes'])
             and artifact['size_in_bytes'] <= MAX_INSTALLER_SIZE
@@ -360,7 +381,7 @@ class Issuer:
         require(run['id'] == self.run and run['run_attempt'] == self.attempt
                 and run['workflow_id'] == self.workflow
                 and run['path'] in (PUBLISH_PATH, f'{PUBLISH_PATH}@main', f'{PUBLISH_PATH}@refs/heads/main')
-                and run['name'] == PUBLISH_NAME and run['event'] == 'workflow_run'
+                and run['name'] == PUBLISH_NAME and run['event'] in PUBLISH_EVENTS
                 and run['head_branch'] == 'main' and run['head_sha'] == self.head
                 and official(run['repository']) and official(run['head_repository']),
                 'Draft issuer was not the canonical protected publisher')
@@ -598,24 +619,37 @@ def publish(api, source, issuer, trusted_ci_blob, directory, download=download_a
     return f'Publication confirmed for {source.tag} (release {release_id})'
 
 
+def source_run(api, environ, event):
+    """ריצת ה-CI שמפרסמים. אחרי workflow_run: הריצה שהסתיימה, מתוך האירוע. בהפעלה ידנית: הריצה
+    שהמספר שלה נמסר (PUBLISH_CI_RUN_ID), כפי ש-GitHub מחזיר אותה עכשיו. בשני המקרים Source.from_run
+    והבדיקות שאחריו זהים: ריצה מוצלחת של ci.yml על תג, בניסיון האחרון שלה."""
+    if environ.get('GITHUB_EVENT_NAME') == 'workflow_run':
+        require(event['action'] == 'completed' and official(event['repository'])
+                and event['repository']['default_branch'] == 'main'
+                and event['workflow']['id'] == CI_ID and event['workflow']['path'] == CI_PATH,
+                'The event is not a canonical CI completion')
+        return event['workflow_run']
+    run_id = environ.get('PUBLISH_CI_RUN_ID', '')
+    require(CI_RUN_ID.fullmatch(run_id) is not None, 'A manual publication needs the CI run id')
+    require(official(event['repository']) and event['repository']['default_branch'] == 'main',
+            'The manual publication is not from the canonical repository')
+    return api.get(f'{API}/actions/runs/{run_id}')
+
+
 def main(environ=os.environ):
     require(environ.get('GITHUB_ACTIONS') == 'true'
-            and environ.get('GITHUB_EVENT_NAME') == 'workflow_run'
+            and environ.get('GITHUB_EVENT_NAME') in PUBLISH_EVENTS
             and environ.get('GITHUB_WORKFLOW_REF') == PUBLISH_REF
             and environ.get('GITHUB_REPOSITORY') == REPOSITORY
             and environ.get('GITHUB_REPOSITORY_ID') == str(REPOSITORY_ID)
             and environ.get('GITHUB_REF') == 'refs/heads/main',
             'Publisher must run as a protected main workflow_run')
     event = json.loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-    require(event['action'] == 'completed' and official(event['repository'])
-            and event['repository']['default_branch'] == 'main'
-            and event['workflow']['id'] == CI_ID and event['workflow']['path'] == CI_PATH,
-            'The event is not a canonical CI completion')
-    source = Source.from_run(event['workflow_run'])
+    api = GitHub()
+    source = Source.from_run(source_run(api, environ, event))
     head, ci_blob = subprocess.check_output(['git', 'rev-parse', 'HEAD', f'HEAD:{CI_PATH}'], text=True).splitlines()
     require(oid(head) and oid(ci_blob) and head == environ['GITHUB_WORKFLOW_SHA'],
             'Publisher did not check out its exact protected workflow revision')
-    api = GitHub()
     publication_workflow = api.get(f'{API}/actions/workflows/publish-release.yml')
     require(publication_workflow['path'] == PUBLISH_PATH and positive(publication_workflow['id']),
             'Canonical publisher workflow identity is unavailable')

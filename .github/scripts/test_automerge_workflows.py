@@ -54,7 +54,10 @@ class QueueWorkflows(unittest.TestCase):
                          "(github.event_name == 'push' || github.event_name == 'workflow_dispatch') && "
                          "github.ref_type == 'tag' }}")
         publisher = yaml.safe_load((ROOT / '.github/workflows/publish-release.yml').read_text(encoding='utf-8'))
-        self.assertEqual(publisher[True], {'workflow_run': {'workflows': ['ci'], 'types': ['completed']}})
+        self.assertEqual(publisher[True]['workflow_run'], {'workflows': ['ci'], 'types': ['completed']})
+        # גשר המיתרים: פרסום ידני רק עם מספר ריצה של ci.yml, שעובר לסקריפט דרך משתנה סביבה.
+        self.assertEqual(set(publisher[True]), {'workflow_run', 'workflow_dispatch'})
+        self.assertEqual(set(publisher[True]['workflow_dispatch']['inputs']), {'ci_run_id'})
         self.assertEqual(publisher['permissions'], {})
         job = publisher['jobs']['publish']
         self.assertEqual(set(publisher['jobs']), {'publish'})
@@ -68,6 +71,8 @@ class QueueWorkflows(unittest.TestCase):
         self.assertEqual(checkout['with']['ref'], '${{ github.workflow_sha }}')
         self.assertFalse(checkout['with']['persist-credentials'])
         self.assertEqual(invocation['run'], 'python3 tools/ci/publish_release.py')
+        self.assertEqual(invocation['env']['PUBLISH_CI_RUN_ID'], '${{ inputs.ci_run_id }}')
+        self.assertNotIn('${{', invocation['run'])
 
     def test_release_tag_runs_only_from_main_and_takes_inputs_through_env(self):
         # גשר המיתרים: יצירת תג הגרסה. רק הפעלה ידנית מ-main בריפו שלנו, רק contents: write,

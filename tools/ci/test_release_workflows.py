@@ -136,6 +136,9 @@ class StubGitHub:
                 'head_branch': TAG, 'head_sha': HEAD,
             },
         }
+        self.extra_artifacts = []
+        self.artifact_total = None
+        self.issuer_event = 'workflow_run'
         self.releases = []
         self.on_upload = lambda: None
         self.on_patch = lambda: None
@@ -170,11 +173,15 @@ class StubGitHub:
             return {'status': 'identical', 'base_commit': {'sha': MAIN}, 'merge_base_commit': {'sha': MAIN}}
         if endpoint == f'{API}/contents/{pub.CI_PATH}?ref={HEAD}':
             return deepcopy(self.ci_definition)
-        if endpoint == f'{API}/actions/runs/{RUN}/artifacts?per_page=100':
-            return {'total_count': 1, 'artifacts': [deepcopy(self.artifact)]}
+        if endpoint.startswith(f'{API}/actions/runs/{RUN}/artifacts?per_page=100&page='):
+            # גשר המיתרים: כמו GitHub, ‏100 בכל דף. אחרי הרצות חוזרות יש בריצה artifacts מכל הניסיונות.
+            rows = [deepcopy(self.artifact)] + deepcopy(self.extra_artifacts)
+            page = int(endpoint.rsplit('=', 1)[1])
+            total = len(rows) if self.artifact_total is None else self.artifact_total
+            return {'total_count': total, 'artifacts': rows[(page - 1) * 100:page * 100]}
         if endpoint == f'{API}/actions/runs/{PUBLISH_RUN}/attempts/1':
             return {'id': PUBLISH_RUN, 'run_attempt': 1, 'workflow_id': WORKFLOW, 'path': self.issuer_path,
-                    'name': pub.PUBLISH_NAME, 'head_branch': 'main', 'head_sha': MAIN, 'event': 'workflow_run',
+                    'name': pub.PUBLISH_NAME, 'head_branch': 'main', 'head_sha': MAIN, 'event': self.issuer_event,
                     'status': 'completed', 'repository': REPO, 'head_repository': REPO}
         if endpoint == f'{API}/releases?per_page=100&page=1':
             return deepcopy(self.releases)
@@ -440,6 +447,57 @@ class PublisherTests(unittest.TestCase):
                     self.publish()
                 self.assertFalse(self.api.download_called)
                 self.assertEqual(self.mutations, [])
+
+    def artifact(self, artifact_id, created_at, name=None):
+        return dict(deepcopy(self.api.artifact), id=artifact_id, created_at=created_at,
+                    name=name or pub.ARTIFACT_NAME)
+
+    def test_rerun_inventory_is_paged_and_the_installer_is_from_the_exact_attempt(self):
+        # גשר המיתרים: ריצה עם ארבעה ניסיונות. ‏artifacts של ניסיונות קודמים, גם מתקינים, לפני עבודת ה-package.
+        self.api.extra_artifacts = [self.artifact(1000 + n, '2026-01-18T12:00:00Z', name=f'other-{n}') for n in range(180)]
+        self.api.extra_artifacts += [self.artifact(2000 + n, f'2026-01-18T12:{10 + n}:00Z') for n in range(3)]
+        _, artifact_id, digest = pub.confirm_producer(self.api, SOURCE)
+        self.assertEqual((artifact_id, digest), (ARCHIVE, DIGEST))
+        pages = [call for call in self.api.calls if '/artifacts?' in call[1]]
+        self.assertEqual(len(pages), 2)
+
+    def test_two_installers_of_the_exact_attempt_are_ambiguous(self):
+        self.api.extra_artifacts = [self.artifact(3000, CREATED)]
+        with self.assertRaisesRegex(pub.ReleaseError, 'Missing or ambiguous installer artifact'):
+            pub.confirm_producer(self.api, SOURCE)
+
+    def test_incomplete_artifact_inventory_fails_without_mutation(self):
+        self.api.extra_artifacts = [self.artifact(1000 + n, CREATED, name=f'other-{n}') for n in range(150)]
+        for total in (300, 120):
+            with self.subTest(total=total):
+                self.api.artifact_total = total
+                with self.assertRaisesRegex(pub.ReleaseError, 'Incomplete artifact inventory'):
+                    self.publish()
+                self.assertFalse(self.api.download_called)
+                self.assertEqual(self.mutations, [])
+
+    def test_manual_publication_reads_the_ci_run_from_github(self):
+        event = {'repository': {'id': REPOSITORY_ID, 'full_name': REPOSITORY, 'default_branch': 'main'}}
+        environ = {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'PUBLISH_CI_RUN_ID': str(RUN)}
+        self.assertEqual(pub.Source.from_run(pub.source_run(self.api, environ, event)), SOURCE)
+        for run_id in ('', '0', '12a', ' 101', '101 ', '-101', '1' * 21):
+            with self.subTest(run_id=run_id), self.assertRaisesRegex(pub.ReleaseError, 'needs the CI run id'):
+                pub.source_run(self.api, dict(environ, PUBLISH_CI_RUN_ID=run_id), event)
+        fork = {'repository': {'id': 42, 'full_name': 'fork/gesher', 'default_branch': 'main'}}
+        with self.assertRaisesRegex(pub.ReleaseError, 'canonical repository'):
+            pub.source_run(self.api, environ, fork)
+        failed = dict(self.api.ci_run, conclusion='failure')
+        self.api.ci_run = failed
+        with self.assertRaises(pub.ReleaseError):
+            pub.Source.from_run(pub.source_run(self.api, environ, event))
+
+    def test_manual_publisher_run_is_a_canonical_issuer(self):
+        self.api.issuer_event = 'workflow_dispatch'
+        PREVIOUS.validate(self.api)
+        for event in ('push', 'schedule', 'pull_request_target'):
+            with self.subTest(event=event), self.assertRaisesRegex(pub.ReleaseError, 'canonical protected publisher'):
+                self.api.issuer_event = event
+                PREVIOUS.validate(self.api)
 
     def test_manual_or_forged_draft_is_untouched(self):
         self.api.releases.append(release_row(DRAFT, TAG, draft=True))
