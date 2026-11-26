@@ -120,6 +120,37 @@ try {
     Add-Result "PASS  סביבת הבדיקה: המשתמש '$userName', תיקיית המשתמש $userProfile ($shortText), דף הקוד של המערכת $($environment.ansi_code_page)"
     Save-Report
 
+    # --- 1א. אבחון: tmpfile() של ה-CRT של Windows (ucrtbase.dll, שגשר בנוי עליו) בתיקייה הזמנית
+    # של המשתמש. ‏ashmem של AOSP (libcutils/ashmem-host.cpp) יוצר כל אזור זיכרון משותף דרך tmpfile().
+    # זה מידע לאבחון, ולא בדיקה של גשר: התוצאה נרשמת, ולא משנה את קוד היציאה.
+    if (-not ('Hameitarim.Crt' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace Hameitarim {
+    public static class Crt {
+        [DllImport("ucrtbase.dll", CallingConvention = CallingConvention.Cdecl)] public static extern IntPtr tmpfile();
+        [DllImport("ucrtbase.dll", CallingConvention = CallingConvention.Cdecl)] public static extern int fclose(IntPtr file);
+        [DllImport("ucrtbase.dll", CallingConvention = CallingConvention.Cdecl)] public static extern IntPtr _errno();
+        // tmpfile ו-errno באותה קריאה, באותו thread.
+        public static int TryTmpfile() {
+            IntPtr file = tmpfile();
+            if (file != IntPtr.Zero) { fclose(file); return 0; }
+            return Marshal.ReadInt32(_errno());
+        }
+    }
+}
+'@
+    }
+    $tmpfileErrno = [Hameitarim.Crt]::TryTmpfile()
+    $script:Report.crt_tmpfile_errno = $tmpfileErrno
+    if ($tmpfileErrno -eq 0) {
+        Add-Result "INFO  אבחון: tmpfile() של ucrtbase.dll יוצר קובץ זמני ב-$temp"
+    } else {
+        Add-Result "INFO  אבחון: tmpfile() של ucrtbase.dll נכשל ב-$temp (errno $tmpfileErrno). ‏ashmem של AOSP נשען עליו"
+    }
+    Save-Report
+
     # --- 2. ההתקנה והאפליקציות, דרך ה-e2e הרגיל של הפרויקט.
     $appList = @($Apps.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     $e2eScript = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\e2e\run-e2e.ps1'))
@@ -128,6 +159,8 @@ try {
     $only = ($appList | ForEach-Object { & $literal $_ }) -join ','
     $command = "& $(& $literal $e2eScript) -Setup $(& $literal $InstallerPath) -OutDir $(& $literal $e2eOut) -Only @($only); exit `$LASTEXITCODE"
     Write-Session "e2e: $command"
+    # הפלט של ה-e2e עובר דרך הקונסולה המשותפת. בלי UTF-8, נתיב בעברית מגיע ללוג כסימני שאלה.
+    try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { Write-Session "קידוד הקונסולה לא שונה: $($_.Exception.Message)" }
     & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -ExecutionPolicy Bypass -Command $command 2>&1 |
         ForEach-Object { Write-Session "e2e | $_" }
     $e2eExit = $LASTEXITCODE
@@ -135,6 +168,41 @@ try {
     $e2eSummary = Join-Path $e2eOut 'summary.txt'
     $e2eLines = if (Test-Path -LiteralPath $e2eSummary) { @(Get-Content -LiteralPath $e2eSummary -Encoding utf8 | Where-Object { $_ -match '^(PASS|FAIL|KNOWN-FAIL) ' }) } else { @() }
     foreach ($line in $e2eLines) { Add-Result "      $line" }
+
+    # --- 2א. הקיצורים בתפריט התחל. ה-e2e קורא קיצור דרך WScript.Shell. כאן כל קיצור נקרא גם
+    # דרך Shell.Application, שקורא את הקובץ כמו סייר הקבצים, ושתי הקריאות נרשמות זו לצד זו.
+    # כך אפשר להבחין בין קיצור שלא נוצר לבין קיצור שרק אחת הדרכים לא מצליחה לקרוא.
+    $appsFolder = Join-Path $programs 'Gesher Apps'
+    $shortcuts = @()
+    if (Test-Path -LiteralPath $appsFolder) {
+        $shellApplication = New-Object -ComObject Shell.Application
+        $scriptShell = New-Object -ComObject WScript.Shell
+        $namespace = $shellApplication.NameSpace($appsFolder)
+        foreach ($file in Get-ChildItem -LiteralPath $appsFolder -Filter *.lnk) {
+            $entry = [ordered]@{ name = $file.Name; size = $file.Length }
+            try {
+                $link = $namespace.ParseName($file.Name).GetLink
+                $entry.target = $link.Path
+                $entry.arguments = $link.Arguments
+            } catch { $entry.shell_application_error = $_.Exception.Message }
+            try { $entry.wscript_arguments = $scriptShell.CreateShortcut($file.FullName).Arguments }
+            catch { $entry.wscript_error = $_.Exception.Message }
+            $shortcuts += $entry
+        }
+    }
+    $script:Report.start_menu_folder = $appsFolder
+    $script:Report.start_menu_shortcuts = $shortcuts
+    foreach ($shortcut in $shortcuts) {
+        Write-Session "קיצור: $($shortcut.name) | Shell.Application: '$($shortcut.target)' '$($shortcut.arguments)' | WScript.Shell: '$($shortcut.wscript_arguments)'"
+    }
+    foreach ($package in $appList) {
+        $found = @($shortcuts | Where-Object { $_.arguments -match "(^|\s)launch $([regex]::Escape($package))$" })
+        if ($found) {
+            Add-Result "INFO  קיצור בתפריט התחל ל-$($package): $($found[0].name), נקרא דרך Shell.Application ('$($found[0].target)' '$($found[0].arguments)'). ‏WScript.Shell, שה-e2e קורא בו, החזיר '$($found[0].wscript_arguments)'"
+        } else {
+            Add-Result "INFO  קיצור בתפריט התחל ל-$($package): לא נמצא ב-$appsFolder גם דרך Shell.Application ($($shortcuts.Count) קיצורים בתיקייה)"
+        }
+    }
 
     # --- 3. איפה גשר הותקן, ואיזה נתיב הריצה מקבלת.
     $app = Join-Path $env:LOCALAPPDATA 'Programs\Gesher'

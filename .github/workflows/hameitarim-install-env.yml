@@ -7,9 +7,11 @@
 #     כמו ברוב המחשבים, ופעם בלי, כשהריצה מקבלת את הנתיב בעברית
 #   - משתמש ביקורת עם שם ASCII, באותה מכונה ובאותה בדיקה. כשהוא עובר והמשתמש בשם עברי נכשל,
 #     הכשל שייך לנתיב בעברית
+#   - כונן שאינו NTFS (דיסק-און-קי): התקנה ופתיחה של APK מכונן exFAT ומכונן FAT32 (#306, ‏#456),
+#     והגרסה הניידת כשכל הקבצים שלה על exFAT (#417)
 # הסקריפטים והתיעוד: tests/install-env. התוצאות עולות כ-artifacts (install-env-*), עם הלוגים של גשר.
 #
-# לא בונה את המוצר ולא מריץ את ci.yml: שתי משימות Windows בלבד, על מתקין שכבר פורסם.
+# לא בונה את המוצר ולא מריץ את ci.yml: שלוש משימות Windows, על מתקין שכבר פורסם.
 name: hameitarim-install-env
 
 on:
@@ -87,5 +89,46 @@ jobs:
         if: always()
         with:
           name: install-env-hebrew-${{ matrix.short_names }}-${{ matrix.os }}
+          path: results/
+          if-no-files-found: warn
+
+  # כונן שאינו NTFS, כמו דיסק-און-קי: התקנה ופתיחה של APK מכונן exFAT ומכונן FAT32
+  # (issues #306 ו-#456, התיקון #313), והגרסה הניידת כשכל הקבצים שלה על exFAT (#417).
+  non-ntfs:
+    name: כוננים exFAT ו-FAT32 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tests/e2e
+            tests/install-env
+            tests/windows/shell
+
+      - name: המתקין והגרסה הניידת, מאומתים
+        id: release
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -Destination installer -IncludePortable
+
+      - name: התקנה ופתיחה מכונן exFAT ומכונן FAT32, וגרסה ניידת על exFAT
+        shell: pwsh
+        run: |
+          tests/install-env/NonNtfsDriveChecks.ps1 -InstallerPath '${{ steps.release.outputs.path }}' `
+            -PortableZipPath '${{ steps.release.outputs.portable }}' -Version '${{ steps.release.outputs.version }}' `
+            -OutDir results/non-ntfs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: install-env-non-ntfs-${{ matrix.os }}
           path: results/
           if-no-files-found: warn
