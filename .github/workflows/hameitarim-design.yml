@@ -2,7 +2,8 @@
 #   - הקבצים שמופקים מ-ui/tokens.json מעודכנים, והניגודיות עומדת בסף בשני המצבים
 #   - מסך הפתיחה האמיתי (GDI+) מצויר על Windows בכל המצבים, לצילומים לביקורת
 #   - דף הרישיון באשף ההתקנה מצולם בעברית ובאנגלית
-# הצילומים עולים כ-artifact בשם splash-screens.
+#   - מרכז הבקרה: בדיקות החוזה של התצוגה על WPF, וצילומים בכל מצב ושפה עם הדיאלוגים
+# הצילומים עולים כ-artifacts (splash-screens, license-page-screens, control-center-screens), וגם ללוג.
 name: hameitarim-design
 
 on:
@@ -10,6 +11,11 @@ on:
     branches: [main, 'design/**']
   pull_request:
   workflow_dispatch:
+    inputs:
+      save_screens:
+        description: 'לשמור את צילומי מרכז הבקרה בענף שהריצה רצה עליו (docs/he/design/assets/control-center)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -128,3 +134,68 @@ jobs:
           name: license-page-screens
           path: license-screens/
           retention-days: 30
+
+  control-center:
+    name: מרכז הבקרה על Windows
+    runs-on: windows-2022
+    timeout-minutes: 25
+    # כתיבה רק לשמירת הצילומים, בהפעלה ידנית עם save_screens
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      # הקבצים המופקים נבדקים במשימה "טוקנים וניגודיות" (Linux)
+      - name: בדיקות החוזה של התצוגה (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          tests/windows/shell/ControlPanelPresentationChecks.ps1
+          tests/windows/shell/ControlPanelLaunchChecks.ps1
+          tests/windows/shell/ControlPanelVirtualizationChecks.ps1
+          tests/windows/shell/ControlPanelSpecialAccessChecks.ps1
+          tests/windows/shell/ControlPanelUpdateChecks.ps1
+          tests/windows/shell/ControlPanelProxyChecks.ps1
+          tests/windows/shell/ControlPanelIconCacheChecks.ps1
+          tests/windows/shell/UiLocalizationChecks.ps1
+      - name: הדיאלוגים של מרכז הבקרה (Windows PowerShell 5.1)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        shell: powershell
+        run: tests/windows/shell/Issue32And33Contracts.ps1
+      - name: צילומי מרכז הבקרה והדיאלוגים
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: tools/ui/control-center-preview.ps1 -OutDir control-center-screens
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem control-center-screens -Filter *.png | Sort-Object Name) {
+            "PANEL-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'PANEL-PNG-END'
+          }
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: control-center-screens
+          path: control-center-screens/
+          retention-days: 30
+      # הצילומים נכנסים לענף כדי שאפשר יהיה לקרוא אותם גם בסביבה שלא מגיעה לאחסון ה-artifacts,
+      # וכדי שמסמך העיצוב יציג את המצב האחרון. רק בהפעלה ידנית, ורק כשמבקשים.
+      - name: שמירת הצילומים בענף
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.save_screens }}
+        shell: pwsh
+        run: |
+          $target = 'docs/he/design/assets/control-center'
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Get-ChildItem $target -Filter *.png | Remove-Item
+          Copy-Item control-center-screens/*.png $target
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A $target
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { 'הצילומים לא השתנו'; exit 0 }
+          git commit -m "צילומי מרכז הבקרה מ-Windows (ריצה ${{ github.run_id }})"
+          git push origin "HEAD:${{ github.ref_name }}"
+          if ($LASTEXITCODE -ne 0) { throw 'הדחיפה של הצילומים נכשלה' }

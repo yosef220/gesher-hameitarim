@@ -6,13 +6,16 @@ $package = [IO.Path]::GetFullPath($PackageDirectory)
 . (Join-Path $package 'gesher-ui.ps1')
 . (Join-Path $package 'gesher-panel-view.ps1')
 $manifest = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../../tools/package/gesher.iss'))
-foreach ($file in 'gesher-panel-view.ps1','gesher-panel-dashboard.xaml','gesher-panel-confirm.xaml','gesher-panel-message.xaml') {
+foreach ($file in 'gesher-panel-view.ps1','gesher-panel-dashboard.xaml','gesher-panel-confirm.xaml','gesher-panel-message.xaml','gesher-panel-proxy.xaml','gesher-panel-styles.xaml','gesher-tokens-light.xaml','gesher-tokens-dark.xaml','gesher-tokens-contrast.xaml') {
     if (-not (Test-Path -LiteralPath (Join-Path $package $file))) { throw "Missing resource: $file" }
     if (-not $manifest.Contains(('Source: "{0}"; DestDir: "{{app}}"; Flags: ignoreversion' -f $file))) { throw "Unpackaged resource: $file" }
 }
+# גשר המיתרים: כל חלון נטען בשלושת המצבים (בהיר, כהה וניגודיות גבוהה), בשתי השפות
+foreach ($theme in 'light','dark','contrast') {
+$script:PanelThemeOverride = $theme
 foreach ($language in 'en','he') {
     $script:GesherUiLanguage = $language
-    foreach ($name in 'dashboard','confirm','message') {
+    foreach ($name in 'dashboard','confirm','message','proxy') {
         $view = New-PanelView $name @{
             PanelFlowDirection = [System.Windows.FlowDirection]$(if ($language -eq 'he') { 'RightToLeft' } else { 'LeftToRight' })
             PanelBadgeBackground = [System.Windows.Media.Brushes]::Red
@@ -52,18 +55,26 @@ foreach ($language in 'en','he') {
             $literal = "{literal} & <text>`t`nHebrew"
             $view.Resources['Text_cp_title'] = $literal
             if ($view.Title -cne $literal) { throw 'Resource was interpreted as markup' }
+            if ($view.Resources['PanelTheme'] -cne $script:PanelThemeOverride) { throw 'Theme override was not applied' }
+            if ($view.FindName('AppsSearch') -eq $null -or $view.FindName('DropOverlay') -eq $null) { throw 'Search or drop feedback missing' }
         } elseif ($name -eq 'confirm') {
             $view.Resources['PanelConfirmStyle'] = $view.Resources['DangerActionButton']
             if ($view.FindName('BtnConfirm').Style -ne $view.Resources['DangerActionButton']) { throw 'Confirm style missing' }
-        } else {
+        } elseif ($name -eq 'message') {
             if ($view.FindName('BtnOk').IsCancel -ne $true) { throw 'Cancel contract changed' }
+        } else {
+            foreach ($control in 'DialogHeading','DialogPackage','DialogDetail','DialogProxyMode','DialogProxyAddress','DialogError','BtnCancel','BtnSave') {
+                if ($null -eq $view.FindName($control)) { throw "Proxy dialog lost $control" }
+            }
         }
         $view.Close()
     }
 }
+}
+$script:PanelThemeOverride = $null
 foreach ($file in Get-ChildItem (Join-Path $package '*.ps1')) {
     $tokens = $null; $errors = $null
     $null = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
     if ($errors.Count) { throw ($errors | Out-String) }
 }
-'Panel presentation load and PowerShell parse checks passed (en/he).'
+'Panel presentation load and PowerShell parse checks passed (en/he, light/dark/contrast).'

@@ -11,6 +11,7 @@
   compat/windows/gesher_tokens.h           דיאלוגים נייטיב ומסך הפתיחה (C ו-C++)
   tools/package/gesher-tokens-light.xaml   מרכז הבקרה, מצב בהיר
   tools/package/gesher-tokens-dark.xaml    מרכז הבקרה, מצב כהה
+  tools/package/gesher-tokens-contrast.xaml מרכז הבקרה, ניגודיות גבוהה (צבעי המערכת של Windows)
   tools/package/gesher-tokens.iss          המתקין
   ui/preview/tokens.css                    אבי-טיפוס בדפדפן, לביקורת עיצובית
 
@@ -29,6 +30,9 @@ TOKENS = ROOT / "ui/tokens.json"
 FONTS = ROOT / "tools/package/ui-fonts"
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 MODES = ("light", "dark")
+# צבעי המערכת של Windows שמותר להפנות אליהם במצב ניגודיות גבוהה (System.Windows.SystemColors)
+SYSTEM_COLORS = {"Window", "WindowText", "GrayText", "Highlight", "HighlightText", "HotTrack",
+                 "Control", "ControlText", "ButtonFace", "ButtonText"}
 HEADER_HE = "נוצר על ידי tools/ui/generate.py מתוך ui/tokens.json. לא לערוך ביד."
 
 
@@ -73,6 +77,10 @@ def load():
             if not isinstance(value, str) or not HEX.match(value):
                 raise TokenError(f"תפקיד {role}/{mode}: '{entry.get(mode)}' אינו צבע בפלטה ואינו hex")
             roles[role][mode] = value.upper()
+        system = entry.get("contrast")
+        if system not in SYSTEM_COLORS:
+            raise TokenError(f"תפקיד {role}/contrast: '{system}' אינו צבע מערכת מוכר ({', '.join(sorted(SYSTEM_COLORS))})")
+        roles[role]["contrast"] = system
     for kind, font in data["font"].items():
         if kind == "about":
             continue
@@ -188,14 +196,69 @@ def c_header(data, roles):
     return "\n".join(out)
 
 
+# המסגרת של הגשר ביחידות של viewBox, כמו באב-הטיפוס של מסך הפתיחה (ui/preview/render-splash.cjs).
+# ב-XAML הקואורדינטות מוזזות כך שהמסגרת מתחילה ב-0,0.
+BRIDGE_FRAME = (-20, 24, 296, 196)
+BRIDGE_STRING_LIFT = 2.2
+
+
+def bridge_geometry(b):
+    """התורן, המסלול, המיתרים וכבלי העיגון כ-path markup של WPF. אותה נוסחה כמו ui/bridge-geometry.cjs."""
+    (p0, p1, p2) = b["deck"]
+
+    def deck_y(x):
+        lo, hi = 0.0, 1.0
+        for _ in range(40):
+            t = (lo + hi) / 2
+            bx = (1 - t) ** 2 * p0[0] + 2 * t * (1 - t) * p1[0] + t * t * p2[0]
+            if bx < x:
+                lo = t
+            else:
+                hi = t
+        t = (lo + hi) / 2
+        return (1 - t) ** 2 * p0[1] + 2 * t * (1 - t) * p1[1] + t * t * p2[1]
+
+    lerp = lambda a, c, t: a + (c - a) * t
+    top = b["mast-top"]
+    base = (b["mast-base-x"], deck_y(b["mast-base-x"]))
+    mast_point = lambda t: (lerp(top[0], base[0], t), lerp(top[1], base[1], t))
+    fx, fy = -BRIDGE_FRAME[0], -BRIDGE_FRAME[1]
+    pt = lambda x, y: f"{x + fx:.2f},{y + fy:.2f}"
+
+    length = ((top[0] - base[0]) ** 2 + (top[1] - base[1]) ** 2) ** 0.5
+    nx, ny = -(top[1] - base[1]) / length, (top[0] - base[0]) / length
+    corners = [(base, 5.2, -1), (base, 5.2, 1), (top, 2.2, 1), (top, 2.2, -1)]
+    mast = "M " + " L ".join(pt(c[0] + s_ * h * nx, c[1] + s_ * h * ny) for c, h, s_ in corners) + " Z"
+    deck = f"M {pt(*p0)} Q {pt(*p1)} {pt(*p2)}"
+    s_ = b["strings"]
+    lines = []
+    for i in range(s_["count"]):
+        f = 0 if s_["count"] == 1 else i / (s_["count"] - 1)
+        mx, my = mast_point(lerp(s_["mast-t"][0], s_["mast-t"][1], f))
+        dx = lerp(s_["deck-x"][0], s_["deck-x"][1], f)
+        lines.append(f"M {pt(mx, my)} L {pt(dx, deck_y(dx) - BRIDGE_STRING_LIFT)}")
+    stays = []
+    x = b["stays"]["deck-x"]
+    for t in b["stays"]["mast-t"]:
+        mx, my = mast_point(t)
+        stays.append(f"M {pt(mx, my)} L {pt(x, deck_y(x) - BRIDGE_STRING_LIFT)}")
+    return {
+        "Mast": mast, "Deck": deck, "Strings": " ".join(lines), "Stays": " ".join(stays),
+        "width": BRIDGE_FRAME[2], "height": BRIDGE_FRAME[3], "deck-end-y": p0[1] + fy,
+    }
+
+
 def xaml(data, roles, mode):
-    name = "בהיר" if mode == "light" else "כהה"
-    out = [f"<!-- {HEADER_HE} מצב {name}. -->",
+    name = {"light": "מצב בהיר", "dark": "מצב כהה", "contrast": "ניגודיות גבוהה: צבעי המערכת בלבד, בלי Color"}[mode]
+    out = [f"<!-- {HEADER_HE} {name}. -->",
            '<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"',
            '                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"',
            '                    xmlns:sys="clr-namespace:System;assembly=mscorlib">']
     for role, values in roles.items():
         key = "Gesher" + camel(role)
+        if mode == "contrast":
+            out.append(f'  <SolidColorBrush x:Key="{key}Brush" Color="{{x:Static SystemColors.{values[mode]}Color}}"/>')
+            continue
         out.append(f'  <Color x:Key="{key}Color">{values[mode]}</Color>')
         out.append(f'  <SolidColorBrush x:Key="{key}Brush" Color="{values[mode]}"/>')
     for kind, font in data["font"].items():
@@ -206,6 +269,13 @@ def xaml(data, roles, mode):
             out.append(f'  <sys:Double x:Key="GesherType{camel(type_name)}Size">{item["size"]}</sys:Double>')
     for radius, value in data["radius"].items():
         out.append(f'  <CornerRadius x:Key="GesherRadius{camel(radius)}">{value}</CornerRadius>')
+    bridge = bridge_geometry(data["bridge"])
+    out.append(f"  <!-- הגשר: מסגרת של {bridge['width']}x{bridge['height']}, והקצוות של המסלול בגובה GesherBridgeDeckEndY -->")
+    out.append(f'  <sys:Double x:Key="GesherBridgeWidth">{bridge["width"]}</sys:Double>')
+    out.append(f'  <sys:Double x:Key="GesherBridgeHeight">{bridge["height"]}</sys:Double>')
+    out.append(f'  <sys:Double x:Key="GesherBridgeDeckEndY">{bridge["deck-end-y"]}</sys:Double>')
+    for part in ("Mast", "Deck", "Strings", "Stays"):
+        out.append(f'  <Geometry x:Key="GesherBridge{part}Geometry">{bridge[part]}</Geometry>')
     out += ["</ResourceDictionary>", ""]
     return "\n".join(out)
 
@@ -252,6 +322,7 @@ def outputs():
         ROOT / "compat/windows/gesher_tokens.h": c_header(data, roles),
         ROOT / "tools/package/gesher-tokens-light.xaml": xaml(data, roles, "light"),
         ROOT / "tools/package/gesher-tokens-dark.xaml": xaml(data, roles, "dark"),
+        ROOT / "tools/package/gesher-tokens-contrast.xaml": xaml(data, roles, "contrast"),
         ROOT / "tools/package/gesher-tokens.iss": inno(data, roles),
         ROOT / "ui/preview/tokens.css": css(data, roles),
     }

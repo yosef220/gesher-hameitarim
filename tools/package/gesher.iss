@@ -171,6 +171,12 @@ Source: "gesher-panel-view.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-dashboard.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-confirm.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-message.xaml"; DestDir: "{app}"; Flags: ignoreversion
+; גשר המיתרים: דיאלוג הפרוקסי, הסגנונות המשותפים והצבעים של מרכז הבקרה (בהיר, כהה וניגודיות גבוהה)
+Source: "gesher-panel-proxy.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-panel-styles.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-tokens-light.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-tokens-dark.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-tokens-contrast.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-native.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-update.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; גשר המיתרים: סוכן העדכונים, ש-gesher-app מפעיל ברקע כשפותחים אפליקציה.
