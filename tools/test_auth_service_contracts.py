@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Run the production auth (IAuthService) contracts of ADR 0094 on a host JVM.
+
+The Android and system-server boundaries are stand-ins with android-16.0.0_r4's
+constant values; AuthService, WindowsHello, WindowsHelloBackend, DeviceCredential,
+ConfirmCredential and OwnerWatch are compiled unchanged apart from their package,
+imports, boundary type qualification and public class visibility; StandIn, the dispatch the service's Binder
+uses, is compiled the same way. Tests cover the sensor-less AOSP answers with
+no Windows Hello backend, and, with an isolated test double only, the
+device-credential confirmation outcomes, cancellation, replacement, client death
+and callback ordering; the one availability decision (natives, Windows build
+22000, Windows Hello's answer at start and now) behind canAuthenticate, prompts
+and the confirm-credential intent; that intent's results; when a prompt's
+owner counts as having left the foreground; and AOSP's permission on every
+IAuthService method through the Binder-facing path.
+Use --source-ref to run the contracts against another revision of the sources.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+from pathlib import Path
+import re
+import subprocess
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCES = {
+    "// PRODUCTION_BACKEND": ("app/java/com/gesher/server/WindowsHelloBackend.java",
+                              "public interface WindowsHelloBackend", "interface WindowsHelloBackend"),
+    "// PRODUCTION_KEY_OPERATIONS": ("app/java/com/gesher/server/KeystoreOperations.java",
+                                     "public interface KeystoreOperations",
+                                     "interface KeystoreOperations"),
+    "// PRODUCTION_WINDOWS_HELLO": ("app/java/com/gesher/server/WindowsHello.java",
+                                    "final class WindowsHello", "final class WindowsHello"),
+    "// PRODUCTION_HELLO_KEY_BACKEND": ("app/java/com/gesher/server/HelloKeyBackend.java",
+                                       "public interface HelloKeyBackend", "interface HelloKeyBackend"),
+    "// PRODUCTION_KEY_NATIVE": ("app/java/com/gesher/server/WindowsHelloKey.java",
+                                        "final class WindowsHelloKey", "final class WindowsHelloKey"),
+    "// PRODUCTION_SERVICE": ("app/java/com/gesher/server/AuthService.java",
+                              "public final class AuthService", "final class AuthService"),
+    "// PRODUCTION_CREDENTIAL": ("app/java/com/gesher/server/DeviceCredential.java",
+                                 "final class DeviceCredential", "final class DeviceCredential"),
+    "// PRODUCTION_WATCH": ("app/java/com/gesher/server/OwnerWatch.java",
+                            "final class OwnerWatch", "final class OwnerWatch"),
+    "// PRODUCTION_CONFIRM": ("app/java/com/gesher/server/ConfirmCredential.java",
+                              "final class ConfirmCredential", "final class ConfirmCredential"),
+    # The Binder-facing dispatch: every IAuthService call an app makes goes through it.
+    "// PRODUCTION_STANDIN": ("app/java/com/gesher/server/StandIn.java",
+                              "public final class StandIn", "final class StandIn"),
+}
+
+
+def read(relative: str, ref: str | None) -> str:
+    if ref:
+        return subprocess.check_output(["git", "show", ref + ":" + relative], cwd=ROOT, text=True)
+    return (ROOT / relative).read_text()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-ref")
+    parser.add_argument("--java-home", default=os.environ.get("JAVA_HOME"))
+    args = parser.parse_args()
+    harness = (ROOT / "tests/biometrics/AuthServiceContracts.java.in").read_text()
+    for marker, (relative, public, private) in SOURCES.items():
+        source = read(relative, args.source_ref)
+        print(Path(relative).name, "SHA256", hashlib.sha256(source.encode()).hexdigest(), flush=True)
+        # The harness declares java.util.* once; Android types are its stand-ins.
+        source = re.sub(r"^package .*;\n|^import .*;\n", "", source, flags=re.MULTILINE)
+        if marker == "// PRODUCTION_STANDIN":
+            source = source.replace("android.os.Parcel", "Parcel")
+            source = source.replace("android.os.RemoteException", "RemoteException")
+        if public not in source:
+            raise SystemExit(f"{relative}: expected '{public}'")
+        harness = harness.replace(marker, source.replace(public, private, 1))
+    executable = lambda name: str(Path(args.java_home) / "bin" / name) if args.java_home else name
+    with tempfile.TemporaryDirectory(prefix="gesher-auth-") as temporary:
+        work = Path(temporary)
+        java = work / "AuthServiceContracts.java"
+        java.write_text(harness)
+        subprocess.run([executable("javac"), "-Xlint:all", "-Werror", "-d", str(work), str(java)],
+                       check=True, timeout=60)
+        subprocess.run([executable("java"), "-cp", str(work), "AuthServiceContracts"],
+                       check=True, timeout=30)
+
+
+if __name__ == "__main__":
+    main()
