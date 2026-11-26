@@ -22,6 +22,8 @@ target_sources(framework_runtime PRIVATE
   ${CMAKE_SOURCE_DIR}/compat/devices/speech_recognition_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/speech_jni.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/speech_win.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/webauthn_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/webauthn_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/winrt.cc)
 target_include_directories(framework_runtime PRIVATE ${CMAKE_SOURCE_DIR}/compat/devices
   ${CMAKE_SOURCE_DIR}/compat/bionic/include)  # gesher/rgba_buffers.h
