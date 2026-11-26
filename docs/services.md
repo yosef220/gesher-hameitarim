@@ -104,6 +104,13 @@ controls from #332 cover a separate set of Android permissions.
 `DownloadProvider` serves `content://downloads`, the provider behind
 `android.app.DownloadManager`, from the system server; see [downloads.md](downloads.md).
 
+## MediaStore
+
+`MediaStoreProvider` serves `content://media` (MediaStore's Images, Video, Audio,
+Downloads and Files collections over the shared volume) from the system server, with
+Android's scoped-storage ownership, pending items and scanner; see
+[media-provider.md](media-provider.md).
+
 ## Storage Access Framework documents
 
 `DocumentsStorageProvider` publishes `com.gesher.documents` through the platform's
