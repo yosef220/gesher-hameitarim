@@ -1,6 +1,7 @@
 # גשר המיתרים: בדיקות העיצוב שלנו. ה-workflow הזה לא קיים ב-upstream.
 #   - הקבצים שמופקים מ-ui/tokens.json מעודכנים, והניגודיות עומדת בסף בשני המצבים
 #   - מסך הפתיחה האמיתי (GDI+) מצויר על Windows בכל המצבים, לצילומים לביקורת
+#   - דף הרישיון באשף ההתקנה מצולם בעברית ובאנגלית
 # הצילומים עולים כ-artifact בשם splash-screens.
 name: hameitarim-design
 
@@ -95,4 +96,35 @@ jobs:
         with:
           name: splash-screens
           path: screens/
+          retention-days: 30
+
+  license-page:
+    name: דף הרישיון באשף ההתקנה
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tools/package
+            tools/ui
+      - name: קובצי דף הרישיון מעודכנים מול LICENSE
+        shell: pwsh
+        run: python tools/package/license_rtf.py --check
+      - name: צילום הדף בעברית ובאנגלית
+        shell: powershell
+        run: tools/ui/license-page-preview.ps1 -OutDir license-screens
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem license-screens -Filter *.png | Sort-Object Name) {
+            "LICENSE-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'LICENSE-PNG-END'
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: license-page-screens
+          path: license-screens/
           retention-days: 30

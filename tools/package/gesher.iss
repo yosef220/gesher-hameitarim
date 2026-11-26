@@ -65,8 +65,10 @@ UsePreviousLanguage=no
 [Languages]
 ; InfoBeforeFile: the security notice (docs/sandbox.md), shown before installing:
 ; Android apps run with the user's Windows permissions, not in a sandbox.
-Name: "en"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "security-notice.txt"
-Name: "he"; MessagesFile: "compiler:Languages\Hebrew.isl"; InfoBeforeFile: "security-notice.he.txt"
+; גשר המיתרים: מסך "אני מסכים" לרישיון (PolyForm Strict 1.0.0) לפני ההתקנה. הקבצים נבנים מ-LICENSE
+; ב-license_rtf.py. התקנה שקטה (/SILENT, ‏/VERYSILENT, כמו בעדכון האוטומטי) לא מציגה אותו.
+Name: "en"; MessagesFile: "compiler:Default.isl"; LicenseFile: "license.en.rtf"; InfoBeforeFile: "security-notice.txt"
+Name: "he"; MessagesFile: "compiler:Languages\Hebrew.isl"; LicenseFile: "license.he.rtf"; InfoBeforeFile: "security-notice.he.txt"
 
 #include "ui-messages.iss"
 
