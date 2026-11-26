@@ -670,7 +670,11 @@ final class BroadcastController {
     /** Hands an implicit, package-less broadcast to the system receivers of its action. */
     private void deliverToSystemReceivers(Intent intent) {
         if (intent.getComponent() != null || intent.getPackage() != null) return;
-        List<java.util.function.Consumer<Intent>> receivers = mSystemReceivers.get(intent.getAction());
+        // גשר המיתרים: שידור בלי פעולה לא מתאים לאף מקבל של המערכת, שרשומים לפי פעולה.
+        // ‏ConcurrentHashMap לא מקבל מפתח null, ולכן בלי הבדיקה הזאת השידור נכשל ב-NullPointerException.
+        String action = intent.getAction();
+        if (action == null) return;
+        List<java.util.function.Consumer<Intent>> receivers = mSystemReceivers.get(action);
         if (receivers == null) return;
         for (java.util.function.Consumer<Intent> receiver : receivers) {
             try {
