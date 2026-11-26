@@ -52,6 +52,7 @@
 #include "../locale/ui_locale.h"
 #include "../windows/host_dialog_theme.h"
 #include "launch_failure_text.h"
+#include "splash_paint.h"
 
 #include <algorithm>
 #include <cstring>
@@ -98,6 +99,9 @@ constexpr wchar_t kErrorFileEnv[] = L"GESHER_LAUNCH_ERROR_FILE";
 // An app window's size when GESHER_DISPLAY gives none (WindowMode.DEFAULT_DISPLAY).
 constexpr int kDefaultWidth = 400, kDefaultHeight = 800;
 constexpr int kIconSize = 128;
+// מסך הפתיחה של גשר המיתרים: טיימר הפריימים של התנועה, כ-60 בשנייה
+constexpr UINT_PTR kSplashFrameTimer = 1;
+constexpr UINT kSplashFrameMs = 16;
 
 // IID_IPropertyStore and PKEY_AppUserModel_ID (propkey.h), spelled out: not
 // every GUID is in llvm-mingw's libuuid.
@@ -112,6 +116,12 @@ struct Splash {
   std::wstring icon;  // an .ico file
   HICON picture = nullptr, big = nullptr, small = nullptr;
   HFONT title_font = nullptr, text_font = nullptr;
+  // מסך הפתיחה של גשר המיתרים (splash_paint.h). בלי GDI+ נשאר הציור הקודם.
+  std::wstring fonts_dir;  // ui-fonts שליד הקבצים המותקנים
+  gesher_splash::Art art;
+  gesher_splash::Look look;
+  bool art_ready = false;
+  ULONGLONG shown_at = 0;
 };
 
 Splash* g_splash = nullptr;
@@ -572,8 +582,33 @@ void TerminateProcessTree(DWORD pid) {
 
 bool g_cancelled = false;
 
+// מסך הפתיחה של גשר המיתרים: מצויר לתוך bitmap בזיכרון ומועתק בבת אחת, בלי הבהוב.
+void PaintSplashArt(HWND hwnd, const Splash* splash) {
+  PAINTSTRUCT ps;
+  HDC dc = BeginPaint(hwnd, &ps);
+  RECT client;
+  GetClientRect(hwnd, &client);
+  const int w = std::max<int>(1, client.right), h = std::max<int>(1, client.bottom);
+  HDC memory = CreateCompatibleDC(dc);
+  HBITMAP bitmap = CreateCompatibleBitmap(dc, w, h);
+  HGDIOBJ previous = SelectObject(memory, bitmap);
+  const auto language = GesherUiCurrentLanguage();
+  splash->art.Paint(memory, client, splash->look, splash->picture, kIconSize, splash->label.c_str(),
+                    GesherUiText(language, "starting"), GesherUiRtl(language) ? true : false,
+                    GetTickCount64() - splash->shown_at);
+  BitBlt(dc, 0, 0, w, h, memory, 0, 0, SRCCOPY);
+  SelectObject(memory, previous);
+  DeleteObject(bitmap);
+  DeleteDC(memory);
+  EndPaint(hwnd, &ps);
+}
+
 // GDI presentation only; launch/cancellation policy stays in SplashProc and its caller.
 void PaintSplash(HWND hwnd, const Splash* splash) {
+  if (splash->art_ready) {
+    PaintSplashArt(hwnd, splash);
+    return;
+  }
   PAINTSTRUCT ps;
   HDC dc = BeginPaint(hwnd, &ps);
   RECT client;
@@ -608,6 +643,21 @@ LRESULT CALLBACK SplashProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
   if (msg == WM_PAINT && g_splash != nullptr) {
     PaintSplash(hwnd, g_splash);
     return 0;
+  }
+  // מסך הפתיחה של גשר המיתרים: הציור מכסה את כל החלון, והתנועה מתקדמת בכל פריים
+  if (g_splash != nullptr && g_splash->art_ready) {
+    if (msg == WM_ERASEBKGND) return 1;
+    if (msg == WM_TIMER && wparam == kSplashFrameTimer) {
+      InvalidateRect(hwnd, nullptr, FALSE);
+      return 0;
+    }
+    if (msg == WM_SETTINGCHANGE || msg == WM_SYSCOLORCHANGE || msg == WM_THEMECHANGED) {
+      g_splash->look = gesher_splash::CurrentLook();
+      gesher_splash::ApplyCaption(hwnd, g_splash->look);
+      if (g_splash->look.reduced_motion) KillTimer(hwnd, kSplashFrameTimer);
+      else SetTimer(hwnd, kSplashFrameTimer, kSplashFrameMs, nullptr);
+      InvalidateRect(hwnd, nullptr, FALSE);
+    }
   }
   if (msg == WM_CLOSE) {
     g_cancelled = true;
@@ -663,13 +713,22 @@ HWND ShowSplash(Splash* splash) {
   splash->text_font = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                                   OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                   DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+  // מסך הפתיחה של גשר המיתרים, עם הגופנים שלו. בלי GDI+ נשאר הציור הקודם.
+  splash->look = gesher_splash::CurrentLook();
+  splash->art_ready = splash->art.Start(splash->fonts_dir.c_str());
   g_splash = splash;
 
   const DWORD ex_style = GesherUiRtl(GesherUiCurrentLanguage()) ? WS_EX_RTLREADING : 0;
   HWND hwnd = CreateWindowExW(ex_style, kSplashClass, splash->label.c_str(), style, x, y, ww, wh, nullptr,
                               nullptr, instance, nullptr);
   if (hwnd == nullptr) return nullptr;
-  GesherHostApplyCaption(hwnd);
+  if (splash->art_ready) {
+    gesher_splash::ApplyCaption(hwnd, splash->look);
+    splash->shown_at = GetTickCount64();
+    if (!splash->look.reduced_motion) SetTimer(hwnd, kSplashFrameTimer, kSplashFrameMs, nullptr);
+  } else {
+    GesherHostApplyCaption(hwnd);
+  }
   // Before it is shown: its taskbar button is the app's (the shortcut's icon).
   if (!splash->app_id.empty()) SetWindowAppUserModelId(hwnd, splash->app_id);
   if (splash->big != nullptr) SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(splash->big));
@@ -718,6 +777,7 @@ bool SplashWhileStarting(const std::wstring& here, HANDLE process, DWORD pid, bo
   *started = false;
   Splash splash;
   if (!SplashFor(here, &splash)) return false;
+  splash.fonts_dir = here + L"\\ui-fonts";
   HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
   std::vector<HWND> before;
   if (splash.app_id.empty()) EnumWindows(CollectVisible, reinterpret_cast<LPARAM>(&before));
@@ -824,22 +884,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   if (n == 0 || n >= sizeof(self) / sizeof(self[0])) return 1;
   const std::wstring here = Directory(self);
 
-  std::wstring script = here + L"\\gesher-app.ps1";
-  if (!IsFile(script)) {
-    std::wstring app_script = here + L"\\App\\gesher-app.ps1";
-    if (IsFile(app_script)) {
-      script = app_script;
-    }
-  }
-
   wchar_t system[MAX_PATH];
   UINT s = GetSystemDirectoryW(system, MAX_PATH);
   std::wstring powershell = (s > 0 && s < MAX_PATH ? std::wstring(system) : L"C:\\Windows\\System32") +
                             L"\\WindowsPowerShell\\v1.0\\powershell.exe";
-  std::wstring command_args = default_to_control_panel ? L"control-panel" : Arguments(GetCommandLineW());
-  std::wstring command = L"\"" + powershell +
-                         L"\" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" +
-                         script + L"\" " + command_args;
 
   AllowSetForegroundWindow(ASFW_ANY);
 
@@ -885,6 +933,33 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       }
       LocalFree(argv);
     }
+  }
+
+  auto find_script = [&](const wchar_t* name) -> std::wstring {
+    std::wstring candidate = here + L"\\" + name;
+    if (IsFile(candidate)) return candidate;
+    std::wstring app_candidate = here + L"\\App\\" + name;
+    if (IsFile(app_candidate)) return app_candidate;
+    return L"";
+  };
+
+  std::wstring script = find_script(L"gesher-app.ps1");
+  if (script.empty()) script = here + L"\\gesher-app.ps1";
+  bool direct_control_panel = false;
+  if (control_panel) {
+    std::wstring cp_script = find_script(L"gesher-control-panel.ps1");
+    if (!cp_script.empty()) {
+      script = cp_script;
+      direct_control_panel = true;
+    }
+  }
+
+  std::wstring command = L"\"" + powershell +
+                         L"\" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" +
+                         script + L"\"";
+  if (!direct_control_panel) {
+    std::wstring command_args = default_to_control_panel ? L"control-panel" : Arguments(GetCommandLineW());
+    command += L" " + command_args;
   }
   // Nobody reads the output: a failure is shown in a message box (ShowLaunchFailure).
   std::wstring error_file;
