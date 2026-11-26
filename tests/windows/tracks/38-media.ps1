@@ -12,6 +12,9 @@
 $mediaTmp = Join-Path $env:RUNNER_TEMP 'gesher-media'
 New-Item -ItemType Directory -Force $mediaTmp | Out-Null
 
+Check 'media: real MP3, Vorbis and Opus reuse scratch while retaining independent PCM, seek, trim and errors' {
+  & "$Dir/media_audio_decoder_scratch_test.exe" gate "$Dir/media-audio-scratch-fixtures"
+} @('Real audio decoder scratch, retained PCM, seek, trim and error contracts passed:')
 $captureUnityTmp = Join-Path $mediaTmp 'capture-unity'
 New-Item -ItemType Directory -Force $captureUnityTmp | Out-Null
 Check 'media: actual capture preserves exact float edges, input history, PCM, lifecycle and complete paced WAV output' {
