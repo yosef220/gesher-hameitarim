@@ -32,8 +32,10 @@
 #include <string_view>
 
 #include "binder_internal.h"
+#include "fifo_internal.h"
 #include "internal.h"
 #include "record_lock_descriptors.h"
+#include "system_linker.h"
 #include "revocable_internal.h"
 
 namespace gesher {
@@ -183,6 +185,13 @@ int OpenFile(const std::wstring& path, int flags, mode_t mode) {
   if ((flags & O_DIRECT) != 0 && (flags & O_PATH) == 0) return errno = EINVAL, -1;
   if ((flags & O_NOATIME) != 0 && (flags & O_PATH) == 0) return errno = EOPNOTSUPP, -1;
   if ((flags & O_PATH) == 0) flags |= O_LARGEFILE;
+  // Classify an existing POSIX FIFO before CreateFileW can apply CREATE_ALWAYS
+  // or TRUNCATE_EXISTING (which would erase the reparse point or fail).
+  {
+    bool handled = false;
+    int fifo_fd = OpenFifo(path, flags, &handled);
+    if (handled) return fifo_fd;
+  }
   DWORD disposition;
   if ((flags & O_PATH) != 0) {
     disposition = OPEN_EXISTING;
@@ -214,6 +223,14 @@ int OpenFile(const std::wstring& path, int flags, mode_t mode) {
   }
   if (h == INVALID_HANDLE_VALUE) {
     DWORD error = GetLastError();
+    // Gesher's ELF loader reached by another name (a symbolic link): a
+    // process using it holds it against writers, and a mapped file cannot be
+    // truncated. Read-only, as through its own name.
+    if ((access & GENERIC_WRITE) != 0 &&
+        (error == ERROR_SHARING_VIOLATION || error == ERROR_USER_MAPPED_FILE) &&
+        system_linker::IsFilePath(path)) {
+      return errno = EROFS, -1;
+    }
     DWORD existing = GetFileAttributesW(path.c_str());
     if (error == ERROR_ACCESS_DENIED && existing != INVALID_FILE_ATTRIBUTES &&
         (existing & FILE_ATTRIBUTE_DIRECTORY) != 0) {
@@ -227,8 +244,12 @@ int OpenFile(const std::wstring& path, int flags, mode_t mode) {
     return errno = ELOOP, -1;
   }
   BY_HANDLE_FILE_INFORMATION info;
-  bool directory = GetFileInformationByHandle(h, &info) &&
-                   (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+  const bool have_info = GetFileInformationByHandle(h, &info) != 0;
+  bool directory = have_info && (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+  if (have_info && (access & GENERIC_WRITE) != 0 && !directory && system_linker::IsFileInfo(info)) {
+    CloseHandle(h);
+    return errno = EROFS, -1;
+  }
   if ((flags & O_DIRECTORY) != 0 && !directory) {
     CloseHandle(h);
     return errno = ENOTDIR, -1;
@@ -260,10 +281,16 @@ int OpenDevice(PathKind kind, int flags) {
 int OpenPath(const char* path, int flags, mode_t mode) {
   if (path == nullptr) return errno = EFAULT, -1;
   if (*path == '\0') return errno = ENOENT, -1;
+  // /system is read-only on Android (system_linker.h).
+  if (((flags & O_ACCMODE) != O_RDONLY || (flags & O_TRUNC) != 0) &&
+      system_linker::RefuseChange(path) != 0) {
+    return -1;
+  }
   std::wstring windows;
   PathKind kind = MapPath(path, &windows);
   switch (kind) {
-    case PathKind::kFile: return OpenFile(windows, flags, mode);
+    case PathKind::kFile:
+      return OpenFile(windows, flags, mode);
     case PathKind::kNull:
     case PathKind::kZero:
     case PathKind::kRandom: return OpenDevice(kind, flags);
@@ -384,6 +411,13 @@ PathKind MapPath(const char* path, std::wstring* windows) {
     }
     PathKind kind = VirtualKind(path, windows);
     if (kind != PathKind::kFile) return kind;
+    // Gesher's ELF loader as Android's dynamic linker (system_linker.h).
+    if (system_linker::IsName(path)) {
+      *windows = system_linker::File();
+      if (windows->empty()) return PathKind::kMissing;
+      Lengthen(windows);
+      return PathKind::kFile;
+    }
     int font = SystemFontPath(path, windows);
     if (font != 0) return font > 0 ? PathKind::kFile : PathKind::kMissing;
     if (DrivePath(path, windows)) {
@@ -687,14 +721,11 @@ int utimensat(int dirfd, const char* path, const struct timespec times[2], int f
   std::string resolved;
   if (!gesher::ResolveAt(dirfd, path, &resolved)) return -1;
   if (resolved.empty()) return errno = ENOENT, -1;
+  if (gesher::system_linker::RefuseChange(resolved.c_str()) != 0) return -1;
   std::wstring windows;
   switch (gesher::MapPath(resolved.c_str(), &windows)) {
     case PathKind::kFile: {
-      HANDLE h = CreateFileW(windows.c_str(), 0,
-                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS |
-                                 ((flags & AT_SYMLINK_NOFOLLOW) != 0 ? FILE_FLAG_OPEN_REPARSE_POINT : 0),
-                             nullptr);
+      HANDLE h = gesher::OpenPathMaybeFifo(windows, 0, (flags & AT_SYMLINK_NOFOLLOW) == 0);
       if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
       const int result = SetHandleTimes(h, times);
       CloseTimeHandle(h);
@@ -715,6 +746,7 @@ int futimens(int fd, const struct timespec times[2]) {
   if (!snapshot) return -1;
   gesher::FileOperationLease operation(snapshot);
   if (operation.Error()) return errno = operation.Error(), -1;
+  if (gesher::system_linker::RefuseChangeHandle(snapshot->handle) != 0) return -1;
   return SetHandleTimes(snapshot->handle, times);
 }
 
@@ -750,6 +782,7 @@ int mkdir(const char* path) {
 }
 
 int unlink(const char* path) {
+  if (gesher::system_linker::RefuseChange(path) != 0) return -1;
   std::wstring windows;
   if (!gesher::DiskPath(path, &windows, EACCES)) return -1;  // EACCES: /dev and /proc names
   return gesher::PosixDelete(windows, false);
