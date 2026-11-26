@@ -204,6 +204,7 @@ public final class AccountManagerService extends IAccountManager.Default {
     // Calls to authenticators wait on their binding and answer: off the binder threads.
     /** Server-local clock seam; normal sessions always use Android's awake-time clock. */
     private java.util.function.LongSupplier mSessionUptimeMillis = SystemClock::uptimeMillis;
+    private final AccountRequests mRequests = new AccountRequests(() -> mSessionUptimeMillis.getAsLong());
     private final java.util.concurrent.ScheduledExecutorService mSessionTimeout =
             sessionTimer();
     private static java.util.concurrent.ScheduledThreadPoolExecutor sessionTimer() {
@@ -214,11 +215,18 @@ public final class AccountManagerService extends IAccountManager.Default {
         timer.setRemoveOnCancelPolicy(true);
         return timer;
     }
+    // Durable notifications and chooser-only callbacks have separate admission
+    // requirements. They are not competing with bounded authenticator requests.
     private final ExecutorService mCalls = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "accounts");
         t.setDaemon(true);
         return t;
     });
+
+    private void request(Caller caller, IAccountManagerResponse response,
+            AccountRequests.Preparation preparation) {
+        mRequests.execute(caller.key(), response, () -> callerUnchanged(caller), preparation);
+    }
     // Retirement notifications share one worker, independent of account count.
     // Only immutable event/recipient metadata enters this lane, never an Entry.
     private record AccountChange(Account account, boolean removed, List<Caller> recipients) { }
@@ -298,6 +306,7 @@ public final class AccountManagerService extends IAccountManager.Default {
                         || answer.client != null && name.equals(answer.client.name)) cancel.add(answer);
             }
         }
+        mRequests.callerRemoved(name);
         for (Answer answer : cancel) answer.cancelForRemoval();
         invalidateAccountListCache();
         invalidateAccountUserDataCache();
@@ -984,10 +993,14 @@ public final class AccountManagerService extends IAccountManager.Default {
 
     // --- passwords, tokens and user data -------------------------------------------------
 
-    private Bundle options(Caller c, Bundle supplied) {
-        Bundle out = supplied != null ? new Bundle(supplied) : new Bundle();
-        String claimed = out.getString(AccountManager.KEY_ANDROID_PACKAGE_NAME);
+    private void validateOptionsCaller(Caller c, Bundle supplied) {
+        String claimed = supplied == null ? null : supplied.getString(AccountManager.KEY_ANDROID_PACKAGE_NAME);
         if (!c.system && claimed != null && !claimed.equals(c.name)) throw new SecurityException("Forged account caller");
+    }
+
+    private Bundle options(Caller c, Bundle supplied) {
+        validateOptionsCaller(c, supplied);
+        Bundle out = supplied != null ? new Bundle(supplied) : new Bundle();
         out.putString(AccountManager.KEY_ANDROID_PACKAGE_NAME, c.name);
         out.putInt(AccountManager.KEY_CALLER_UID, c.uid);
         out.putInt(AccountManager.KEY_CALLER_PID, c.pid);
@@ -1066,7 +1079,7 @@ public final class AccountManagerService extends IAccountManager.Default {
             Bundle supplied) {
         if (response == null) return;
         Caller c = caller(null);
-        Bundle o = options(c, supplied);
+        validateOptionsCaller(c, supplied);
         if (account == null || authTokenType == null) {
             error(response, AccountManager.ERROR_CODE_BAD_ARGUMENTS, "An account and token type are required"); return;
         }
@@ -1084,59 +1097,72 @@ public final class AccountManagerService extends IAccountManager.Default {
             }
             throw new SecurityException("Account is not visible to this caller");
         }
-        mCalls.execute(() -> {
-            Authenticator a = authenticator(account.type);
-            boolean needsGrant;
-            synchronized (this) {
-                Entry e = mAccounts.get(account);
-                if (a == null || e == null || !a.service.getPackageName().equals(e.owner)
-                        || !e.ownerIdentity.equals(packageIdentity(e.owner)) || !visible(c, account, e)
-                        || !callerUnchanged(c)) {
-                    error(response, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Account authenticator unavailable"); return;
-                }
-                CachedToken custom = e.customTokens.get(c.key() + "\u0000" + authTokenType);
-                if (a.customTokens && custom != null && custom.expires > System.currentTimeMillis()) {
-                    reply(response, tokenResult(account, custom.value)); return;
-                }
-                needsGrant = !a.customTokens && !tokenAuthorized(c, e, authTokenType);
-                String cached = e.tokens.get(authTokenType);
-                if (!a.customTokens && cached != null && !needsGrant) {
-                    reply(response, tokenResult(account, cached)); return;
-                }
-            }
-            if (needsGrant && !grantTokenInteractively(response, account, authTokenType, c, a, expectActivityLaunch)) return;
-            synchronized (this) {
-                Entry e = mAccounts.get(account);
-                if (e == null || !callerUnchanged(c) || !visible(c, account, e)
-                        || !e.ownerIdentity.equals(packageIdentity(e.owner))
-                        || !a.customTokens && !tokenAuthorized(c, e, authTokenType)) {
-                    error(response, AccountManager.ERROR_CODE_CANCELED, "Account credential access revoked"); return;
-                }
-            }
-            Answer answer = call(a, (auth, r) -> auth.getAuthToken(r, account, authTokenType, o), c, response);
-            answer.deliverSession(response, b -> {
-                Bundle result = validatedResult(a, b, account, true);
-                if (result == null) return null;
-                String token = result.getString(AccountManager.KEY_AUTHTOKEN);
-                if (token != null) {
+        request(c, response, accepted -> {
+            Bundle o = options(c, supplied);
+            return () -> {
+                Authenticator a = authenticator(account.type);
+                if (!mRequests.guard("credential", () -> {
                     synchronized (this) {
-                        Entry e = mAccounts.get(account);
-                        if (e == null || !callerUnchanged(c) || !visible(c, account, e)
-                                || !e.ownerIdentity.equals(packageIdentity(e.owner))
-                                || !a.customTokens && !tokenAuthorized(c, e, authTokenType)) return null;
-                        if (a.customTokens) {
-                            long expiry = result.getLong("android.accounts.expiry", 0);
-                            if (expiry > System.currentTimeMillis()) {
-                                e.customTokens.put(c.key() + "\u0000" + authTokenType, new CachedToken(token, expiry));
-                            }
-                        } else {
-                            beginMutation(); e.tokens.put(authTokenType, token);
-                            save();
-                        }
+                        Entry current = mAccounts.get(account);
+                        return a != null && current != null && authenticatorUnchanged(a)
+                                && a.service.getPackageName().equals(current.owner)
+                                && current.ownerIdentity.equals(packageIdentity(current.owner))
+                                && visible(c, account, current)
+                                && (a.customTokens || tokenAuthorized(c, current, authTokenType));
+                    }
+                })) return;
+                boolean needsGrant;
+                synchronized (this) {
+                    Entry e = mAccounts.get(account);
+                    if (a == null || e == null || !a.service.getPackageName().equals(e.owner)
+                            || !e.ownerIdentity.equals(packageIdentity(e.owner)) || !visible(c, account, e)
+                            || !callerUnchanged(c)) {
+                        error(accepted, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Account authenticator unavailable"); return;
+                    }
+                    CachedToken custom = e.customTokens.get(c.key() + "\u0000" + authTokenType);
+                    if (a.customTokens && custom != null && custom.expires > System.currentTimeMillis()) {
+                        reply(accepted, tokenResult(account, custom.value)); return;
+                    }
+                    needsGrant = !a.customTokens && !tokenAuthorized(c, e, authTokenType);
+                    String cached = e.tokens.get(authTokenType);
+                    if (!a.customTokens && cached != null && !needsGrant) {
+                        reply(accepted, tokenResult(account, cached)); return;
                     }
                 }
-                return result;
-            });
+                if (needsGrant && !grantTokenInteractively(accepted, account, authTokenType, c, a, expectActivityLaunch)) return;
+                synchronized (this) {
+                    Entry e = mAccounts.get(account);
+                    if (e == null || !callerUnchanged(c) || !visible(c, account, e)
+                            || !e.ownerIdentity.equals(packageIdentity(e.owner))
+                            || !a.customTokens && !tokenAuthorized(c, e, authTokenType)) {
+                        error(accepted, AccountManager.ERROR_CODE_CANCELED, "Account credential access revoked"); return;
+                    }
+                }
+                Answer answer = call(a, (auth, r) -> auth.getAuthToken(r, account, authTokenType, o), c, accepted);
+                answer.deliverSession(accepted, b -> {
+                    Bundle result = validatedResult(a, b, account, true);
+                    if (result == null) return null;
+                    String token = result.getString(AccountManager.KEY_AUTHTOKEN);
+                    if (token != null) {
+                        synchronized (this) {
+                            Entry e = mAccounts.get(account);
+                            if (e == null || !callerUnchanged(c) || !visible(c, account, e)
+                                    || !e.ownerIdentity.equals(packageIdentity(e.owner))
+                                    || !a.customTokens && !tokenAuthorized(c, e, authTokenType)) return null;
+                            if (a.customTokens) {
+                                long expiry = result.getLong("android.accounts.expiry", 0);
+                                if (expiry > System.currentTimeMillis()) {
+                                    e.customTokens.put(c.key() + "\u0000" + authTokenType, new CachedToken(token, expiry));
+                                }
+                            } else {
+                                beginMutation(); e.tokens.put(authTokenType, token);
+                                save();
+                            }
+                        }
+                    }
+                    return result;
+                });
+            };
         });
     }
 
@@ -1254,30 +1280,34 @@ public final class AccountManagerService extends IAccountManager.Default {
     public void addAccount(IAccountManagerResponse response, String accountType,
             String authTokenType, String[] requiredFeatures, boolean expectActivityLaunch,
             Bundle supplied) {
-        Caller c = caller(null); Bundle o = options(c, supplied);
-        mCalls.execute(() -> {
-            Authenticator a = authenticator(accountType);
-            if (a == null) { error(response, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator unavailable"); return; }
-            Answer answer = call(a, (auth, r) -> auth.addAccount(r, accountType, authTokenType, requiredFeatures, o), c, response);
-            answer.deliverSession(response, b -> {
-                Bundle result = validatedResult(a, b, null);
-                if (result == null) return null;
-                String name = result.getString(AccountManager.KEY_ACCOUNT_NAME);
-                String type = result.getString(AccountManager.KEY_ACCOUNT_TYPE);
-                if (name != null && type != null) {
-                    if (!accountType.equals(type)) return null;
-                    synchronized (this) {
-                        Entry entry = mAccounts.get(new Account(name, type));
-                        if (!callerUnchanged(c) || !authenticatorUnchanged(a)
-                                || entry == null || !a.service.getPackageName().equals(entry.owner)
-                                || !entry.ownerIdentity.equals(packageIdentity(entry.owner))) return null;
-                        beginMutation();
-                        if (!c.system) entry.visibility.put(c.key(), AccountManager.VISIBILITY_VISIBLE);
-                        save();
+        Caller c = caller(null); validateOptionsCaller(c, supplied);
+        request(c, response, accepted -> {
+            Bundle o = options(c, supplied);
+            String[] features = requiredFeatures == null ? null : requiredFeatures.clone();
+            return () -> {
+                Authenticator a = authenticator(accountType);
+                if (a == null) { error(accepted, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator unavailable"); return; }
+                Answer answer = call(a, (auth, r) -> auth.addAccount(r, accountType, authTokenType, features, o), c, accepted);
+                answer.deliverSession(accepted, b -> {
+                    Bundle result = validatedResult(a, b, null);
+                    if (result == null) return null;
+                    String name = result.getString(AccountManager.KEY_ACCOUNT_NAME);
+                    String type = result.getString(AccountManager.KEY_ACCOUNT_TYPE);
+                    if (name != null && type != null) {
+                        if (!accountType.equals(type)) return null;
+                        synchronized (this) {
+                            Entry entry = mAccounts.get(new Account(name, type));
+                            if (!callerUnchanged(c) || !authenticatorUnchanged(a)
+                                    || entry == null || !a.service.getPackageName().equals(entry.owner)
+                                    || !entry.ownerIdentity.equals(packageIdentity(entry.owner))) return null;
+                            beginMutation();
+                            if (!c.system) entry.visibility.put(c.key(), AccountManager.VISIBILITY_VISIBLE);
+                            save();
+                        }
                     }
-                }
-                return result;
-            });
+                    return result;
+                });
+            };
         });
     }
 
@@ -1288,10 +1318,13 @@ public final class AccountManagerService extends IAccountManager.Default {
         synchronized (this) {
             if (!visible(c, account, mAccounts.get(account))) throw new SecurityException("Account is not visible");
         }
-        mCalls.execute(() -> {
-            Bundle result = new Bundle(); Boolean has = hasFeatures(account, features);
-            if (has == null) { error(response, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator did not answer"); return; }
-            result.putBoolean(AccountManager.KEY_BOOLEAN_RESULT, has); reply(response, result);
+        request(c, response, accepted -> {
+            String[] required = features == null ? null : features.clone();
+            return () -> {
+                Bundle result = new Bundle(); Boolean has = hasFeatures(account, required);
+                if (has == null) { error(accepted, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator did not answer"); return; }
+                result.putBoolean(AccountManager.KEY_BOOLEAN_RESULT, has); reply(accepted, result);
+            };
         });
     }
 
@@ -1299,10 +1332,13 @@ public final class AccountManagerService extends IAccountManager.Default {
     public void getAccountsByFeatures(IAccountManagerResponse response, String accountType,
             String[] features, String opPackageName) {
         Caller c = caller(opPackageName);
-        mCalls.execute(() -> {
-            Bundle result = new Bundle();
-            result.putParcelableArray(AccountManager.KEY_ACCOUNTS, accountsWithFeatures(accountType, features, c));
-            reply(response, result);
+        request(c, response, accepted -> {
+            String[] required = features == null ? null : features.clone();
+            return () -> {
+                Bundle result = new Bundle();
+                result.putParcelableArray(AccountManager.KEY_ACCOUNTS, accountsWithFeatures(accountType, required, c));
+                reply(accepted, result);
+            };
         });
     }
 
@@ -1310,14 +1346,17 @@ public final class AccountManagerService extends IAccountManager.Default {
     public void getAccountByTypeAndFeatures(IAccountManagerResponse response,
             String accountType, String[] features, String opPackageName) {
         Caller c = caller(opPackageName);
-        mCalls.execute(() -> {
-            Account[] accounts = accountsWithFeatures(accountType, features, c);
-            Bundle result = new Bundle();
-            if (accounts.length == 1) {
-                result.putString(AccountManager.KEY_ACCOUNT_NAME, accounts[0].name);
-                result.putString(AccountManager.KEY_ACCOUNT_TYPE, accounts[0].type);
-            }
-            reply(response, result);
+        request(c, response, accepted -> {
+            String[] required = features == null ? null : features.clone();
+            return () -> {
+                Account[] accounts = accountsWithFeatures(accountType, required, c);
+                Bundle result = new Bundle();
+                if (accounts.length == 1) {
+                    result.putString(AccountManager.KEY_ACCOUNT_NAME, accounts[0].name);
+                    result.putString(AccountManager.KEY_ACCOUNT_TYPE, accounts[0].type);
+                }
+                reply(accepted, result);
+            };
         });
     }
 
@@ -1347,32 +1386,46 @@ public final class AccountManagerService extends IAccountManager.Default {
     @Override
     public void confirmCredentialsAsUser(IAccountManagerResponse response, Account account,
             Bundle supplied, boolean expectActivityLaunch, int userId) {
-        user(userId); Caller c = caller(null); Bundle o = options(c, supplied);
-        authenticatedCall(response, account, c, (auth, r) -> auth.confirmCredentials(r, account, o));
+        user(userId); Caller c = caller(null); validateOptionsCaller(c, supplied);
+        authenticatedPrepared(response, account, c, () -> {
+            Bundle o = options(c, supplied);
+            return (auth, r) -> auth.confirmCredentials(r, account, o);
+        });
     }
 
     @Override
     public void updateCredentials(IAccountManagerResponse response, Account account,
             String tokenType, boolean expectActivityLaunch, Bundle supplied) {
-        Caller c = caller(null); Bundle o = options(c, supplied);
-        authenticatedCall(response, account, c, (auth, r) -> auth.updateCredentials(r, account, tokenType, o));
+        Caller c = caller(null); validateOptionsCaller(c, supplied);
+        authenticatedPrepared(response, account, c, () -> {
+            Bundle o = options(c, supplied);
+            return (auth, r) -> auth.updateCredentials(r, account, tokenType, o);
+        });
     }
 
     private void authenticatedCall(IAccountManagerResponse response, Account account, Caller c, Call operation) {
+        authenticatedPrepared(response, account, c, () -> operation);
+    }
+
+    private void authenticatedPrepared(IAccountManagerResponse response, Account account, Caller c,
+            java.util.function.Supplier<Call> prepare) {
         synchronized (this) {
             Entry e = mAccounts.get(account);
             if (e == null || !visible(c, account, e)) throw new SecurityException("Account is not visible");
         }
-        mCalls.execute(() -> {
-            Authenticator a = authenticator(account.type);
-            synchronized (this) {
-                Entry e = mAccounts.get(account);
-                if (a == null || e == null || !a.service.getPackageName().equals(e.owner)
-                        || !e.ownerIdentity.equals(packageIdentity(e.owner))) {
-                    error(response, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Authenticator unavailable"); return;
+        request(c, response, accepted -> {
+            Call operation = prepare.get();
+            return () -> {
+                Authenticator a = authenticator(account.type);
+                synchronized (this) {
+                    Entry e = mAccounts.get(account);
+                    if (a == null || e == null || !a.service.getPackageName().equals(e.owner)
+                            || !e.ownerIdentity.equals(packageIdentity(e.owner))) {
+                        error(accepted, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Authenticator unavailable"); return;
+                    }
                 }
-            }
-            call(a, operation, c, response).deliverSession(response, b -> validatedResult(a, b, account));
+                call(a, operation, c, accepted).deliverSession(accepted, b -> validatedResult(a, b, account));
+            };
         });
     }
 
@@ -1383,17 +1436,17 @@ public final class AccountManagerService extends IAccountManager.Default {
         if (a == null) { error(response, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator unavailable"); return; }
         if (!c.system && (!a.service.getPackageName().equals(c.name)
                 || !packageIdentity(c.name).equals(c.code))) throw new SecurityException("Authenticator owner required");
-        mCalls.execute(() -> call(a, (auth, r) -> auth.editProperties(r, accountType), c, response)
-                .deliverSession(response, b -> validatedResult(a, b, null)));
+        request(c, response, accepted -> () -> call(a, (auth, r) -> auth.editProperties(r, accountType), c, accepted)
+                .deliverSession(accepted, b -> validatedResult(a, b, null)));
     }
 
     @Override
     public void getAuthTokenLabel(IAccountManagerResponse response, String type, String tokenType) {
-        caller(null); Authenticator a = authenticator(type);
+        Caller c = caller(null); Authenticator a = authenticator(type);
         if (a == null) { error(response, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator unavailable"); return; }
-        mCalls.execute(() -> {
-            call(a, (auth, r) -> auth.getAuthTokenLabel(r, tokenType), null, response)
-                    .deliverSession(response, value -> {
+        request(c, response, accepted -> () -> {
+            call(a, (auth, r) -> auth.getAuthTokenLabel(r, tokenType), null, accepted)
+                    .deliverSession(accepted, value -> {
                         Bundle result = new Bundle();
                         result.putString(AccountManager.KEY_AUTH_TOKEN_LABEL,
                                 value.getString(AccountManager.KEY_AUTH_TOKEN_LABEL));
@@ -1418,62 +1471,70 @@ public final class AccountManagerService extends IAccountManager.Default {
     @Override
     public void startAddAccountSession(IAccountManagerResponse response, String type, String tokenType,
             String[] features, boolean expectActivity, Bundle supplied) {
-        Caller c = caller(null); Bundle o = options(c, supplied);
-        startSession(response, type, null, c,
-                (auth, r) -> auth.startAddAccountSession(r, type, tokenType, features, o));
+        Caller c = caller(null); validateOptionsCaller(c, supplied);
+        startSession(response, type, null, c, () -> {
+            Bundle o = options(c, supplied);
+            String[] required = features == null ? null : features.clone();
+            return (auth, r) -> auth.startAddAccountSession(r, type, tokenType, required, o);
+        });
     }
 
     @Override
     public void startUpdateCredentialsSession(IAccountManagerResponse response, Account account,
             String tokenType, boolean expectActivity, Bundle supplied) {
-        Caller c = caller(null); Bundle o = options(c, supplied);
+        Caller c = caller(null); validateOptionsCaller(c, supplied);
         synchronized (this) {
             Entry e = mAccounts.get(account);
             if (e == null || !visible(c, account, e)) throw new SecurityException("Account is not visible");
         }
-        startSession(response, account.type, account, c,
-                (auth, r) -> auth.startUpdateCredentialsSession(r, account, tokenType, o));
+        startSession(response, account.type, account, c, () -> {
+            Bundle o = options(c, supplied);
+            return (auth, r) -> auth.startUpdateCredentialsSession(r, account, tokenType, o);
+        });
     }
 
     private void startSession(IAccountManagerResponse response, String type, Account account,
-            Caller c, Call operation) {
-        mCalls.execute(() -> {
-            Authenticator a = authenticator(type);
-            if (a == null) { error(response, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator unavailable"); return; }
-            String code = packageIdentity(a.service.getPackageName());
-            synchronized (this) {
-                Entry e = account != null ? mAccounts.get(account) : null;
-                if (account != null && (e == null || !visible(c, account, e)
-                        || !a.service.getPackageName().equals(e.owner) || !code.equals(e.ownerIdentity))) {
-                    error(response, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Account owner changed"); return;
-                }
-            }
-            call(a, operation, c, response).deliverSession(response, b -> {
-                if (!code.equals(packageIdentity(a.service.getPackageName()))) return null;
-                Bundle internal = b.getBundle(AccountManager.KEY_ACCOUNT_SESSION_BUNDLE);
-                Bundle checked = validatedResult(a, b, account);
-                if (checked == null) return null;
-                Bundle result = new Bundle();
-                if (checked.containsKey(AccountManager.KEY_INTENT)) {
-                    result.putParcelable(AccountManager.KEY_INTENT, checked.getParcelable(AccountManager.KEY_INTENT));
-                }
-                if (checked.containsKey(AccountManager.KEY_ERROR_CODE)) {
-                    result.putInt(AccountManager.KEY_ERROR_CODE, checked.getInt(AccountManager.KEY_ERROR_CODE));
-                    result.putString(AccountManager.KEY_ERROR_MESSAGE, "Authenticator session failed");
-                }
-                if (internal != null) {
-                    String nestedType = internal.getString(AccountManager.KEY_ACCOUNT_TYPE);
-                    if (nestedType != null && !type.equals(nestedType)) return null;
-                    synchronized (this) {
-                        if (!callerUnchanged(c) || !authenticatorUnchanged(a)) return null;
-                        result.putBundle(AccountManager.KEY_ACCOUNT_SESSION_BUNDLE,
-                                mSessions.issue(c.key(), c.uid, a.service.getPackageName(), code,
-                                        type, account, internal, a.removalEpoch));
+            Caller c, java.util.function.Supplier<Call> prepare) {
+        request(c, response, accepted -> {
+            Call operation = prepare.get();
+            return () -> {
+                Authenticator a = authenticator(type);
+                if (a == null) { error(accepted, AccountManager.ERROR_CODE_REMOTE_EXCEPTION, "Authenticator unavailable"); return; }
+                String code = packageIdentity(a.service.getPackageName());
+                synchronized (this) {
+                    Entry e = account != null ? mAccounts.get(account) : null;
+                    if (account != null && (e == null || !visible(c, account, e)
+                            || !a.service.getPackageName().equals(e.owner) || !code.equals(e.ownerIdentity))) {
+                        error(accepted, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Account owner changed"); return;
                     }
-                } else if (!result.containsKey(AccountManager.KEY_INTENT)
-                        && !result.containsKey(AccountManager.KEY_ERROR_CODE)) return null;
-                return result;
-            });
+                }
+                call(a, operation, c, accepted).deliverSession(accepted, b -> {
+                    if (!code.equals(packageIdentity(a.service.getPackageName()))) return null;
+                    Bundle internal = b.getBundle(AccountManager.KEY_ACCOUNT_SESSION_BUNDLE);
+                    Bundle checked = validatedResult(a, b, account);
+                    if (checked == null) return null;
+                    Bundle result = new Bundle();
+                    if (checked.containsKey(AccountManager.KEY_INTENT)) {
+                        result.putParcelable(AccountManager.KEY_INTENT, checked.getParcelable(AccountManager.KEY_INTENT));
+                    }
+                    if (checked.containsKey(AccountManager.KEY_ERROR_CODE)) {
+                        result.putInt(AccountManager.KEY_ERROR_CODE, checked.getInt(AccountManager.KEY_ERROR_CODE));
+                        result.putString(AccountManager.KEY_ERROR_MESSAGE, "Authenticator session failed");
+                    }
+                    if (internal != null) {
+                        String nestedType = internal.getString(AccountManager.KEY_ACCOUNT_TYPE);
+                        if (nestedType != null && !type.equals(nestedType)) return null;
+                        synchronized (this) {
+                            if (!callerUnchanged(c) || !authenticatorUnchanged(a)) return null;
+                            result.putBundle(AccountManager.KEY_ACCOUNT_SESSION_BUNDLE,
+                                    mSessions.issue(c.key(), c.uid, a.service.getPackageName(), code,
+                                            type, account, internal, a.removalEpoch));
+                        }
+                    } else if (!result.containsKey(AccountManager.KEY_INTENT)
+                            && !result.containsKey(AccountManager.KEY_ERROR_CODE)) return null;
+                    return result;
+                });
+            };
         });
     }
 
@@ -1482,48 +1543,50 @@ public final class AccountManagerService extends IAccountManager.Default {
             boolean expectActivity, Bundle appInfo, int userId) {
         user(userId); Caller c = caller(null);
         // Do not merge client-controlled appInfo into the sealed authenticator payload.
-        options(c, appInfo); // Validate any claimed caller package, then use trusted fields only.
-        AccountSessions.Pending pending = mSessions.consume(session, c.key(), c.uid, p -> {
-            Authenticator a = authenticator(p.type);
-            synchronized (this) {
-                Entry e = p.account != null ? mAccounts.get(p.account) : null;
-                return callerUnchanged(c) && a != null && p.ownerEpoch == packageEpoch(p.owner)
-                        && a.service.getPackageName().equals(p.owner)
-                        && p.ownerCode.equals(packageIdentity(p.owner))
-                        && (p.account == null || e != null && visible(c, p.account, e)
-                                && p.owner.equals(e.owner) && p.ownerCode.equals(e.ownerIdentity));
-            }
-        });
-        Bundle internal = pending.data();
-        internal.putString(AccountManager.KEY_ANDROID_PACKAGE_NAME, c.name);
-        internal.putInt(AccountManager.KEY_CALLER_UID, c.uid);
-        internal.putInt(AccountManager.KEY_CALLER_PID, c.pid);
-        mCalls.execute(() -> {
-            Authenticator a = authenticator(pending.type);
-            if (!callerUnchanged(c) || pending.ownerEpoch != packageEpoch(pending.owner)
-                    || a == null || !pending.owner.equals(a.service.getPackageName())
-                    || !pending.ownerCode.equals(packageIdentity(pending.owner))) {
-                error(response, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Account session owner changed"); return;
-            }
-            call(a, (auth, r) -> auth.finishSession(r, pending.type, internal), c, response).deliverSession(response, b -> {
-                Bundle result = validatedResult(a, b, pending.account);
-                if (result == null || !pending.ownerCode.equals(packageIdentity(pending.owner))) return null;
-                String name = result.getString(AccountManager.KEY_ACCOUNT_NAME);
-                String type = result.getString(AccountManager.KEY_ACCOUNT_TYPE);
-                if (name != null && type != null) {
-                    if (!pending.type.equals(type)) return null;
-                    synchronized (this) {
-                        Entry e = mAccounts.get(new Account(name, type));
-                        if (!callerUnchanged(c) || pending.ownerEpoch != packageEpoch(pending.owner)
-                                || e == null || !pending.owner.equals(e.owner)
-                                || !pending.ownerCode.equals(e.ownerIdentity)) return null;
-                        beginMutation();
-                        if (!c.system) e.visibility.put(c.key(), AccountManager.VISIBILITY_VISIBLE);
-                        save();
-                    }
+        validateOptionsCaller(c, appInfo);
+        request(c, response, accepted -> {
+            AccountSessions.Pending pending = mSessions.consume(session, c.key(), c.uid, p -> {
+                Authenticator a = authenticator(p.type);
+                synchronized (this) {
+                    Entry e = p.account != null ? mAccounts.get(p.account) : null;
+                    return callerUnchanged(c) && a != null && p.ownerEpoch == packageEpoch(p.owner)
+                            && a.service.getPackageName().equals(p.owner)
+                            && p.ownerCode.equals(packageIdentity(p.owner))
+                            && (p.account == null || e != null && visible(c, p.account, e)
+                                    && p.owner.equals(e.owner) && p.ownerCode.equals(e.ownerIdentity));
                 }
-                return result;
             });
+            Bundle internal = pending.data();
+            internal.putString(AccountManager.KEY_ANDROID_PACKAGE_NAME, c.name);
+            internal.putInt(AccountManager.KEY_CALLER_UID, c.uid);
+            internal.putInt(AccountManager.KEY_CALLER_PID, c.pid);
+            return () -> {
+                Authenticator a = authenticator(pending.type);
+                if (!callerUnchanged(c) || pending.ownerEpoch != packageEpoch(pending.owner)
+                        || a == null || !pending.owner.equals(a.service.getPackageName())
+                        || !pending.ownerCode.equals(packageIdentity(pending.owner))) {
+                    error(accepted, AccountManager.ERROR_CODE_BAD_AUTHENTICATION, "Account session owner changed"); return;
+                }
+                call(a, (auth, r) -> auth.finishSession(r, pending.type, internal), c, accepted).deliverSession(accepted, b -> {
+                    Bundle result = validatedResult(a, b, pending.account);
+                    if (result == null || !pending.ownerCode.equals(packageIdentity(pending.owner))) return null;
+                    String name = result.getString(AccountManager.KEY_ACCOUNT_NAME);
+                    String type = result.getString(AccountManager.KEY_ACCOUNT_TYPE);
+                    if (name != null && type != null) {
+                        if (!pending.type.equals(type)) return null;
+                        synchronized (this) {
+                            Entry e = mAccounts.get(new Account(name, type));
+                            if (!callerUnchanged(c) || pending.ownerEpoch != packageEpoch(pending.owner)
+                                    || e == null || !pending.owner.equals(e.owner)
+                                    || !pending.ownerCode.equals(e.ownerIdentity)) return null;
+                            beginMutation();
+                            if (!c.system) e.visibility.put(c.key(), AccountManager.VISIBILITY_VISIBLE);
+                            save();
+                        }
+                    }
+                    return result;
+                });
+            };
         });
     }
 
@@ -1548,6 +1611,11 @@ public final class AccountManagerService extends IAccountManager.Default {
         Bundle result = new Bundle(input);
         Intent intent = result.getParcelable(AccountManager.KEY_INTENT);
         if (intent != null) {
+            // Admission may queue a validated result before outbound IPC. Own the
+            // security-relevant Intent fields before checking them; an in-process
+            // authenticator must not mutate that queued decision through its input.
+            intent = new Intent(intent);
+            result.putParcelable(AccountManager.KEY_INTENT, intent);
             ComponentName component = intent.getComponent();
             if (component == null || !a.service.getPackageName().equals(component.getPackageName())
                     || intent.getSelector() != null || intent.getClipData() != null
@@ -1686,6 +1754,8 @@ public final class AccountManagerService extends IAccountManager.Default {
         private boolean timeoutPending;
         private IBinder responseBinder;
         private java.util.concurrent.ScheduledFuture<?> timeout;
+        private AccountRequests.Session requestSession;
+        private final boolean admitted;
 
         /** Called with this Answer's monitor held on every terminal session path. */
         private void completeLocked() {
@@ -1701,23 +1771,52 @@ public final class AccountManagerService extends IAccountManager.Default {
             result = null;
             pending.clear();
             done.countDown();
+            if (requestSession != null) {
+                requestSession.close();
+                requestSession = null;
+            }
         }
 
         Answer(Authenticator owner) { this(owner, null, null); }
         Answer(Authenticator owner, Caller client) { this(owner, client, null); }
         Answer(Authenticator owner, Caller client, IAccountManagerResponse response) {
             this.owner = owner; this.client = client;
-            deadline = mSessionUptimeMillis.getAsLong() + AUTHENTICATOR_TIMEOUT_MILLIS;
+            mRequests.guard("authenticator:" + owner.service.getPackageName(),
+                    () -> authenticatorUnchanged(owner));
+            AccountRequests.Session admission = mRequests.session(this::cancelFromAdmission);
+            admitted = admission != null;
+            deadline = admitted ? admission.deadline()
+                    : mSessionUptimeMillis.getAsLong() + AUTHENTICATOR_TIMEOUT_MILLIS;
+            synchronized (this) {
+                requestSession = admission;
+                // The deadline can close this Answer while session() is returning.
+                // Publish/retire the lease under the same state monitor as that hook.
+                if (complete && requestSession != null) {
+                    requestSession.close();
+                    requestSession = null;
+                }
+            }
             synchronized (AccountManagerService.this) { mAnswers.add(this); }
             synchronized (deliveryLock) {
                 synchronized (this) {
                     if (!complete) {
-                        scheduleTimeoutLocked();
+                        if (!admitted) scheduleTimeoutLocked();
                         watchResponseLocked(response);
                         if (!complete && response != null) errorListener = (c, m) -> error(response, c, m);
                     }
                 }
             }
+        }
+
+        /** The admission publishes its own sole terminal error outside this state. */
+        private synchronized void cancelFromAdmission() {
+            deliveryStarted = true;
+            completeLocked();
+        }
+
+        private synchronized AccountRequests.Lease enterCall() {
+            if (complete) return null;
+            return requestSession == null ? () -> { } : requestSession.enter();
         }
 
         private void watchResponseLocked(IAccountManagerResponse response) {
@@ -1785,13 +1884,23 @@ public final class AccountManagerService extends IAccountManager.Default {
                     deliver = finishErrorLocked(errorCode, errorMessage);
                 }
                 if (deliver != null) {
-                    if (asynchronous) mCalls.execute(() -> deliver.accept(errorCode, errorMessage));
+                    if (asynchronous && !admitted) mCalls.execute(() -> deliver.accept(errorCode, errorMessage));
                     else deliver.accept(errorCode, errorMessage);
                 }
             }
         }
 
         void cancelForRemoval() {
+            if (admitted) {
+                AccountRequests.Session session;
+                synchronized (this) {
+                    if (complete) return;
+                    session = requestSession;
+                }
+                if (session != null) session.fail(AccountManager.ERROR_CODE_CANCELED,
+                        "Account package access removed");
+                return;
+            }
             finishError(AccountManager.ERROR_CODE_CANCELED, "Account package access removed", true);
         }
 
@@ -1811,31 +1920,68 @@ public final class AccountManagerService extends IAccountManager.Default {
         @Override
         public void onResult(Bundle b) {
             authenticateCallback();
-            if (!current()) { cancelForRemoval(); return; }
-            Bundle value = b != null ? new Bundle(b) : new Bundle();
-            java.util.function.Consumer<Bundle> deliver;
-            synchronized (this) {
-                if (complete) return;
-                deliver = listener;
-                if (deliver == null) {
-                    if (result == null) result = value;
-                    else pending.add(value);
-                    done.countDown(); return;
+            // Serialize before making a retained copy. Concurrent foreign callers
+            // wait at their own call boundary instead of filling an internal queue
+            // with Bundles. The executing callback retains admission independently
+            // of the interactive session, including while validation is stalled.
+            synchronized (deliveryLock) {
+                AccountRequests.Lease ownership = enterCall();
+                if (ownership == null) return;
+                try (AccountRequests.Lease ignored = ownership) {
+                    if (!current()) { cancelForRemoval(); return; }
+                    java.util.function.Consumer<Bundle> deliver;
+                    boolean full;
+                    synchronized (this) {
+                        if (complete) return;
+                        deliver = listener;
+                        full = admitted && deliver == null
+                                && pending.size() + (result == null ? 0 : 1) >= AccountRequests.MAX_RESULTS;
+                    }
+                    if (full) {
+                        finishError(AccountManager.ERROR_CODE_REMOTE_EXCEPTION,
+                                "Account response queue full", true);
+                        return;
+                    }
+                    // Bundle operations must not hold the state monitor used by
+                    // the deadline/death path. A delayed copy stays owned until it
+                    // returns even if that path closes the session in the meantime.
+                    Bundle value = b != null ? new Bundle(b) : new Bundle();
+                    synchronized (this) {
+                        if (complete) return;
+                        if (deliver == null) {
+                            if (result == null) result = value;
+                            else pending.add(value);
+                            done.countDown(); return;
+                        }
+                    }
+                    deliver.accept(value);
                 }
             }
-            deliver.accept(value);
         }
 
         @Override
         public void onRequestContinued() {
-            authenticateCallback(); if (!current()) cancelForRemoval();
+            authenticateCallback();
+            synchronized (deliveryLock) {
+                AccountRequests.Lease ownership = enterCall();
+                if (ownership == null) return;
+                try (AccountRequests.Lease ignored = ownership) {
+                    if (!current()) cancelForRemoval();
+                }
+            }
         }
 
         @Override
         public void onError(int errorCode, String errorMessage) {
             authenticateCallback();
-            if (!current()) { cancelForRemoval(); return; }
-            finishError(errorCode, errorMessage, false);
+            synchronized (deliveryLock) {
+                AccountRequests.Lease ownership = enterCall();
+                if (ownership == null) return;
+                try (AccountRequests.Lease ignored = ownership) {
+                    if (!current()) { cancelForRemoval(); return; }
+                    finishError(errorCode, errorMessage, false);
+                }
+            }
         }
 
         void fail(String why) {
@@ -1946,7 +2092,7 @@ public final class AccountManagerService extends IAccountManager.Default {
         }
     }
 
-    /** Binds {@code a}'s service, makes the call and waits for its answer (on mCalls). */
+    /** Binds {@code a}'s service, makes the call and waits on its admitted worker. */
     private Answer call(Authenticator a, Call call) {
         return call(a, call, null, null);
     }
@@ -1963,9 +2109,11 @@ public final class AccountManagerService extends IAccountManager.Default {
                 if (answer.isComplete()) return;
                 if (binder == null || dead) { answer.fail("Authenticator disconnected"); return; }
                 if (!answer.current()) { answer.cancelForRemoval(); return; }
-                try {
+                AccountRequests.Lease ownership = answer.enterCall();
+                if (ownership == null) return;
+                try (AccountRequests.Lease ignored = ownership) {
                     call.run(IAccountAuthenticator.Stub.asInterface(binder), answer);
-                } catch (RemoteException | RuntimeException e) {
+                } catch (Exception e) {
                     answer.fail("Authenticator IPC failed");
                 }
             }
