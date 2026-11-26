@@ -840,8 +840,7 @@ ssize_t process_vm_readv(pid_t, const struct iovec*, unsigned long, const struct
 
 // --- extra stat calls (lstat, fstatat, mkdirat: path.cc) ----------------------
 
-// fchown is in unistd.cc, with chown.
-int mkfifo(const char*, mode_t) { return errno = ENOSYS, -1; }
+// fchown is in unistd.cc, with chown; mkfifo is in fifo.cc.
 
 int mknod(const char* path, mode_t mode, dev_t) {
   switch (mode & S_IFMT) {
