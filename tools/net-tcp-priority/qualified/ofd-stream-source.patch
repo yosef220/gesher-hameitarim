@@ -737,7 +737,7 @@ index 0af9c16d..a3bc4dfd 100644
 +  if (FileWriteVector(fd, iov, iovcnt, false, 0, &transferred)) return transferred;
 @@ -702,0 +826 @@ ssize_t pwritev(int fd, const struct iovec* iov, int iovcnt, off_t offset) {
 +  if (FileWriteVector(fd, iov, iovcnt, true, offset, &total)) return total;
-@@ -797,3 +921,5 @@ int memfd_create(const char* name, unsigned int flags) {
+@@ -797,3 +920,5 @@ int memfd_create(const char* name, unsigned int flags) {
 -  if (fd < 0) {
 -    CloseHandle(h);
 -    return fd;
@@ -746,7 +746,7 @@ index 0af9c16d..a3bc4dfd 100644
 +    int saved = errno;
 +    _close(fd);
 +    return errno = saved, -1;
-@@ -801 +927 @@ int memfd_create(const char* name, unsigned int flags) {
+@@ -801 +926 @@ int memfd_create(const char* name, unsigned int flags) {
 -  gesher::RegisterMemfd(fd);
 +  if (fd >= 0) gesher::RegisterMemfd(fd);
 diff --git a/compat/posix/src/winsock.cc b/compat/posix/src/winsock.cc
