@@ -1,0 +1,56 @@
+<!-- נוצר על ידי tools/ui/generate.py מתוך ui/tokens.json. לא לערוך ביד. מצב כהה. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <Color x:Key="GesherSurfaceColor">#0F1A2B</Color>
+  <SolidColorBrush x:Key="GesherSurfaceBrush" Color="#0F1A2B"/>
+  <Color x:Key="GesherSurfaceRaisedColor">#16243A</Color>
+  <SolidColorBrush x:Key="GesherSurfaceRaisedBrush" Color="#16243A"/>
+  <Color x:Key="GesherSelectionColor">#42392A</Color>
+  <SolidColorBrush x:Key="GesherSelectionBrush" Color="#42392A"/>
+  <Color x:Key="GesherInkColor">#EAF0F7</Color>
+  <SolidColorBrush x:Key="GesherInkBrush" Color="#EAF0F7"/>
+  <Color x:Key="GesherInkMutedColor">#9DAABD</Color>
+  <SolidColorBrush x:Key="GesherInkMutedBrush" Color="#9DAABD"/>
+  <Color x:Key="GesherInkDisabledColor">#5D6C83</Color>
+  <SolidColorBrush x:Key="GesherInkDisabledBrush" Color="#5D6C83"/>
+  <Color x:Key="GesherFillDisabledColor">#1C2A40</Color>
+  <SolidColorBrush x:Key="GesherFillDisabledBrush" Color="#1C2A40"/>
+  <Color x:Key="GesherBrandColor">#86A9DB</Color>
+  <SolidColorBrush x:Key="GesherBrandBrush" Color="#86A9DB"/>
+  <Color x:Key="GesherBrandHoverColor">#9DBAE3</Color>
+  <SolidColorBrush x:Key="GesherBrandHoverBrush" Color="#9DBAE3"/>
+  <Color x:Key="GesherBrandPressedColor">#6F95CC</Color>
+  <SolidColorBrush x:Key="GesherBrandPressedBrush" Color="#6F95CC"/>
+  <Color x:Key="GesherOnBrandColor">#0F1A2B</Color>
+  <SolidColorBrush x:Key="GesherOnBrandBrush" Color="#0F1A2B"/>
+  <Color x:Key="GesherLineColor">#26364F</Color>
+  <SolidColorBrush x:Key="GesherLineBrush" Color="#26364F"/>
+  <Color x:Key="GesherLineStrongColor">#6C7D97</Color>
+  <SolidColorBrush x:Key="GesherLineStrongBrush" Color="#6C7D97"/>
+  <Color x:Key="GesherFocusColor">#9DBAE3</Color>
+  <SolidColorBrush x:Key="GesherFocusBrush" Color="#9DBAE3"/>
+  <Color x:Key="GesherStringColor">#E9BE5C</Color>
+  <SolidColorBrush x:Key="GesherStringBrush" Color="#E9BE5C"/>
+  <Color x:Key="GesherStringGlowColor">#D9A43B</Color>
+  <SolidColorBrush x:Key="GesherStringGlowBrush" Color="#D9A43B"/>
+  <Color x:Key="GesherMastColor">#FFFFFF</Color>
+  <SolidColorBrush x:Key="GesherMastBrush" Color="#FFFFFF"/>
+  <Color x:Key="GesherDangerColor">#F97066</Color>
+  <SolidColorBrush x:Key="GesherDangerBrush" Color="#F97066"/>
+  <Color x:Key="GesherOnDangerColor">#0F1A2B</Color>
+  <SolidColorBrush x:Key="GesherOnDangerBrush" Color="#0F1A2B"/>
+  <sys:String x:Key="GesherDisplayFontFamily">David Libre</sys:String>
+  <sys:String x:Key="GesherUiFontFamily">IBM Plex Sans Hebrew</sys:String>
+  <sys:String x:Key="GesherFallbackFontFamily">Segoe UI</sys:String>
+  <sys:Double x:Key="GesherTypeCaptionSize">12</sys:Double>
+  <sys:Double x:Key="GesherTypeBodySize">14</sys:Double>
+  <sys:Double x:Key="GesherTypeListTitleSize">16</sys:Double>
+  <sys:Double x:Key="GesherTypeSectionSize">21</sys:Double>
+  <sys:Double x:Key="GesherTypeScreenTitleSize">24</sys:Double>
+  <sys:Double x:Key="GesherTypeWordmarkSize">36</sys:Double>
+  <CornerRadius x:Key="GesherRadiusWindow">10</CornerRadius>
+  <CornerRadius x:Key="GesherRadiusPanel">8</CornerRadius>
+  <CornerRadius x:Key="GesherRadiusButton">6</CornerRadius>
+  <CornerRadius x:Key="GesherRadiusPill">999</CornerRadius>
+</ResourceDictionary>

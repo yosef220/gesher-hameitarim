@@ -124,9 +124,20 @@ target_compile_options(media_muxer_verify PRIVATE -Wall -Wextra -Werror -Wno-unu
   -Wno-deprecated-copy)
 set_target_properties(media_muxer_verify PROPERTIES CXX_STANDARD 23)
 
+# The actual pure helper, including unaligned and protected-page boundaries.
+# This default native target accompanies the unchanged ART/NDK muxer gates.
+add_executable(media_annexb_contracts
+  "${CMAKE_SOURCE_DIR}/tests/media/annexb_split_contracts.cc"
+  ${_media}/encode/codec_config.cc)
+target_include_directories(media_annexb_contracts PRIVATE "${CMAKE_SOURCE_DIR}")
+target_compile_options(media_annexb_contracts PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(media_annexb_contracts PRIVATE pthread)
+set_target_properties(media_annexb_contracts PROPERTIES CXX_STANDARD 23)
+
 add_library(gesher_media_player OBJECT
   ${_media}/jni/java_data_source.cc
   ${_media}/jni/media_codec_jni.cc
+  ${_media}/jni/persistent_input_surface.cc
   ${_media}/jni/media_jni.cc
   ${_media}/jni/media_player_jni.cc
   ${_media}/jni/media_jni_others.cc
@@ -249,6 +260,19 @@ add_executable(media_yuv_rgba_test "${CMAKE_SOURCE_DIR}/tests/media/yuv_rgba_tes
 target_include_directories(media_yuv_rgba_test PRIVATE "${CMAKE_SOURCE_DIR}")
 target_compile_options(media_yuv_rgba_test PRIVATE -Wall -Wextra -Werror)
 
+# Actual full cropped-frame conversion and QueueSurface ownership. This links
+# the production renderer and hostgraphics objects, without host test adapters.
+add_executable(media_i420_crop_test "${CMAKE_SOURCE_DIR}/tests/media/i420_crop_test.cc")
+target_include_directories(media_i420_crop_test PRIVATE "${CMAKE_SOURCE_DIR}")
+target_compile_options(media_i420_crop_test PRIVATE
+  -Wall -Wextra -Werror -Wno-unused-parameter -Wno-deprecated-copy)
+target_link_libraries(media_i420_crop_test PRIVATE gesher_media_audio gesher_media_player_core gesher_elf)
+gesher_graphics_cxx(media_i420_crop_test)
+
+add_executable(wasapi_refill_test "${CMAKE_SOURCE_DIR}/tests/media/wasapi_refill_test.cc")
+target_include_directories(wasapi_refill_test PRIVATE "${CMAKE_SOURCE_DIR}")
+target_compile_options(wasapi_refill_test PRIVATE -Wall -Wextra -Werror)
+
 # The surfaces hwui draws (stage 2, ADR 0051): SurfaceTexture and TextureView's layer,
 # SurfaceView's surface (compat/media/surface), built with hwui (its headers, Skia).
 # QueueSurface itself uses only hostgraphics and is shared by hwui and the renderer.
@@ -273,6 +297,7 @@ target_include_directories(media_input_surface_callback_test PRIVATE
 # Only the fixture throws a callback exception to check capture cleanup.
 target_compile_options(media_input_surface_callback_test PRIVATE
   -Wall -Wextra -Werror -Wno-unused-parameter -fexceptions)
+target_compile_definitions(media_input_surface_callback_test PRIVATE GESHER_PERSISTENT_INPUT_TEST)
 target_link_libraries(media_input_surface_callback_test PRIVATE hostgraphics pthread)
 gesher_graphics_cxx(media_input_surface_callback_test)
 
@@ -311,3 +336,32 @@ target_compile_definitions(media_rgba_i420_test PRIVATE GESHER_MEDIA_STANDALONE 
 target_compile_options(media_rgba_i420_test PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter)
 target_link_libraries(media_rgba_i420_test PRIVATE avc pthread)
 set_target_properties(media_rgba_i420_test PROPERTIES CXX_STANDARD 23)
+# Complete capture stream methods and the explicitly selected test-owned WAV
+# source. Only engine attachment and source-clock input are fixture boundaries.
+set(_capture_unity_fixture "${CMAKE_CURRENT_BINARY_DIR}/capture-unity-fixture")
+set(_capture_unity_cpp "${_capture_unity_fixture}/capture_unity_production.cc")
+set(_capture_unity_header "${_capture_unity_fixture}/capture_unity_common.h")
+add_custom_command(OUTPUT "${_capture_unity_cpp}" "${_capture_unity_header}"
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/test_audio_capture_unity.py"
+    --generate-only --output-dir "${_capture_unity_fixture}"
+  DEPENDS "${CMAKE_SOURCE_DIR}/tools/test_audio_capture_unity.py"
+    "${CMAKE_SOURCE_DIR}/tests/media/capture_unity_common.h.in"
+    "${_media}/audio/capture.cc" "${_media}/audio/capture.h"
+    "${_media}/audio/engine.cc" "${_media}/audio/engine.h"
+  VERBATIM)
+add_executable(media_capture_unity_test "${_capture_unity_cpp}" "${_capture_unity_header}"
+  "${CMAKE_SOURCE_DIR}/tests/media/capture_unity_test.cc")
+target_include_directories(media_capture_unity_test PRIVATE "${_capture_unity_fixture}")
+target_compile_definitions(media_capture_unity_test PRIVATE GESHER_COUNT_CAPTURE=1)
+target_compile_options(media_capture_unity_test PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(media_capture_unity_test PRIVATE pthread)
+set_target_properties(media_capture_unity_test PROPERTIES CXX_STANDARD 23)
+# The complete software encoder and the product's actual pinned AVC library.
+add_executable(media_soft_avc_reuse_test
+  "${CMAKE_SOURCE_DIR}/tests/media/soft_avc_reuse_test.cc")
+target_include_directories(media_soft_avc_reuse_test PRIVATE "${CMAKE_SOURCE_DIR}")
+target_include_directories(media_soft_avc_reuse_test SYSTEM PRIVATE ${GESHER_SOFT_AVCENC_INCLUDES})
+target_compile_definitions(media_soft_avc_reuse_test PRIVATE GESHER_MEDIA_STANDALONE)
+target_compile_options(media_soft_avc_reuse_test PRIVATE
+  -Wall -Wextra -Werror -Wno-unused-parameter)
+target_link_libraries(media_soft_avc_reuse_test PRIVATE avc pthread)
