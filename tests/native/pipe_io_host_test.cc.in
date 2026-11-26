@@ -235,6 +235,7 @@ struct OpenFileDescription {
   explicit OpenFileDescription(int value) : flags(value) { admission.kind = Kind::Mutex; }
   bool OwnedPipe() const { return owned; }
   bool KnownPipeStatus() const { return known; }
+  bool IsFifo() const { return false; }
   int Flags() const { return flags; }
 };
 enum class DescriptorKind { kFile, kUnshareable };
@@ -260,6 +261,15 @@ static DescriptorSnapshotPtr CaptureFileHandle(HANDLE handle) {
 }
 static int ReadFileDescription(const DescriptorSnapshotPtr&, void*, unsigned) {
   std::abort();  // This declared shell boundary supplies pipes only.
+}
+static int TransferFifo(const DescriptorSnapshotPtr&, void*, unsigned, bool, HANDLE, HANDLE) {
+  std::abort();
+}
+static int PollFifoHandle(const DescriptorSnapshotPtr&, short, short*) {
+  std::abort();
+}
+static int FifoBytesAvailable(const DescriptorSnapshotPtr&, int*) {
+  std::abort();
 }
 // gesher/fork.h (ADR 0092): this fixture is never a forked child, so its
 // transfers keep their asynchronous cancellation.
