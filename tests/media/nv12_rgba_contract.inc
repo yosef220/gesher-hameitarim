@@ -46,12 +46,28 @@ std::vector<uint8_t> Nv12Expected(const Array& input, int w, int h, int tw, int 
 int Nv12Push(Target& target, Array& input, int w, int h, int64_t timestamp, jbyteArray jpeg=nullptr) {
   return CameraFrames_deliver(&target.env,0,&target.surface,&input,w,h,timestamp,jpeg);
 }
+// #453: הפיקסלים של תמונת RGBA יושבים בחוצץ משותף (Image::bytes), ו-data נשאר ריק. ImageBytes
+// של התבנית מחזיר את החוצץ (ואת data כשאין חוצץ). לתמונת RGBA יש מישור אחד צפוף, של
+// width * height * 4 בתים, וכך הבדיקות כאן קוראות אותה, בלי להעתיק.
+size_t Nv12RgbaSize(const Image& image) {
+  return static_cast<size_t>(image.width) * image.height * 4;
+}
+std::vector<uint8_t> Nv12RgbaCopy(Image& image) {
+  const size_t size = Nv12RgbaSize(image);
+  if (size == 0) return {};
+  const uint8_t* pixels = ImageBytes(image);
+  return std::vector<uint8_t>(pixels, pixels + size);
+}
+bool Nv12RgbaEquals(Image& image, const std::vector<uint8_t>& expected) {
+  const size_t size = Nv12RgbaSize(image);
+  return size == expected.size() && (size == 0 || std::memcmp(ImageBytes(image), expected.data(), size) == 0);
+}
 void Nv12Metadata(const Target& target, const Image& image, int64_t timestamp) {
   Check(image.width == target.reader->width && image.height == target.reader->height &&
         image.timestampNs == timestamp && image.dataSpace == target.reader->dataSpace &&
         image.halFormat == 1, "NV12 reader dimensions timestamp and dataspace");
   Check(image.planes.size() == 1 && image.planes[0].offset == 0 &&
-        image.planes[0].size == image.data.size() && image.planes[0].rowStride == image.width*4 &&
+        image.planes[0].size == Nv12RgbaSize(image) && image.planes[0].rowStride == image.width*4 &&
         image.planes[0].pixelStride == 4, "NV12 reader exact RGBA plane layout");
 }
 void Nv12ReaderCases() {
@@ -70,10 +86,10 @@ void Nv12ReaderCases() {
     Image* image = target.Acquire();
     Check(image != nullptr, "NV12 delivered image can be acquired");
     if (!image) continue;
-    Check(image->data == expected, "NV12 complete RGBA pixel oracle");
+    Check(Nv12RgbaEquals(*image, expected), "NV12 complete RGBA pixel oracle");
     Nv12Metadata(target,*image,1234567);
     Check(input.bytes == saved, "NV12 input remains unchanged");
-    if (!image->data.empty()) image->data[0] ^= 0xff;
+    if (Nv12RgbaSize(*image) != 0) ImageBytes(*image)[0] ^= 0xff;
     Check(input.bytes == saved, "NV12 delivered RGBA storage is independently writable");
     ReleaseImage(target.reader,image);
     Check(target.env.events == 1 && target.env.pins == 1 && target.env.releases == 1 &&
@@ -177,12 +193,12 @@ void Nv12LifetimeCases() {
   auto* held = target.Acquire();
   Check(held != nullptr, "NV12 held image exists");
   if (!held) return;
-  const auto saved = held->data;
+  const auto saved = Nv12RgbaCopy(*held);
   for (int n=2; n<=7; ++n) {
     input = Nv12Input(16,8,n);
     Check(Nv12Push(target,input,16,8,n) == OK, "NV12 producer reuse delivers");
   }
-  Check(held->data == saved && target.reader->pending.size() == 2,
+  Check(!saved.empty() && Nv12RgbaEquals(*held,saved) && target.reader->pending.size() == 2,
         "NV12 acquired bytes survive bounded queue replacement");
   auto* next = target.Acquire();
   Check(next && next->timestampNs == 6, "NV12 pending FIFO retains the last two frames");
@@ -193,7 +209,7 @@ void Nv12LifetimeCases() {
   auto* last = target.Acquire();
   Check(last && last->timestampNs == 7, "NV12 last surviving frame has original timestamp");
   if (last) ReleaseImage(target.reader,last);
-  Check(held->data == saved, "NV12 separate release cannot alter acquired image");
+  Check(Nv12RgbaEquals(*held,saved), "NV12 separate release cannot alter acquired image");
   ReleaseImage(target.reader,held);
   target.Close();
   Check(Nv12Push(target,input,16,8,8) == NO_INIT && target.reader->pending.empty(),
@@ -241,7 +257,18 @@ void Nv12OtherFormatsAndErrors() {
           "NV12 JPEG path preserves supplied encoded bytes");
     if (image) ReleaseImage(jpeg.reader,image);
   }
-  for (int format : {0x22,0x23}) {
+  {
+    // #453: קורא PRIVATE (0x22) נדגם ב-GPU כ-RGBA, ולכן התמונה שלו היא RGBA עם מישור אחד,
+    // כמו של קורא RGBA_8888. רק YUV_420_888 (0x23) נשאר I420.
+    Target opaque(16,8,0x22);
+    Check(Nv12Push(opaque,input,16,8,3) == OK,"NV12 PRIVATE delivers");
+    auto* image = opaque.Acquire();
+    Check(image && image->planes.size() == 1 && image->planes[0].size == Nv12RgbaSize(*image) &&
+          Nv12RgbaEquals(*image,Nv12Expected(input,16,8,16,8,16)),
+          "NV12 PRIVATE holds the same RGBA pixels as an RGBA reader");
+    if (image) ReleaseImage(opaque.reader,image);
+  }
+  for (int format : {0x23}) {
     Target planar(16,8,format);
     Check(Nv12Push(planar,input,16,8,3) == OK,"NV12 planar/PRIVATE fallback delivers");
     auto* image = planar.Acquire();
@@ -289,7 +316,7 @@ void Nv12ExhaustiveColors() {
     const uint8_t mask = static_cast<uint8_t>(1u<<(triple&7));
     if (!(seen[triple/8]&mask)) { seen[triple/8] |= mask; ++unique; }
     const auto expected = Nv12Color(luma,u,v);
-    Check(std::memcmp(image->data.data()+at*4,expected.data(),4) == 0,
+    Check(std::memcmp(ImageBytes(*image)+at*4,expected.data(),4) == 0,
           "NV12 exhaustive independent color oracle");
   }
   Check(unique == (1u<<24) && std::all_of(seen.begin(),seen.end(),[](uint8_t b){return b==255;}),
@@ -330,10 +357,11 @@ uint64_t Nv12Cycle(const Nv12Workload& work, int frames, std::array<Array,2>& in
       auto* image = target.Acquire();
       Check(image != nullptr,"timed NV12 image acquired");
       if (!image) continue;
-      Check(image->data == expected[n%2],"timed NV12 full pixel oracle");
+      Check(Nv12RgbaEquals(*image,expected[n%2]),"timed NV12 full pixel oracle");
       Nv12Metadata(target,*image,n+1);
-      checksum += image->data.size()+image->timestampNs;
-      if (!image->data.empty()) checksum += image->data.front()+image->data.back();
+      const size_t size = Nv12RgbaSize(*image);
+      checksum += size+image->timestampNs;
+      if (size != 0) checksum += ImageBytes(*image)[0]+ImageBytes(*image)[size-1];
       ReleaseImage(target.reader,image);
     }
     Check(target.env.events == frames && target.env.pins == frames && target.env.releases == frames &&
