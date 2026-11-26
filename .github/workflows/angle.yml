@@ -58,7 +58,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: angle-sdk
-          key: angle-sdk-${{ env.ANGLE_COMMIT }}-${{ hashFiles('compat/angle/**', 'LICENSE') }}
+          # גשר המיתרים: טקסט Apache 2.0 עבר מ-LICENSE ל-LICENSE-APACHE בלי שינוי. hashFiles מחשב
+          # רק את תוכן הקבצים, ולכן המפתח לא השתנה, והבנייה השמורה של ANGLE ממשיכה לשמש.
+          key: angle-sdk-${{ env.ANGLE_COMMIT }}-${{ hashFiles('compat/angle/**', 'LICENSE-APACHE') }}
 
       - name: Build ANGLE (libEGL, libGLESv2)
         if: steps.cache.outputs.cache-hit != 'true'

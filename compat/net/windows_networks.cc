@@ -7,8 +7,9 @@
 // kind (Wi-Fi, Ethernet, cellular, VPN), addresses, gateways, DNS servers and
 // suffix, MTU and link speeds, and from the Network List Manager whether it
 // reaches the internet and whether it is metered or roaming. Changes of
-// interfaces, addresses and routes (NotifyIpInterfaceChange and friends) set
-// an event that nativeWaitForChange waits on.
+// interfaces, addresses and routes (NotifyIpInterfaceChange and friends), and of a
+// connection's cost (the Network List Manager's INetworkConnectionCostEvents,
+// cost_events_win.cc), set an event that nativeWaitForChange waits on.
 //
 // Win32 side (Windows' headers) but for the JNI table, which needs only jni.h.
 
@@ -29,6 +30,7 @@
 
 #include <map>
 #include <mutex>
+#include "cost_events_win.h"
 #include <string>
 #include <vector>
 
@@ -288,6 +290,7 @@ std::string Snapshot() {
 // --- change notifications -------------------------------------------------------
 
 HANDLE g_changed = nullptr;
+gesher::net::CostWatch* g_cost_watch = nullptr;  // for the life of the process
 std::once_flag g_watch_once;
 
 void CALLBACK OnInterfaceChange(PVOID, PMIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE) {
@@ -308,6 +311,11 @@ void StartWatching() {
   NotifyUnicastIpAddressChange(AF_UNSPEC, OnAddressChange, nullptr, FALSE, &h);
   h = nullptr;
   NotifyRouteChange2(AF_UNSPEC, OnRouteChange, nullptr, FALSE, &h);
+  // A metered setting changes the cost of a network that stays connected, which none of the
+  // above report. Without the subscription (an edition without the Network List Manager) the
+  // service's own timed re-read still sees the change, within its wait timeout.
+  HRESULT hr = S_OK;
+  g_cost_watch = gesher::net::StartCostWatch(g_changed, &hr);
 }
 
 // --- JNI ---------------------------------------------------------------------------

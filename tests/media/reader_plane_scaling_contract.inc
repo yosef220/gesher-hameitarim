@@ -23,10 +23,12 @@ constexpr ScaleCase kScaleCases[] = {
   {"closed_control",16,8,7,5,1,3,0x23,4000,true},
 };
 
+// #453: קורא RGBA_8888 וקורא PRIVATE (0x22) מקבלים RGBA במישור אחד, בחוצץ משותף (Image::bytes),
+// ו-data נשאר ריק. ‏IsRgbaFormat ו-ImageBytes של התבנית מבטאים את זה. רק YUV_420_888 (0x23) נשאר I420.
 std::vector<uint8_t> ExpectedPlanes(const VideoFrame& frame, int width, int height, int format) {
   const int source_width = frame.visible_width() & ~1;
   const int source_height = frame.visible_height() & ~1;
-  if (format == 1) {
+  if (IsRgbaFormat(format)) {
     std::vector<uint8_t> result(static_cast<size_t>(width) * height * 4);
     for (int y = 0; y < height; ++y) {
       const int sy = static_cast<int>(static_cast<int64_t>(y) * source_height / height);
@@ -110,31 +112,35 @@ void PlaneCoordinates(bool quick) {
   }
 }
 
-uint64_t OutputChecksum(const std::vector<uint8_t>& bytes) {
+uint64_t OutputChecksum(const uint8_t* bytes, size_t size) {
   uint64_t sum = 0;
   size_t at = 0;
-  for (; at + sizeof(uint64_t) <= bytes.size(); at += sizeof(uint64_t)) {
+  for (; at + sizeof(uint64_t) <= size; at += sizeof(uint64_t)) {
     uint64_t word;
-    std::memcpy(&word,bytes.data()+at,sizeof(word));
+    std::memcpy(&word,bytes+at,sizeof(word));
     sum += word;
   }
-  for (; at < bytes.size(); ++at) sum = sum * 131 + bytes[at];
+  for (; at < size; ++at) sum = sum * 131 + bytes[at];
   return sum;
 }
 
-void CheckDelivered(const Image& image, const ScaleCase& sample,
+void CheckDelivered(Image& image, const ScaleCase& sample,
                     const std::vector<uint8_t>& expected, int64_t timestamp) {
   Check(image.width==sample.target_width && image.height==sample.target_height &&
         image.timestampNs==timestamp && image.dataSpace==0x8c20000 && image.halFormat==sample.format,
         "scaled delivery retains public metadata");
-  Check(image.data==expected,"scaled delivery complete bytes match original coordinate oracle");
-  const int planes = sample.format==1 ? 1 : 3;
+  const bool rgba = IsRgbaFormat(sample.format);
+  const size_t delivered = rgba ? static_cast<size_t>(image.width)*image.height*4 : image.data.size();
+  Check(delivered==expected.size() &&
+        (delivered==0 || std::memcmp(ImageBytes(image),expected.data(),delivered)==0),
+        "scaled delivery complete bytes match original coordinate oracle");
+  const int planes = rgba ? 1 : 3;
   Check(static_cast<int>(image.planes.size())==planes,"scaled delivery retains plane count");
   size_t offset = 0;
   for (int p = 0; p < planes; ++p) {
     const int width = p ? (sample.target_width+1)/2 : sample.target_width;
     const int height = p ? (sample.target_height+1)/2 : sample.target_height;
-    const int pixel_stride = sample.format==1 ? 4 : 1;
+    const int pixel_stride = rgba ? 4 : 1;
     const auto& plane = image.planes[p];
     const size_t size = static_cast<size_t>(width)*height*pixel_stride;
     Check(plane.offset==offset && plane.size==size && plane.rowStride==width*pixel_stride &&
@@ -157,7 +163,7 @@ uint64_t Transfer(const ScaleCase& sample, const VideoFrame& frame,
       Check(image!=nullptr,"whole scaled delivery acquires actual published image");
       if (!image) continue;
       CheckDelivered(*image,sample,expected,n);
-      checksum += OutputChecksum(image->data) ^ static_cast<uint64_t>(n);
+      checksum += OutputChecksum(ImageBytes(*image),expected.size()) ^ static_cast<uint64_t>(n);
       ReleaseImage(target.reader,image);
     }
     Check(target.reader->acquired==0 && target.reader->pending.empty(),

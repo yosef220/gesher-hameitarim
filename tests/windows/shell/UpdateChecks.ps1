@@ -31,12 +31,12 @@ finally { $sha.Dispose() }
 function New-ReleaseMetadata([string] $Version = '0.2.0') {
     [PSCustomObject]@{
         tag_name = "v$Version"
-        html_url = "https://github.com/gesher-runtime/gesher/releases/tag/v$Version"
+        html_url = "https://github.com/yosef220/gesher-hameitarim/releases/tag/v$Version"
         draft = $false
         prerelease = $false
         assets = @([PSCustomObject]@{
             name = "gesher-setup-$Version.exe"
-            browser_download_url = "https://github.com/gesher-runtime/gesher/releases/download/v$Version/gesher-setup-$Version.exe"
+            browser_download_url = "https://github.com/yosef220/gesher-hameitarim/releases/download/v$Version/gesher-setup-$Version.exe"
             size = $script:Payload.Length
             state = 'uploaded'
             digest = "sha256:$script:PayloadHash"
@@ -159,16 +159,16 @@ public static class GesherInstallerVersionFixture {}
             Assert-InvalidRelease $bad "Invalid release flag accepted: $flag=$value"
         }
     }
-    foreach ($url in 'http://github.com/gesher-runtime/gesher/releases/tag/v0.2.0',
+    foreach ($url in 'http://github.com/yosef220/gesher-hameitarim/releases/tag/v0.2.0',
         'https://github.com/another/repo/releases/tag/v0.2.0',
-        'https://github.com/gesher-runtime/gesher/releases/tag/v0.2.0?other=1') {
+        'https://github.com/yosef220/gesher-hameitarim/releases/tag/v0.2.0?other=1') {
         $bad = New-ReleaseMetadata; $bad.html_url = $url
         Assert-InvalidRelease $bad 'Unexpected release page URL accepted'
     }
-    foreach ($url in 'http://github.com/gesher-runtime/gesher/releases/download/v0.2.0/gesher-setup-0.2.0.exe',
+    foreach ($url in 'http://github.com/yosef220/gesher-hameitarim/releases/download/v0.2.0/gesher-setup-0.2.0.exe',
         'https://github.com/another/repo/releases/download/v0.2.0/gesher-setup-0.2.0.exe',
-        'https://github.com/gesher-runtime/gesher/releases/download/v0.3.0/gesher-setup-0.2.0.exe',
-        'https://github.com/gesher-runtime/gesher/releases/download/v0.2.0/gesher-setup-0.2.0.exe?other=1') {
+        'https://github.com/yosef220/gesher-hameitarim/releases/download/v0.3.0/gesher-setup-0.2.0.exe',
+        'https://github.com/yosef220/gesher-hameitarim/releases/download/v0.2.0/gesher-setup-0.2.0.exe?other=1') {
         $bad = New-ReleaseMetadata; $bad.assets[0].browser_download_url = $url
         Assert-InvalidRelease $bad 'Unexpected asset download URL accepted'
     }
@@ -245,6 +245,11 @@ public static class GesherInstallerVersionFixture {}
     Assert-Update ($script:StartedInstaller -ceq $download.Path) 'Installer handoff used a different file'
     Assert-Update ($script:StartedArguments -ceq ('/NORESTART /DIR="' + $install + '"')) 'Installer command did not preserve the quoted destination or unexpectedly requested unattended installation'
     Assert-Update ($script:StartedDirectory -ceq $download.Directory) 'Installer working directory differs from the verified download'
+    # גשר המיתרים: התקנה אוטומטית מריצה את המתקין בלי חלונות, עם אותו יעד בדיוק
+    $process = Start-GesherUpdateInstaller -Download $download -InstallDirectory $install -Silent
+    if ($process) { $process.Dispose() }
+    Assert-Update ($script:StartedArguments -ceq ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $install + '"')) 'Automatic installation did not run setup silently with the same destination'
+    $script:ProcessCalls--  # הבדיקות הבאות סופרות הפעלות מאז ההפעלה הרגילה היחידה
     $cts = [Threading.CancellationTokenSource]::new()
     try {
         $cts.Cancel()
@@ -278,6 +283,8 @@ public static class GesherInstallerVersionFixture {}
     $state = Join-Path $work 'update state'
     $preferences = Get-GesherUpdatePreferences -StateDirectory $state
     Assert-Update ($preferences.AutomaticChecks -is [bool] -and $preferences.AutomaticChecks) 'New installation did not enable automatic checks'
+    # גשר המיתרים: התקנה אוטומטית פעילה כברירת מחדל, וקובץ ישן בלי השדה נשאר איתה
+    Assert-Update ($preferences.AutomaticInstall -is [bool] -and $preferences.AutomaticInstall) 'New installation did not enable automatic installation'
     $now = [DateTime]::SpecifyKind([DateTime]'2026-11-14T12:00:00', [DateTimeKind]::Utc)
     Assert-Update (Test-GesherUpdateCheckDue -Preferences $preferences -Now $now) 'First automatic check was suppressed'
     $preferences.AutomaticChecks = $false
@@ -304,6 +311,17 @@ public static class GesherInstallerVersionFixture {}
     $saved = [IO.File]::ReadAllText($stateFile)
     Assert-UpdateThrows { Save-GesherUpdatePreferences -StateDirectory $state -Preferences ([PSCustomObject]@{ AutomaticChecks = 'false'; LastCheckUtc = $null }) } 'Invalid preference type was written'
     Assert-Update ([IO.File]::ReadAllText($stateFile) -ceq $saved) 'Rejected preference write changed the existing setting'
+    [IO.File]::WriteAllText($stateFile, '{"AutomaticChecks":false,"LastCheckUtc":null}')
+    $loaded = Get-GesherUpdatePreferences -StateDirectory $state
+    Assert-Update (-not $loaded.AutomaticChecks -and $loaded.AutomaticInstall) 'Settings saved before automatic installation existed did not keep its default'
+    Save-GesherUpdatePreferences -StateDirectory $state -Preferences ([PSCustomObject]@{ AutomaticChecks = $true; AutomaticInstall = $false; LastCheckUtc = $null })
+    $loaded = Get-GesherUpdatePreferences -StateDirectory $state
+    Assert-Update ($loaded.AutomaticChecks -and -not $loaded.AutomaticInstall) 'Turning off automatic installation was not persisted'
+    [IO.File]::WriteAllText($stateFile, '{"AutomaticChecks":true,"AutomaticInstall":"false","LastCheckUtc":null}')
+    Assert-Update ((Get-GesherUpdatePreferences -StateDirectory $state).AutomaticInstall) 'A string was accepted as the automatic installation preference'
+    $saved = [IO.File]::ReadAllText($stateFile)
+    Assert-UpdateThrows { Save-GesherUpdatePreferences -StateDirectory $state -Preferences ([PSCustomObject]@{ AutomaticChecks = $true; AutomaticInstall = 'no'; LastCheckUtc = $null }) } 'An invalid automatic installation preference was written'
+    Assert-Update ([IO.File]::ReadAllText($stateFile) -ceq $saved) 'A rejected automatic installation preference changed the setting'
     Assert-Update (@(Get-ChildItem -LiteralPath $state -Force).Count -eq 1) 'Preference persistence left temporary files'
     "PASS: GitHub release updater contracts ($script:Checks checks)"
 } finally {
