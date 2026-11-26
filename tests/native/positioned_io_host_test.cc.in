@@ -285,6 +285,10 @@ static bool IsBinderFd(int) { return false; }
 static int MemfdWriteError(int, bool, uint64_t, uint64_t) { return 0; }
 #ifndef GESHER_TEST_MEMFD_WRITE
 static bool FileDescriptionIsMemfd(const DescriptorSnapshotPtr&) { return false; }
+// FIFO (#256): ברתמה הזו אין FIFO, ולכן אף תיאור קובץ אינו FIFO, כמו ש-StatFifoDescription
+// האמיתי (fifo.cc) מחזיר false לכל תיאור שאינו FIFO.
+static bool StatFifoDescription(const DescriptorSnapshotPtr&, mode_t*, unsigned long long*,
+                                unsigned long long*) { return false; }
 static int MemfdWriteHandleError(HANDLE, bool, uint64_t, uint64_t, bool) { return 0; }
 #endif
 static int MemfdResizeHandleError(HANDLE, uint64_t) { return 0; }
