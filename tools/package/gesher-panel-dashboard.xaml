@@ -10,8 +10,8 @@
         FlowDirection="{DynamicResource PanelFlowDirection}"
         FontFamily="{DynamicResource PanelUiFont}"
         FontSize="14"
-        Foreground="{StaticResource GesherInkBrush}"
-        Background="{StaticResource GesherSurfaceBrush}"
+        Foreground="{DynamicResource GesherInkBrush}"
+        Background="{DynamicResource GesherSurfaceBrush}"
         UseLayoutRounding="True"
         AllowDrop="True">
     <Window.Resources>

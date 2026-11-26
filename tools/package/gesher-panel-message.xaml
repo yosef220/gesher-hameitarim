@@ -9,8 +9,8 @@
         FlowDirection="{DynamicResource PanelFlowDirection}"
         FontFamily="{DynamicResource PanelUiFont}"
         FontSize="14"
-        Foreground="{StaticResource GesherInkBrush}"
-        Background="{StaticResource GesherSurfaceRaisedBrush}"
+        Foreground="{DynamicResource GesherInkBrush}"
+        Background="{DynamicResource GesherSurfaceRaisedBrush}"
         UseLayoutRounding="True">
     <Border Padding="28,24,28,22">
         <Grid>

@@ -11,6 +11,11 @@ on:
     branches: [main, 'design/**']
   pull_request:
   workflow_dispatch:
+    inputs:
+      save_screens:
+        description: 'לשמור את צילומי מרכז הבקרה בענף שהריצה רצה עליו (docs/he/design/assets/control-center)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -134,15 +139,13 @@ jobs:
     name: מרכז הבקרה על Windows
     runs-on: windows-2022
     timeout-minutes: 25
+    # כתיבה רק לשמירת הצילומים, בהפעלה ידנית עם save_screens
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: הקבצים המופקים מעודכנים (טוקנים ומחרוזות)
-        shell: pwsh
-        run: |
-          python tools/ui/generate.py --check
-          if ($LASTEXITCODE -ne 0) { throw 'הטוקנים לא מעודכנים' }
+      # הקבצים המופקים נבדקים במשימה "טוקנים וניגודיות" (Linux)
       - name: בדיקות החוזה של התצוגה (Windows PowerShell 5.1)
-        if: ${{ !cancelled() }}
         shell: powershell
         run: |
           tests/windows/shell/ControlPanelPresentationChecks.ps1
@@ -178,3 +181,21 @@ jobs:
           name: control-center-screens
           path: control-center-screens/
           retention-days: 30
+      # הצילומים נכנסים לענף כדי שאפשר יהיה לקרוא אותם גם בסביבה שלא מגיעה לאחסון ה-artifacts,
+      # וכדי שמסמך העיצוב יציג את המצב האחרון. רק בהפעלה ידנית, ורק כשמבקשים.
+      - name: שמירת הצילומים בענף
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.save_screens }}
+        shell: pwsh
+        run: |
+          $target = 'docs/he/design/assets/control-center'
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Get-ChildItem $target -Filter *.png | Remove-Item
+          Copy-Item control-center-screens/*.png $target
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A $target
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { 'הצילומים לא השתנו'; exit 0 }
+          git commit -m "צילומי מרכז הבקרה מ-Windows (ריצה ${{ github.run_id }})"
+          git push origin "HEAD:${{ github.ref_name }}"
+          if ($LASTEXITCODE -ne 0) { throw 'הדחיפה של הצילומים נכשלה' }
