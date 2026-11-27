@@ -5,7 +5,15 @@
 # זה לא מריץ את הלוגיקה של מרכז הבקרה: המצבים (מערכת פועלת, שירותי Google מופעלים וכו')
 # נקבעים כאן באותם מאפיינים שהלוגיקה משנה. ב-CI: ‏.github/workflows/hameitarim-design.yml.
 # רץ ב-Windows PowerShell 5.1 (STA).
-param([Parameter(Mandatory = $true)][string] $OutDir)
+# -Interactive: במקום צילומים, פותח את מרכז הבקרה בחלון אמיתי עם נתוני דוגמה, כדי לראות אותו, ללחוץ,
+# להקליד בחיפוש ולגרור את הרווח שבין הרשימה לעמודה. אין חיבור להתקנה: הכפתורים לא עושים דבר.
+param(
+    [string] $OutDir,
+    [switch] $Interactive,
+    [ValidateSet('he', 'en')] [string] $Language = 'he',
+    [ValidateSet('light', 'dark', 'contrast')] [string] $Theme = 'light'
+)
+if (-not $Interactive -and -not $OutDir) { throw 'יש לציין -OutDir (לצילומים) או -Interactive (חלון אמיתי).' }
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
@@ -13,8 +21,10 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $package = Join-Path $repo 'tools\package'
 . (Join-Path $package 'gesher-ui.ps1')
 . (Join-Path $package 'gesher-panel-view.ps1')
-$null = New-Item -ItemType Directory -Force -Path $OutDir
-$OutDir = (Resolve-Path $OutDir).Path
+if ($OutDir) {
+    $null = New-Item -ItemType Directory -Force -Path $OutDir
+    $OutDir = (Resolve-Path $OutDir).Path
+}
 
 # סמל לדוגמה: ריבוע מעוגל בצבע, עם האות הראשונה. לא הסמלים האמיתיים של האפליקציות.
 function New-SampleIcon([string] $color, [string] $letter) {
@@ -119,6 +129,30 @@ function Update-Layout($window) {
     $window.UpdateLayout()
     $layout.Height = [Math]::Max($layout.MinHeight, $scroll.ActualHeight)
     $window.UpdateLayout()
+}
+
+# 0. -Interactive: חלון אמיתי עם נתוני דוגמה. שינוי גודל החלון מחשב מחדש את הפריסה.
+if ($Interactive) {
+    $window = New-Dashboard $Language $Theme
+    $window.WindowStartupLocation = 'CenterScreen'
+    $window.Width = 1000
+    $window.Height = 780
+    $state = @{ Busy = $false }
+    $relayout = {
+        if ($state.Busy) { return }
+        $state.Busy = $true
+        try { Update-Layout $window } finally { $state.Busy = $false }
+    }
+    $window.Add_ContentRendered({
+        Set-SampleState $window $true $true $false
+        $list = $window.FindName('AppsList')
+        $list.ItemsSource = @(Get-SampleApps $Language)
+        $list.SelectedIndex = 1
+        & $relayout
+    })
+    $window.Add_SizeChanged({ & $relayout })
+    [void]$window.ShowDialog()
+    return
 }
 
 # 1. מרכז הבקרה: כל מצב, כל שפה, בגודל הרגיל ובגודל המינימלי
