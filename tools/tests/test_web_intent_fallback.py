@@ -116,7 +116,10 @@ class WebIntentFallback(unittest.TestCase):
             out = tmp / "out"
             out.mkdir()
             sources = [str(p) for p in (package / "Cases.java", package / "IntentFallback.java")]
-            subprocess.run(["javac", "-d", str(out), "-sourcepath", str(tmp / "stubs"), *sources],
+            # --release 8: the class files run on any Java, also when javac is newer than the java on
+            # the PATH (JDK 21's javac with a Java 11 runtime failed with UnsupportedClassVersionError).
+            subprocess.run(["javac", "--release", "8", "-Xlint:-options", "-d", str(out),
+                            "-sourcepath", str(tmp / "stubs"), *sources],
                            check=True, capture_output=True, text=True)
             run = subprocess.run(["java", "-cp", str(out), "com.gesher.app.webview.Cases"],
                                  capture_output=True, text=True)

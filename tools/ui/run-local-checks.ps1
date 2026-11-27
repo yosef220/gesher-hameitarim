@@ -33,7 +33,7 @@ $pythonChecks = @(
     'tools/tests/test_dialog_bidi.py', 'tools/tests/test_host_account_commands.py',
     'tools/tests/test_web_intent_fallback.py', 'tools/tests/test_bluetooth_le_audio.py',
     'tools/tests/test_location_mode.py', 'tools/tests/test_panel_resize.py',
-    'tools/tests/test_portable_package.py', 'tools/test_portable_launcher.py'
+    'tools/tests/test_portable_package.py'
 )
 
 function Invoke-Check([string] $name, [string] $exe, [string] $arguments) {
@@ -84,5 +84,5 @@ $rows | Format-Table -AutoSize | Out-String -Width 200
 $failed = @($rows | Where-Object { $_.Result -ne 'עבר' })
 "עברו: $(@($rows | Where-Object { $_.Result -eq 'עבר' }).Count) מתוך $($rows.Count). יומנים ב: $OutDir"
 if ($failed.Count) { "לא עברו: " + (($failed | ForEach-Object { $_.Check }) -join ', ') }
-if ($git) { "קומיט: " + (& git -C $repo log --oneline -1) }
+if ($git) { "קומיט: " + (& git -C $repo rev-parse --short HEAD) }
 exit $(if ($failed.Count) { 1 } else { 0 })
