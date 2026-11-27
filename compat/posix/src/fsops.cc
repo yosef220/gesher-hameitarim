@@ -24,6 +24,7 @@
 #include <gesher/reserved_names.h>
 #include <gesher/file_description.h>
 
+#include "fifo_internal.h"
 #include "internal.h"
 #include "standalone_input.h"
 #include "descriptor_resources.h"
@@ -31,6 +32,7 @@
 #include "revocable_internal.h"
 #include "rooted_storage_client.h"
 #include "stdio_internal.h"
+#include "system_linker.h"
 
 using gesher::PathKind;
 
@@ -160,6 +162,10 @@ int CheckDirectoryRenameVolume(const BY_HANDLE_FILE_INFORMATION& source,
 // it is not atomic. Renaming onto another name of the same file does nothing.
 int Rename(const char* oldpath, const char* newpath, unsigned flags) {
   if ((flags & ~kRenameNoReplace) != 0) return errno = EINVAL, -1;  // RENAME_EXCHANGE, WHITEOUT
+  if (gesher::system_linker::RefuseChange(oldpath) != 0 ||
+      gesher::system_linker::RefuseChange(newpath) != 0) {
+    return -1;
+  }
   std::wstring from, to;
   if (!gesher::DiskPath(oldpath, &from, EACCES, true) ||
       !gesher::DiskPath(newpath, &to, EACCES, true)) {
@@ -273,6 +279,7 @@ int SetMode(HANDLE h, mode_t mode) {
 }
 
 int Chmod(const char* path, mode_t mode, bool follow) {
+  if (gesher::system_linker::RefuseChange(path) != 0) return -1;
   std::wstring windows;
   if (!gesher::DiskPath(path, &windows, EPERM, true)) return -1;
   if (const auto rooted = gesher::storage_root::Lookup(windows)) {
@@ -283,13 +290,11 @@ int Chmod(const char* path, mode_t mode, bool follow) {
     CloseHandle(h);
     return result;
   }
-  HANDLE h = CreateFileW(windows.c_str(), FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                         OPEN_EXISTING,
-                         FILE_FLAG_BACKUP_SEMANTICS | (follow ? 0 : FILE_FLAG_OPEN_REPARSE_POINT),
-                         nullptr);
+  HANDLE h = gesher::OpenPathMaybeFifo(
+      windows, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | FILE_READ_EA | FILE_WRITE_EA, follow);
   if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
   int result = !follow && gesher::IsSymlinkHandle(h) ? (errno = EOPNOTSUPP, -1) : SetMode(h, mode);
+  if (result == 0 && gesher::IsFifoHandle(h)) gesher::WriteFifoMode(h, mode);
   CloseHandle(h);
   return result;
 }
@@ -334,11 +339,7 @@ int Access(const char* path, int mode, bool follow) {
     const int error = gesher::storage_root::Open(rooted, gesher::rooted_storage_wire::kMetadata, &h);
     if (error != 0) return errno = error, -1;
   } else {
-    h = CreateFileW(windows.c_str(), FILE_READ_ATTRIBUTES,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                         OPEN_EXISTING,
-                         FILE_FLAG_BACKUP_SEMANTICS | (follow ? 0 : FILE_FLAG_OPEN_REPARSE_POINT),
-                         nullptr);
+    h = gesher::OpenPathMaybeFifo(windows, FILE_READ_ATTRIBUTES, follow);
   }
   if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
   BY_HANDLE_FILE_INFORMATION info;
@@ -359,6 +360,7 @@ int Access(const char* path, int mode, bool follow) {
 int Symlink(const char* target, const char* linkpath) {
   if (target == nullptr) return errno = EFAULT, -1;
   if (target[0] == '\0') return errno = ENOENT, -1;
+  if (gesher::system_linker::RefuseChange(linkpath) != 0) return -1;
   std::wstring link;
   if (!gesher::DiskPath(linkpath, &link, EEXIST)) return -1;
   // The target as Windows stores it: backslashes; an absolute one with its
@@ -426,6 +428,14 @@ ssize_t Readlink(const char* path, char* buf, size_t size) {
                                             : (errno = EINVAL, false);
       CloseHandle(h);
       if (!ok) return -1;
+      // A link made to /system/bin/linker64 stores the file's Windows path:
+      // read back the name it was made with.
+      std::wstring linked;
+      if (!target.empty() && target[0] == '/' &&
+          gesher::MapPath(target.c_str(), &linked) == PathKind::kFile &&
+          gesher::system_linker::IsFilePath(linked)) {
+        target = gesher::system_linker::kPath;
+      }
       break;
     }
     case PathKind::kMissing:
@@ -439,13 +449,15 @@ ssize_t Readlink(const char* path, char* buf, size_t size) {
 }
 
 int Link(const char* oldpath, const char* newpath, bool follow) {
+  if (gesher::system_linker::RefuseChange(oldpath) != 0 ||
+      gesher::system_linker::RefuseChange(newpath) != 0) {
+    return -1;
+  }
   std::wstring from, to;
   if (!gesher::DiskPath(oldpath, &from, EPERM) || !gesher::DiskPath(newpath, &to, EEXIST)) return -1;
   if (follow) {
     // AT_SYMLINK_FOLLOW: a link to the file a symbolic link names.
-    HANDLE h = CreateFileW(from.c_str(), FILE_READ_ATTRIBUTES,
-                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                           OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    HANDLE h = gesher::OpenPathMaybeFifo(from, FILE_READ_ATTRIBUTES, true);
     if (h == INVALID_HANDLE_VALUE) return gesher::FailWithLastError();
     wchar_t final_path[32768];
     DWORD n = GetFinalPathNameByHandleW(h, final_path, 32768, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
@@ -561,6 +573,7 @@ int renameat(int olddirfd, const char* oldpath, int newdirfd, const char* newpat
 }
 
 int remove(const char* path) {
+  if (gesher::system_linker::RefuseChange(path) != 0) return -1;
   std::wstring windows;
   if (!gesher::DiskPath(path, &windows, EACCES, true)) return -1;
   if (const auto rooted = gesher::storage_root::Lookup(windows)) {
@@ -638,6 +651,7 @@ int fchmod(int fd, mode_t mode) {
   if (operation.Error()) return errno = operation.Error(), -1;
   HANDLE h = snapshot->handle;
   if (GetFileType(h) != FILE_TYPE_DISK) return 0;  // pipes, sockets, devices
+  if (gesher::system_linker::RefuseChangeHandle(h) != 0) return -1;
   HANDLE writable = ReOpenFile(h, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                FILE_FLAG_BACKUP_SEMANTICS);

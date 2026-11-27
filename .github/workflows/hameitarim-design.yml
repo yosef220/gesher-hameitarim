@@ -1,0 +1,201 @@
+# גשר המיתרים: בדיקות העיצוב שלנו. ה-workflow הזה לא קיים ב-upstream.
+#   - הקבצים שמופקים מ-ui/tokens.json מעודכנים, והניגודיות עומדת בסף בשני המצבים
+#   - מסך הפתיחה האמיתי (GDI+) מצויר על Windows בכל המצבים, לצילומים לביקורת
+#   - דף הרישיון באשף ההתקנה מצולם בעברית ובאנגלית
+#   - מרכז הבקרה: בדיקות החוזה של התצוגה על WPF, וצילומים בכל מצב ושפה עם הדיאלוגים
+# הצילומים עולים כ-artifacts (splash-screens, license-page-screens, control-center-screens), וגם ללוג.
+name: hameitarim-design
+
+on:
+  push:
+    branches: [main, 'design/**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      save_screens:
+        description: 'לשמור את צילומי מרכז הבקרה בענף שהריצה רצה עליו (docs/he/design/assets/control-center)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hameitarim-design-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # אותה גרסה של המהדר כמו בבנייה של המוצר (ci.yml)
+  LLVM_MINGW_TAG: "20261006"
+  LLVM_MINGW_NAME: llvm-mingw-20261006-ucrt-ubuntu-22.04-x86_64
+
+jobs:
+  tokens:
+    name: טוקנים וניגודיות
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: הקבצים המופקים מעודכנים והניגודיות עומדת בסף
+        run: python3 tools/ui/generate.py --check
+
+  splash-build:
+    name: בניית כלי התצוגה של מסך הפתיחה
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: הורדת המהדר
+        run: |
+          mkdir -p ~/toolchain
+          curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/$LLVM_MINGW_NAME.tar.xz" \
+            | tar -xJ -C ~/toolchain
+      - name: בנייה עם ההגדרות של הפרויקט
+        run: |
+          CXX="$HOME/toolchain/$LLVM_MINGW_NAME/bin/x86_64-w64-mingw32-clang++"
+          # כמו CMakeLists.txt ו-cmake/aosp/shell.cmake
+          FLAGS="-std=c++20 -DGESHER -DUSE_MINGW -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNOGDI -D_USE_MATH_DEFINES
+            -D__STDC_FORMAT_MACROS -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS -D_WIN32_WINNT=0x0A00
+            -DWINVER=0x0A00 -D_FILE_OFFSET_BITS=64 -D_POSIX_THREAD_SAFE_FUNCTIONS -mno-ms-bitfields
+            -fno-exceptions -fsized-deallocation -Wall -Wextra -Werror -municode"
+          mkdir -p out
+          $CXX $FLAGS -c compat/shell/splash_paint.cc -o out/splash_paint.o
+          $CXX $FLAGS -c tools/ui/splash_preview.cc -o out/splash_preview.o
+          $CXX -municode out/splash_preview.o out/splash_paint.o -o out/splash_preview.exe \
+            -lgdiplus -lgdi32 -luser32 -ladvapi32 -static
+          cp -r tools/package/ui-fonts out/ui-fonts
+          cp tests/apps/lifecycle/res/mipmap-xxxhdpi/ic_launcher.png out/app-icon.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: splash-preview-tool
+          path: out/
+          retention-days: 3
+
+  splash-render:
+    name: צילומי מסך הפתיחה על Windows
+    needs: splash-build
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: splash-preview-tool
+          path: tool
+      - name: ציור כל המצבים
+        shell: pwsh
+        run: |
+          $screens = New-Item -ItemType Directory -Force -Path screens
+          & tool/splash_preview.exe (Resolve-Path tool/ui-fonts).Path (Resolve-Path tool/app-icon.png).Path $screens.FullName
+          if ($LASTEXITCODE -ne 0) { throw "splash_preview נכשל בקוד $LASTEXITCODE" }
+          $files = @(Get-ChildItem $screens -Filter *.png)
+          if ($files.Count -lt 12) { throw "נוצרו רק $($files.Count) צילומים" }
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem screens -Filter *.png | Sort-Object Name) {
+            "SPLASH-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'SPLASH-PNG-END'
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: splash-screens
+          path: screens/
+          retention-days: 30
+
+  license-page:
+    name: דף הרישיון באשף ההתקנה
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tools/package
+            tools/ui
+      - name: קובצי דף הרישיון מעודכנים מול LICENSE
+        shell: pwsh
+        run: python tools/package/license_rtf.py --check
+      - name: צילום הדף בעברית ובאנגלית
+        shell: powershell
+        run: tools/ui/license-page-preview.ps1 -OutDir license-screens
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem license-screens -Filter *.png | Sort-Object Name) {
+            "LICENSE-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'LICENSE-PNG-END'
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: license-page-screens
+          path: license-screens/
+          retention-days: 30
+
+  control-center:
+    name: מרכז הבקרה על Windows
+    runs-on: windows-2022
+    timeout-minutes: 25
+    # כתיבה רק לשמירת הצילומים, בהפעלה ידנית עם save_screens
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      # הקבצים המופקים נבדקים במשימה "טוקנים וניגודיות" (Linux)
+      - name: בדיקות החוזה של התצוגה (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          tests/windows/shell/ControlPanelPresentationChecks.ps1
+          tests/windows/shell/ControlPanelLaunchChecks.ps1
+          tests/windows/shell/ControlPanelVirtualizationChecks.ps1
+          tests/windows/shell/ControlPanelSpecialAccessChecks.ps1
+          tests/windows/shell/ControlPanelUpdateChecks.ps1
+          tests/windows/shell/ControlPanelProxyChecks.ps1
+          tests/windows/shell/ControlPanelIconCacheChecks.ps1
+          tests/windows/shell/UiLocalizationChecks.ps1
+      - name: הדיאלוגים של מרכז הבקרה (Windows PowerShell 5.1)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        shell: powershell
+        run: tests/windows/shell/Issue32And33Contracts.ps1
+      - name: צילומי מרכז הבקרה והדיאלוגים
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: tools/ui/control-center-preview.ps1 -OutDir control-center-screens
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem control-center-screens -Filter *.png | Sort-Object Name) {
+            "PANEL-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'PANEL-PNG-END'
+          }
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: control-center-screens
+          path: control-center-screens/
+          retention-days: 30
+      # הצילומים נכנסים לענף כדי שאפשר יהיה לקרוא אותם גם בסביבה שלא מגיעה לאחסון ה-artifacts,
+      # וכדי שמסמך העיצוב יציג את המצב האחרון. רק בהפעלה ידנית, ורק כשמבקשים.
+      - name: שמירת הצילומים בענף
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.save_screens }}
+        shell: pwsh
+        run: |
+          $target = 'docs/he/design/assets/control-center'
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Get-ChildItem $target -Filter *.png | Remove-Item
+          Copy-Item control-center-screens/*.png $target
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A $target
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { 'הצילומים לא השתנו'; exit 0 }
+          git commit -m "צילומי מרכז הבקרה מ-Windows (ריצה ${{ github.run_id }})"
+          git push origin "HEAD:${{ github.ref_name }}"
+          if ($LASTEXITCODE -ne 0) { throw 'הדחיפה של הצילומים נכשלה' }

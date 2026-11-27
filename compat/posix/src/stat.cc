@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "fifo_internal.h"
 #include "internal.h"
 #include "revocable_internal.h"
 #include "rooted_storage_client.h"
@@ -64,7 +65,11 @@ int FromHandle(HANDLE h, struct stat* buf) {
   // regular files show the execute bits too, as an NTFS volume mounted on
   // Linux does (ADR 0057).
   bool read_only = (info.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0;
-  if (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+  mode_t fifo_mode = 0;
+  if (gesher::ReadFifoMode(h, &fifo_mode)) {
+    buf->st_mode = S_IFIFO | fifo_mode;
+    buf->st_size = 0;
+  } else if (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
     buf->st_mode = S_IFDIR | 0755;
   } else {
     buf->st_mode = S_IFREG | (read_only ? 0555 : 0755);
@@ -111,11 +116,9 @@ int StatPath(const char* path, struct stat* buf, bool follow, int depth = 0) {
           return result;
         }
       }
-      HANDLE h = inherited ? selected.Open(true) : CreateFileW(windows.c_str(), FILE_READ_ATTRIBUTES,
-                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                             OPEN_EXISTING,
-                             FILE_FLAG_BACKUP_SEMANTICS | (follow ? 0 : FILE_FLAG_OPEN_REPARSE_POINT),
-                             nullptr);
+      // FILE_READ_EA lets ReadFifoMode inspect persisted FIFO permissions on reparse points.
+      HANDLE h = inherited ? selected.Open(true)
+                           : gesher::OpenPathMaybeFifo(windows, FILE_READ_ATTRIBUTES | FILE_READ_EA, follow);
       if (h == INVALID_HANDLE_VALUE) {
         return inherited ? (errno = EACCES, -1) : gesher::FailWithLastError();
       }
@@ -190,10 +193,19 @@ int fstat(int fd, struct stat* buf) {
       if (result == 0 && !gesher::DropDescriptorPath(snapshot).empty()) buf->st_mode &= ~0222;
       return result;
     }
-    case FILE_TYPE_PIPE:
+    case FILE_TYPE_PIPE: {
       Clear(buf);
-      buf->st_mode = S_IFIFO | 0600;
+      mode_t fifo_mode = 0600;
+      unsigned long long dev = 0, ino = 0;
+      if (gesher::StatFifoDescription(snapshot, &fifo_mode, &dev, &ino)) {
+        buf->st_mode = S_IFIFO | fifo_mode;
+        buf->st_dev = dev;
+        buf->st_ino = ino;
+      } else {
+        buf->st_mode = S_IFIFO | 0600;
+      }
       return 0;
+    }
     default:  // consoles, NUL and the devices on it
       Clear(buf);
       buf->st_mode = S_IFCHR | 0666;

@@ -1,3 +1,12 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 42895739a..7432eafaf 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -208,0 +209,4 @@ target_link_libraries(pipe_kernel_test PRIVATE gesher_posix)
++add_executable(netlink_route_test tests/native/netlink_route_test.cc)
++target_compile_options(netlink_route_test PRIVATE -Wall -Wextra -Werror)
++target_link_libraries(netlink_route_test PRIVATE gesher_posix)
++
 diff --git a/compat/binder/binderd.cc b/compat/binder/binderd.cc
 index 1b028093c..3e3506ae1 100644
 --- a/compat/binder/binderd.cc
@@ -78,17 +87,261 @@ index 1b028093c..3e3506ae1 100644
 @@ -2681,0 +2697,2 @@ void Serve(HANDLE pipe) {
 +        } else if (op == wire::kNetlinkInspection) {
 +          ServeNetlinkInspection(pipe, in);
+diff --git a/compat/binder/launch_channel.h b/compat/binder/launch_channel.h
+index 65bae3cc6..3c94a4c4d 100644
+--- a/compat/binder/launch_channel.h
++++ b/compat/binder/launch_channel.h
+@@ -27 +27 @@ enum class Action : uint32_t { kEnroll = 1, kHandoff, kRetire, kRevokeInstallati
+-                              kRestoreInstallation, kAttachJob,
++                              kRestoreInstallation, kAttachJob, kEnableNetlinkInspection,
+diff --git a/compat/elf/exec/exec.cmake b/compat/elf/exec/exec.cmake
+index a25e4b776..47c5d173e 100644
+--- a/compat/elf/exec/exec.cmake
++++ b/compat/elf/exec/exec.cmake
+@@ -91,0 +92,10 @@ target_link_libraries(appcontainer_record_lock_probe PRIVATE gesher_exec_spawn a
++add_executable(appcontainer_netlink_probe
++  ${CMAKE_SOURCE_DIR}/tests/sandbox/netlink-authority-probe.cc
++  ${CMAKE_SOURCE_DIR}/compat/framework/services_zygote.cc
++  ${CMAKE_SOURCE_DIR}/compat/framework/app_container.cc)
++target_include_directories(appcontainer_netlink_probe PRIVATE
++  ${CMAKE_SOURCE_DIR}/compat/framework ${CMAKE_SOURCE_DIR}/compat/binder)
++target_compile_options(appcontainer_netlink_probe PRIVATE -Wall -Wextra -Werror)
++target_link_options(appcontainer_netlink_probe PRIVATE -municode)
++target_link_libraries(appcontainer_netlink_probe PRIVATE advapi32 ole32)
++
+diff --git a/compat/framework/services_zygote.cc b/compat/framework/services_zygote.cc
+index 02dad8ca7..ff1c90056 100644
+--- a/compat/framework/services_zygote.cc
++++ b/compat/framework/services_zygote.cc
+@@ -883,0 +884,6 @@ Writer ReadWriter() {
++
++  launch::Request enable_netlink;
++  enable_netlink.action = launch::Action::kEnableNetlinkInspection;
++  enable_netlink.pid = self.pid;
++  enable_netlink.birth = self.birth;
++  if (!SubmitLaunchRequest(writer.channel.get(), enable_netlink)) return {};
+diff --git a/compat/posix/include/gesher/binder_endpoint.h b/compat/posix/include/gesher/binder_endpoint.h
+index 7b7da315c..e0ebef5d9 100644
+--- a/compat/posix/include/gesher/binder_endpoint.h
++++ b/compat/posix/include/gesher/binder_endpoint.h
+@@ -105,0 +106,11 @@ class Binding {
++  bool PinsTrustedHost() {
++    std::lock_guard<std::mutex> lock(mutex_);
++    if (!required_ || guest_ || operator_ || broker_ == nullptr) return false;
++    process_identity::Process caller, broker;
++    return process_identity::ReadLiveProcess(GetCurrentProcess(), &caller) &&
++           caller.principal.container.size == 0 && !caller.principal.restricted &&
++           caller.principal.integrity >= SECURITY_MANDATORY_MEDIUM_RID &&
++           process_identity::ReadLiveProcess(broker_, &broker) &&
++           broker.principal == caller.principal;
++  }
++
+@@ -134,0 +146 @@ bool EnrollChild(HANDLE process);
++bool MayInspectNetlink();
+diff --git a/compat/posix/include/linux/if_addr.h b/compat/posix/include/linux/if_addr.h
+index 344ad4dba..d34a85889 100644
+--- a/compat/posix/include/linux/if_addr.h
++++ b/compat/posix/include/linux/if_addr.h
+@@ -5,0 +6,4 @@
++#ifdef __cplusplus
++extern "C" {
++#endif
++
+@@ -13,0 +18,14 @@ struct ifaddrmsg {
++enum {
++  IFA_UNSPEC,
++  IFA_ADDRESS,
++  IFA_LOCAL,
++  IFA_LABEL,
++  IFA_BROADCAST,
++  IFA_ANYCAST,
++  IFA_CACHEINFO,
++  IFA_MULTICAST,
++  IFA_FLAGS,
++  __IFA_MAX,
++};
++#define IFA_MAX (__IFA_MAX - 1)
++
+@@ -22,0 +41,11 @@ struct ifaddrmsg {
++
++#ifndef IFA_RTA
++#define IFA_RTA(r) ((struct rtattr*)(((char*)(r)) + NLMSG_ALIGN(sizeof(struct ifaddrmsg))))
++#endif
++#ifndef IFA_PAYLOAD
++#define IFA_PAYLOAD(n) NLMSG_PAYLOAD(n, sizeof(struct ifaddrmsg))
++#endif
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/compat/posix/include/linux/netlink.h b/compat/posix/include/linux/netlink.h
+index 6c112e15b..13b200d9e 100644
+--- a/compat/posix/include/linux/netlink.h
++++ b/compat/posix/include/linux/netlink.h
+@@ -1,2 +1 @@
+-// gesher-base: <linux/netlink.h>. Netlink sockets do not exist on Windows;
+-// the types are defined for code that formats their addresses.
++// gesher-base: <linux/netlink.h>, Linux netlink constants and headers.
+@@ -4,0 +4 @@
++#include <stddef.h>
+@@ -7,0 +8,4 @@
++#ifdef __cplusplus
++extern "C" {
++#endif
++
+@@ -24,0 +29,53 @@ struct nlmsghdr {
++
++struct nlmsgerr {
++  int error;
++  struct nlmsghdr msg;
++};
++
++#define NLM_F_REQUEST       0x01
++#define NLM_F_MULTI         0x02
++#define NLM_F_ACK           0x04
++#define NLM_F_ECHO          0x08
++#define NLM_F_DUMP_INTR     0x10
++#define NLM_F_DUMP_FILTERED 0x20
++
++#define NLM_F_ROOT   0x100
++#define NLM_F_MATCH  0x200
++#define NLM_F_ATOMIC 0x400
++#define NLM_F_DUMP   (NLM_F_ROOT | NLM_F_MATCH)
++
++// Flags carried by an NLMSG_ERROR response.
++#define NLM_F_CAPPED 0x100
++
++#define NLMSG_ALIGNTO 4U
++#define NLMSG_ALIGN(len) (((len) + NLMSG_ALIGNTO - 1) & ~(NLMSG_ALIGNTO - 1))
++#define NLMSG_HDRLEN ((int)NLMSG_ALIGN(sizeof(struct nlmsghdr)))
++#define NLMSG_LENGTH(len) ((len) + NLMSG_HDRLEN)
++#define NLMSG_SPACE(len) NLMSG_ALIGN(NLMSG_LENGTH(len))
++#define NLMSG_DATA(nlh) ((void*)(((char*)(nlh)) + NLMSG_HDRLEN))
++#define NLMSG_NEXT(nlh, len) \
++  ((len) -= NLMSG_ALIGN((nlh)->nlmsg_len), \
++   (struct nlmsghdr*)(((char*)(nlh)) + NLMSG_ALIGN((nlh)->nlmsg_len)))
++#define NLMSG_OK(nlh, len) \
++  ((len) >= (int)sizeof(struct nlmsghdr) && \
++   (nlh)->nlmsg_len >= sizeof(struct nlmsghdr) && \
++   (unsigned int)(nlh)->nlmsg_len <= (unsigned int)(len))
++#define NLMSG_PAYLOAD(nlh, len) ((int)((nlh)->nlmsg_len) - NLMSG_SPACE((len)))
++
++#define NLMSG_NOOP    0x1
++#define NLMSG_ERROR   0x2
++#define NLMSG_DONE    0x3
++#define NLMSG_OVERRUN 0x4
++
++#define NETLINK_ADD_MEMBERSHIP  1
++#define NETLINK_DROP_MEMBERSHIP 2
++#define NETLINK_PKTINFO         3
++#define NETLINK_BROADCAST_ERROR 4
++#define NETLINK_NO_ENOBUFS      5
++#define NETLINK_CAP_ACK         10
++#define NETLINK_EXT_ACK         11
++#define NETLINK_GET_STRICT_CHK  12
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/compat/posix/include/linux/rtnetlink.h b/compat/posix/include/linux/rtnetlink.h
+index 3b9ec8e96..8939c65cc 100644
+--- a/compat/posix/include/linux/rtnetlink.h
++++ b/compat/posix/include/linux/rtnetlink.h
+@@ -6,0 +7,14 @@
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define RTM_NEWLINK  16
++#define RTM_DELLINK  17
++#define RTM_GETLINK  18
++#define RTM_NEWADDR  20
++#define RTM_DELADDR  21
++#define RTM_GETADDR  22
++#define RTM_NEWROUTE 24
++#define RTM_DELROUTE 25
++#define RTM_GETROUTE 26
++
+@@ -13,0 +28,12 @@
++#define RTNLGRP_LINK        1
++#define RTNLGRP_IPV4_IFADDR 5
++#define RTNLGRP_IPV6_IFADDR 9
++
++enum rt_scope_t {
++  RT_SCOPE_UNIVERSE = 0,
++  RT_SCOPE_SITE = 200,
++  RT_SCOPE_LINK = 253,
++  RT_SCOPE_HOST = 254,
++  RT_SCOPE_NOWHERE = 255,
++};
++
+@@ -17,0 +44,47 @@ struct rtattr {
++
++#define RTA_ALIGNTO 4U
++#define RTA_ALIGN(len) (((len) + RTA_ALIGNTO - 1) & ~(RTA_ALIGNTO - 1))
++#define RTA_OK(rta, len) \
++  ((len) >= (int)sizeof(struct rtattr) && \
++   (rta)->rta_len >= sizeof(struct rtattr) && \
++   (unsigned int)(rta)->rta_len <= (unsigned int)(len))
++#define RTA_NEXT(rta, attrlen) \
++  ((attrlen) -= RTA_ALIGN((rta)->rta_len), \
++   (struct rtattr*)(((char*)(rta)) + RTA_ALIGN((rta)->rta_len)))
++#define RTA_LENGTH(len) (RTA_ALIGN(sizeof(struct rtattr)) + (len))
++#define RTA_SPACE(len) RTA_ALIGN(RTA_LENGTH(len))
++#define RTA_DATA(rta) ((void*)(((char*)(rta)) + RTA_LENGTH(0)))
++#define RTA_PAYLOAD(rta) ((int)((rta)->rta_len) - RTA_LENGTH(0))
++
++struct rtgenmsg {
++  unsigned char rtgen_family;
++};
++
++struct ifinfomsg {
++  unsigned char ifi_family;
++  unsigned char __ifi_pad;
++  unsigned short ifi_type;
++  int ifi_index;
++  unsigned int ifi_flags;
++  unsigned int ifi_change;
++};
++
++enum {
++  IFLA_UNSPEC,
++  IFLA_ADDRESS,
++  IFLA_BROADCAST,
++  IFLA_IFNAME,
++  IFLA_MTU,
++  IFLA_LINK,
++  IFLA_QDISC,
++  IFLA_STATS,
++  __IFLA_MAX,
++};
++#define IFLA_MAX (__IFLA_MAX - 1)
++
++#define IFLA_RTA(r) ((struct rtattr*)(((char*)(r)) + NLMSG_ALIGN(sizeof(struct ifinfomsg))))
++#define IFLA_PAYLOAD(n) NLMSG_PAYLOAD(n, sizeof(struct ifinfomsg))
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/compat/posix/include/net/if_arp.h b/compat/posix/include/net/if_arp.h
+index 675981be2..0e591300c 100644
+--- a/compat/posix/include/net/if_arp.h
++++ b/compat/posix/include/net/if_arp.h
+@@ -6,0 +7 @@
++#define ARPHRD_PPP      512
+@@ -7,0 +9 @@
++#define ARPHRD_NONE     0xfffe
 diff --git a/compat/posix/posix.cmake b/compat/posix/posix.cmake
-index 26022dfda..9df6ef727 100644
+index ffdeea190..4097ff6dd 100644
 --- a/compat/posix/posix.cmake
 +++ b/compat/posix/posix.cmake
-@@ -29,0 +30 @@ add_library(gesher_posix STATIC
+@@ -30,0 +31 @@ add_library(gesher_posix STATIC
 +  ${CMAKE_CURRENT_LIST_DIR}/src/netlink.cc
 diff --git a/compat/posix/src/binder.cc b/compat/posix/src/binder.cc
-index 7f2bb3f17..c60fae0d6 100644
+index 9cb32b9f2..556b2b240 100644
 --- a/compat/posix/src/binder.cc
 +++ b/compat/posix/src/binder.cc
-@@ -777,0 +778,19 @@ int Forward(const std::shared_ptr<BinderFile>& file, uint32_t request, void* arg
+@@ -785,0 +786,19 @@ int Forward(const std::shared_ptr<BinderFile>& file, uint32_t request, void* arg
 +bool binder_endpoint::MayInspectNetlink() {
 +  auto& binding = Current();
 +  if (!binding.PinsTrustedHost()) return false;
@@ -116,7 +369,7 @@ index 641db1a94..7a91bb01d 100644
 +  // -> {magic, version}; <- {status}. Requires a live protected system_server.
 +  kNetlinkInspection = 16,
 diff --git a/compat/posix/src/fd.cc b/compat/posix/src/fd.cc
-index 5660333f2..b047f7baf 100644
+index d6d1eec36..d4fea6110 100644
 --- a/compat/posix/src/fd.cc
 +++ b/compat/posix/src/fd.cc
 @@ -32,0 +33 @@
@@ -137,8 +390,102 @@ index 5660333f2..b047f7baf 100644
 +  return fd;
 +}
 +
+diff --git a/compat/posix/src/linux_socket.h b/compat/posix/src/linux_socket.h
+index 1dc72ce8a..764641090 100644
+--- a/compat/posix/src/linux_socket.h
++++ b/compat/posix/src/linux_socket.h
+@@ -91,0 +92,2 @@ bool InterfaceIoctl(unsigned long request, void* arg, int* result);
++bool ListNamedInterfaces(std::vector<ws::Interface>* interfaces);
++unsigned ToIfFlags(unsigned flags);
+diff --git a/compat/posix/src/netdb.cc b/compat/posix/src/netdb.cc
+index da324277e..633035c6e 100644
+--- a/compat/posix/src/netdb.cc
++++ b/compat/posix/src/netdb.cc
+@@ -19,0 +20 @@
++#include <gesher/binder_endpoint.h>
+@@ -462,22 +462,0 @@ namespace {
+-// Windows' interface names ("ethernet_32769", the names its own
+-// if_indextoname gives); one that does not fit IFNAMSIZ becomes "if<index>",
+-// the same way in every function here.
+-bool ListNamedInterfaces(std::vector<ws::Interface>* interfaces) {
+-  if (!ws::ListInterfaces(interfaces)) return false;
+-  for (ws::Interface& iface : *interfaces) {
+-    if (iface.name.size() >= IFNAMSIZ) iface.name = "if" + std::to_string(iface.index);
+-  }
+-  return true;
+-}
+-
+-unsigned ToIfFlags(unsigned flags) {
+-  unsigned result = 0;
+-  if (flags & ws::kIfUp) result |= IFF_UP;
+-  if (flags & ws::kIfRunning) result |= IFF_RUNNING;
+-  if (flags & ws::kIfLoopback) result |= IFF_LOOPBACK;
+-  if (flags & ws::kIfBroadcast) result |= IFF_BROADCAST;
+-  if (flags & ws::kIfMulticast) result |= IFF_MULTICAST;
+-  if (flags & ws::kIfPointToPoint) result |= IFF_POINTOPOINT;
+-  return result;
+-}
+-
+@@ -569,2 +548,2 @@ void if_freenameindex(struct if_nameindex* ptr) {
+-// As on Linux: an AF_PACKET entry per interface, holding its hardware
+-// address (which libcore's NetworkInterface reads), then one per IP address.
++// Android exposes IP addresses to ordinary apps. Link-layer entries come from
++// the same authenticated system-only inspection as RTM_GETLINK.
+@@ -575,0 +555 @@ int getifaddrs(struct ifaddrs** ifap) {
++  const bool include_link_layer = gesher::binder_endpoint::MayInspectNetlink();
+@@ -582,5 +562,15 @@ int getifaddrs(struct ifaddrs** ifap) {
+-    IfAddrsBlock* packet = NewEntry(iface);
+-    if (packet == nullptr) {
+-      freeifaddrs(*ifap);
+-      *ifap = nullptr;
+-      return errno = ENOMEM, -1;
++    if (include_link_layer) {
++      IfAddrsBlock* packet = NewEntry(iface);
++      if (packet == nullptr) {
++        freeifaddrs(*ifap);
++        *ifap = nullptr;
++        return errno = ENOMEM, -1;
++      }
++      auto* sll = reinterpret_cast<sockaddr_ll*>(&packet->address);
++      sll->sll_family = AF_PACKET;
++      sll->sll_ifindex = static_cast<int>(iface.index);
++      sll->sll_hatype = (iface.flags & ws::kIfLoopback) != 0 ? ARPHRD_LOOPBACK : ARPHRD_ETHER;
++      sll->sll_halen = static_cast<unsigned char>(iface.hardware_len);
++      memcpy(sll->sll_addr, iface.hardware, iface.hardware_len);
++      packet->ifa.ifa_addr = reinterpret_cast<sockaddr*>(&packet->address);
++      append(packet);
+@@ -588,8 +577,0 @@ int getifaddrs(struct ifaddrs** ifap) {
+-    auto* sll = reinterpret_cast<sockaddr_ll*>(&packet->address);
+-    sll->sll_family = AF_PACKET;
+-    sll->sll_ifindex = static_cast<int>(iface.index);
+-    sll->sll_hatype = (iface.flags & ws::kIfLoopback) != 0 ? ARPHRD_LOOPBACK : ARPHRD_ETHER;
+-    sll->sll_halen = static_cast<unsigned char>(iface.hardware_len);
+-    memcpy(sll->sll_addr, iface.hardware, iface.hardware_len);
+-    packet->ifa.ifa_addr = reinterpret_cast<sockaddr*>(&packet->address);
+-    append(packet);
+@@ -626,0 +609,20 @@ namespace gesher::sock {
++// Match the names returned by if_indextoname, including the IFNAMSIZ fallback.
++bool ListNamedInterfaces(std::vector<ws::Interface>* interfaces) {
++  if (!ws::ListInterfaces(interfaces)) return false;
++  for (ws::Interface& iface : *interfaces) {
++    if (iface.name.size() >= IFNAMSIZ) iface.name = "if" + std::to_string(iface.index);
++  }
++  return true;
++}
++
++unsigned ToIfFlags(unsigned flags) {
++  unsigned result = 0;
++  if (flags & ws::kIfUp) result |= IFF_UP;
++  if (flags & ws::kIfRunning) result |= IFF_RUNNING;
++  if (flags & ws::kIfLoopback) result |= IFF_LOOPBACK;
++  if (flags & ws::kIfBroadcast) result |= IFF_BROADCAST;
++  if (flags & ws::kIfMulticast) result |= IFF_MULTICAST;
++  if (flags & ws::kIfPointToPoint) result |= IFF_POINTOPOINT;
++  return result;
++}
++
 diff --git a/compat/posix/src/socket.cc b/compat/posix/src/socket.cc
-index 6683c8c5a..56312a162 100644
+index 8324d92d2..e8ead6205 100644
 --- a/compat/posix/src/socket.cc
 +++ b/compat/posix/src/socket.cc
 @@ -3,0 +4 @@
@@ -218,14 +565,14 @@ index 6683c8c5a..56312a162 100644
 +    }
 +    return n;
 +  }
-@@ -606,0 +664 @@ ssize_t sendmsg(int fd, const struct msghdr* msg, int flags) {
+@@ -611,0 +669 @@ ssize_t sendmsg(int fd, const struct msghdr* msg, int flags) {
 +    if (state.description->netlink) return errno = EOPNOTSUPP, -1;
-@@ -923,0 +982,4 @@ int setsockopt(int fd, int level, int name, const void* value, socklen_t len) {
+@@ -950,0 +1009,4 @@ int setsockopt(int fd, int level, int name, const void* value, socklen_t len) {
 +  if (state.description->netlink) {
 +    return gesher::NetlinkSetSockOpt(*state.description->netlink, level, name, value,
 +                                     static_cast<uint32_t>(len));
 +  }
-@@ -999,0 +1062,11 @@ int getsockopt(int fd, int level, int name, void* value, socklen_t* len) {
+@@ -1041,0 +1104,11 @@ int getsockopt(int fd, int level, int name, void* value, socklen_t* len) {
 +  if (state.description->netlink) {
 +    socklen_t capacity = 0;
 +    if (!ws::CopyFromUser(&capacity, len, sizeof(capacity))) return errno = EFAULT, -1;
@@ -237,10 +584,10 @@ index 6683c8c5a..56312a162 100644
 +    if (!ws::CopyToUser(len, &out_len, sizeof(out_len))) return errno = EFAULT, -1;
 +    return 0;
 +  }
-@@ -1115,0 +1189 @@ bool gesher::TransferSocket(int fd, uintptr_t* socket, uint64_t* metadata) {
+@@ -1164,0 +1238 @@ bool gesher::TransferSocket(int fd, uintptr_t* socket, uint64_t* metadata) {
 +  if (d.netlink) return false;
 diff --git a/compat/posix/src/socket_internal.h b/compat/posix/src/socket_internal.h
-index b715fa5c7..035236528 100644
+index 122339127..e20f26790 100644
 --- a/compat/posix/src/socket_internal.h
 +++ b/compat/posix/src/socket_internal.h
 @@ -20,0 +21,4 @@
@@ -250,41 +597,41 @@ index b715fa5c7..035236528 100644
 +
 @@ -72,0 +77 @@ struct SocketDescription {
 +  std::shared_ptr<gesher::NetlinkState> netlink;
-@@ -294,0 +300,4 @@ struct InterfaceAddress {
+@@ -310,0 +316,4 @@ struct InterfaceAddress {
 +  enum class State { kPreferred, kDeprecated, kTentative, kDuplicate };
 +  State state = State::kPreferred;
 +  bool permanent = false;
 +  bool temporary = false;
-@@ -297,0 +307 @@ struct Interface {
+@@ -313,0 +323 @@ struct Interface {
 +  enum class LinkKind { kOther, kLoopback, kEthernet, kPpp };
-@@ -304,0 +315 @@ struct Interface {
+@@ -320,0 +331 @@ struct Interface {
 +  LinkKind kind = LinkKind::kOther;
-@@ -307,0 +319,5 @@ bool ListInterfaces(std::vector<Interface>* interfaces);
+@@ -323,0 +335,5 @@ bool ListInterfaces(std::vector<Interface>* interfaces);
 +struct InterfaceChangeWatch;
 +enum class InterfaceChangeKind { kLink, kAddress };
 +InterfaceChangeWatch* WatchInterfaceChanges(InterfaceChangeKind kind, void (*changed)(void*),
 +                                             void* context);
 +void StopInterfaceChanges(InterfaceChangeWatch* watch);
-@@ -367,0 +384,2 @@ int RegisterSocket(const SocketFd& state);
+@@ -383,0 +400,2 @@ int RegisterSocket(const SocketFd& state);
 +// Registers an in-process AF_NETLINK descriptor backed by `netlink`.
 +int RegisterNetlinkSocket(bool nonblocking, int sock_type);
 diff --git a/compat/posix/src/system.cc b/compat/posix/src/system.cc
-index 0a7af110a..4cd5bc492 100644
+index d940ba6f5..ec900e299 100644
 --- a/compat/posix/src/system.cc
 +++ b/compat/posix/src/system.cc
-@@ -372,0 +373 @@ int ioctl(int fd, unsigned long request, ...) {
+@@ -376,0 +377 @@ int ioctl(int fd, unsigned long request, ...) {
 +    if (state.description->netlink) return errno = EACCES, -1;
-@@ -472 +473,2 @@ int fcntl(int fd, int cmd, ...) {
+@@ -476 +477,2 @@ int fcntl(int fd, int cmd, ...) {
 -              if (!state.description->native_nonblocking_datagram &&
 +              if (!state.description->netlink &&
 +                  !state.description->native_nonblocking_datagram &&
 diff --git a/compat/posix/src/winsock.cc b/compat/posix/src/winsock.cc
-index 91662df88..c3807d812 100644
+index 86c44eb8c..e6c726784 100644
 --- a/compat/posix/src/winsock.cc
 +++ b/compat/posix/src/winsock.cc
-@@ -23,0 +24 @@
+@@ -24,0 +25 @@
 +#include "netlink_internal.h"
-@@ -449,0 +451,13 @@ int Close(Socket s, const std::shared_ptr<SocketDescription>& description, bool
+@@ -451,0 +453,13 @@ int Close(Socket s, const std::shared_ptr<SocketDescription>& description, bool
 +  if (description && description->netlink) {
 +    {
 +      std::lock_guard<std::mutex> lock(description->error_mutex);
@@ -298,22 +645,22 @@ index 91662df88..c3807d812 100644
 +    }
 +    return 0;
 +  }
-@@ -1208,0 +1223,4 @@ ptrdiff_t SendOwned(Socket s, const Buffer* buffers, size_t count, int flags, co
+@@ -1410,0 +1425,4 @@ ptrdiff_t SendOwned(Socket s, const Buffer* buffers, size_t count, int flags, co
 +  if (description && description->netlink) {
 +    if (rights != nullptr && rights->count != 0) return errno = EOPNOTSUPP, -1;
 +    return gesher::NetlinkSend(*description->netlink, buffers, count, 0, nullptr, 0);
 +  }
-@@ -1227,0 +1246,6 @@ ptrdiff_t RecvOwned(Socket s, Buffer* buffers, size_t count, int flags, Address*
+@@ -1429,0 +1448,6 @@ ptrdiff_t RecvOwned(Socket s, Buffer* buffers, size_t count, int flags, Address*
 +  if (description && description->netlink) {
 +    if (rights != nullptr) *rights = {};
 +    if (credentials != nullptr) *credentials = {};
 +    return gesher::NetlinkRecv(*description->netlink, buffers, count, 0, nullptr, nullptr,
 +                               description->nonblocking.load() || dont_wait, result_flags);
 +  }
-@@ -1481,0 +1506,2 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
+@@ -1683,0 +1708,2 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
 +  bool has_netlink = false;
 +  bool has_netlink_ready = false;
-@@ -1489,0 +1516,7 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
+@@ -1691,0 +1718,7 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
 +    if (entries[i].description && entries[i].description->netlink) {
 +      has_netlink = true;
 +      fds[i].fd = INVALID_SOCKET;
@@ -321,7 +668,7 @@ index 91662df88..c3807d812 100644
 +          gesher::NetlinkPoll(*entries[i].description->netlink, entries[i].events) != 0;
 +      continue;
 +    }
-@@ -1536 +1569,6 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
+@@ -1738 +1771,6 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
 -  const int wait = has_lifecycle_hup ? 0 : has_owned_pending && (timeout_ms < 0 || timeout_ms > 10) ? 10 : timeout_ms;
 +  const int wait = (has_lifecycle_hup || has_netlink_ready)
 +                       ? 0
@@ -329,14 +676,14 @@ index 91662df88..c3807d812 100644
 +                                 (timeout_ms < 0 || timeout_ms > 10)
 +                             ? 10
 +                             : timeout_ms;
-@@ -1547 +1585,5 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
+@@ -1749 +1787,5 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
 -    if (!owned_pending[i] && !closed[i]) { active.push_back(fds[i]); active_index.push_back(i); }
 +    if (!owned_pending[i] && !closed[i] &&
 +        !(entries[i].description && entries[i].description->netlink)) {
 +      active.push_back(fds[i]);
 +      active_index.push_back(i);
 +    }
-@@ -1603 +1645,11 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
+@@ -1805 +1847,11 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
 -    if (entries[i].description) {
 +    if (entries[i].description && entries[i].description->netlink) {
 +      auto& description = *entries[i].description;
@@ -349,17 +696,17 @@ index 91662df88..c3807d812 100644
 +      if (change & kPollErr) r |= POLLERR;
 +      if (change & kPollNval) r |= POLLNVAL;
 +    } else if (entries[i].description) {
-@@ -2015 +2067,4 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
+@@ -2217 +2269,4 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
 -    if (a->IfType == IF_TYPE_SOFTWARE_LOOPBACK) iface.flags |= kIfLoopback;
 +    if (a->IfType == IF_TYPE_SOFTWARE_LOOPBACK) {
 +      iface.flags |= kIfLoopback;
 +      iface.kind = Interface::LinkKind::kLoopback;
 +    }
-@@ -2018,0 +2074 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
+@@ -2220,0 +2276 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
 +      iface.kind = Interface::LinkKind::kEthernet;
-@@ -2019,0 +2076 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
+@@ -2221,0 +2278 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
 +    if (a->IfType == IF_TYPE_PPP) iface.kind = Interface::LinkKind::kPpp;
-@@ -2027,0 +2085,9 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
+@@ -2229,0 +2287,9 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
 +      using State = InterfaceAddress::State;
 +      switch (u->DadState) {
 +        case IpDadStateDeprecated: address.state = State::kDeprecated; break;
@@ -369,7 +716,7 @@ index 91662df88..c3807d812 100644
 +      }
 +      address.permanent = u->ValidLifetime == 0xffffffffu;
 +      address.temporary = (u->Flags & IP_ADAPTER_ADDRESS_TRANSIENT) != 0;
-@@ -2034,0 +2101,48 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
+@@ -2236,0 +2303,48 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
 +struct InterfaceChangeWatch {
 +  std::mutex callback_mutex;
 +  void (*changed)(void*);
@@ -418,3 +765,142 @@ index 91662df88..c3807d812 100644
 +  if (CancelMibChangeNotify2(watch->handle) == NO_ERROR) delete watch;
 +}
 +
+diff --git a/tests/native/native_poll_allocations_windows.cc.in b/tests/native/native_poll_allocations_windows.cc.in
+index d05b4b46c..af9aefe27 100644
+--- a/tests/native/native_poll_allocations_windows.cc.in
++++ b/tests/native/native_poll_allocations_windows.cc.in
+@@ -17,0 +18,5 @@
++namespace gesher {
++// This extracted fixture exercises real Winsock descriptors only.
++int NetlinkPoll(NetlinkState&, int) { std::abort(); }
++}  // namespace gesher
++
+diff --git a/tests/native2/net4_ifaddrs.h b/tests/native2/net4_ifaddrs.h
+index a7083f809..972aa24e9 100644
+--- a/tests/native2/net4_ifaddrs.h
++++ b/tests/native2/net4_ifaddrs.h
+@@ -6 +5,0 @@
+-#include <net/if_arp.h>
+@@ -37 +35,0 @@ struct Node {
+-  std::string hardware;
+@@ -45 +43 @@ struct Result {
+-    return "LP64; IPv4/IPv6 loopback; netmasks/broadcast; packet index/hardware; independent lists; entries "
++    return "LP64; IPv4/IPv6 loopback; netmasks/broadcast; Android app link privacy; independent lists; entries "
+@@ -50,10 +47,0 @@ struct Result {
+-inline std::string Hardware(const sockaddr_ll* packet) {
+-  std::string hex;
+-  for (unsigned i = 0; i < packet->sll_halen && i < sizeof(packet->sll_addr); ++i) {
+-    char byte[3];
+-    std::snprintf(byte, sizeof(byte), "%02x", static_cast<unsigned>(packet->sll_addr[i]));
+-    hex += byte;
+-  }
+-  return hex.empty() ? "-" : hex;
+-}
+-
+@@ -79,10 +67 @@ inline std::vector<Node> Snapshot(ifaddrs* list, Result& result) {
+-      auto* packet = reinterpret_cast<const sockaddr_ll*>(p->ifa_addr);
+-      result.Check(packet->sll_ifindex > 0 && static_cast<unsigned>(packet->sll_ifindex) == node.index,
+-                   "packet index matches the interface");
+-      result.Check(packet->sll_halen <= sizeof(packet->sll_addr), "bounded hardware address");
+-      result.Check(packet->sll_halen != 6 || packet->sll_hatype == ARPHRD_ETHER, "six-byte Ethernet hardware type");
+-      result.Check(p->ifa_netmask == nullptr && p->ifa_broadaddr == nullptr, "packet has no IP mask/destination");
+-      result.Check((node.flags & IFF_LOOPBACK) == 0 ||
+-                       (packet->sll_hatype == ARPHRD_LOOPBACK && packet->sll_halen == 0),
+-                   "loopback hardware type and empty address");
+-      node.hardware = Hardware(packet);
++      result.Check(false, "ordinary Android caller sees no AF_PACKET rows");
+@@ -142 +121 @@ inline Result RunIfaddrs(const char* oracle = nullptr) {
+-  bool loop4 = false, loop6 = false, ethernet = false;
++  bool loop4 = false, loop6 = false;
+@@ -151,7 +129,0 @@ inline Result RunIfaddrs(const char* oracle = nullptr) {
+-    if (node.family == AF_PACKET && node.hardware.size() == 12 && (node.flags & IFF_LOOPBACK) == 0) ethernet = true;
+-    if (node.family == AF_INET || node.family == AF_INET6) {
+-      bool packet = false;
+-      for (const Node& other : original) packet |= other.family == AF_PACKET && other.name == node.name
+-          && other.index == node.index && other.flags == node.flags;
+-      result.Check(packet, "IP entry shares flags/index/name with its link entry");
+-    }
+@@ -160 +131,0 @@ inline Result RunIfaddrs(const char* oracle = nullptr) {
+-  result.Check(ethernet, "real non-loopback six-byte hardware address");
+@@ -178,0 +150 @@ inline Result RunIfaddrs(const char* oracle = nullptr) {
++    bool oracle4 = false, oracle6 = false;
+@@ -182 +154 @@ inline Result RunIfaddrs(const char* oracle = nullptr) {
+-      if (!fields) { result.Check(false, "valid host oracle row"); continue; }
++      if (!fields || kind != 'A') { result.Check(false, "valid host IP oracle row"); continue; }
+@@ -184,10 +156,8 @@ inline Result RunIfaddrs(const char* oracle = nullptr) {
+-      if (kind == 'P') {
+-        std::string hardware; fields >> hardware;
+-        for (const Node& node : original) found |= node.family == AF_PACKET && node.index == index && node.hardware == hardware;
+-      } else if (kind == 'A') {
+-        int family, prefix; unsigned scope; std::string text; fields >> family >> prefix >> text >> scope;
+-        std::array<unsigned char, 16> address{};
+-        result.Check(inet_pton(family, text.c_str(), address.data()) == 1, "host oracle numeric IP parses");
+-        for (const Node& node : original) found |= node.family == family && node.index == index
+-            && node.prefix == prefix && node.address == address && node.scope == scope;
+-      }
++      int family, prefix; unsigned scope; std::string text; fields >> family >> prefix >> text >> scope;
++      if (!fields) { result.Check(false, "valid host IP oracle address"); continue; }
++      std::array<unsigned char, 16> address{};
++      result.Check(inet_pton(family, text.c_str(), address.data()) == 1, "host oracle numeric IP parses");
++      oracle4 |= family == AF_INET;
++      oracle6 |= family == AF_INET6;
++      for (const Node& node : original) found |= node.family == family && node.index == index
++          && node.prefix == prefix && node.address == address && node.scope == scope;
+@@ -197 +167 @@ inline Result RunIfaddrs(const char* oracle = nullptr) {
+-    result.Check(result.oracle >= 3, "host oracle includes real link and IP records");
++    result.Check(oracle4 && oracle6, "host oracle independently includes real IPv4 and IPv6 address records");
+diff --git a/tests/windows/net/IfaddrsOracle.ps1 b/tests/windows/net/IfaddrsOracle.ps1
+index 6c5e06b32..d90a96c41 100644
+--- a/tests/windows/net/IfaddrsOracle.ps1
++++ b/tests/windows/net/IfaddrsOracle.ps1
+@@ -4 +4 @@
+-function Get-Net4IfaddrsOracleRows {
++function Get-Net4IfaddrsOracleRows([switch] $AddressOnly) {
+@@ -17,3 +17,5 @@ function Get-Net4IfaddrsOracleRows {
+-    $hardware = $adapter.GetPhysicalAddress().ToString().ToLowerInvariant()
+-    if (-not $hardware) { $hardware = '-' }
+-    $rows.Add("P $index $hardware")
++    if (-not $AddressOnly) {
++      $hardware = $adapter.GetPhysicalAddress().ToString().ToLowerInvariant()
++      if (-not $hardware) { $hardware = '-' }
++      $rows.Add("P $index $hardware")
++    }
+@@ -31 +33,2 @@ function Get-Net4IfaddrsOracleRows {
+-    Write-Host "INFO net4 oracle: IP-bound interface $($adapter.Name); index=$index; MAC=$hardware; addresses=$($properties.UnicastAddresses.Count)"
++    $link = if ($AddressOnly) { '' } else { " MAC=$hardware;" }
++    Write-Host "INFO net4 oracle: IP-bound interface $($adapter.Name); index=$index;$link addresses=$($properties.UnicastAddresses.Count)"
+diff --git a/tests/windows/tracks/44-native2.ps1 b/tests/windows/tracks/44-native2.ps1
+index d2432791a..34801e366 100644
+--- a/tests/windows/tracks/44-native2.ps1
++++ b/tests/windows/tracks/44-native2.ps1
+@@ -233 +233 @@ $n2Lines = @('Native2Activity: native2 extras: ok', 'Native2Activity: native2 dl
+-  'Native2Activity: native2 ifaddrs: ok; LP64; IPv4/IPv6 loopback; netmasks/broadcast; packet index/hardware; independent lists',
++  'Native2Activity: native2 ifaddrs: ok; LP64; IPv4/IPv6 loopback; netmasks/broadcast; Android app link privacy; independent lists',
+diff --git a/tests/windows/tracks/56-net.ps1 b/tests/windows/tracks/56-net.ps1
+index 7506ad78a..f4d11fdde 100644
+--- a/tests/windows/tracks/56-net.ps1
++++ b/tests/windows/tracks/56-net.ps1
+@@ -74,0 +75,11 @@ $cacerts = Join-Path $root 'system/etc/security/cacerts'
++Check 'net: NETLINK_ROUTE dumps, subscription registration and app restrictions' {
++  & "$Dir/netlink_route_test.exe"
++} @('netlink_route_test all passed')
++Check 'net: isolated AppContainer and authenticated SystemServer NETLINK access' {
++  $fixtureRoot = Join-Path $root "netlink-authority-$PID"
++  New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
++  $fixture = Join-Path $fixtureRoot 'appcontainer_netlink_probe.exe'
++  Copy-Item -LiteralPath "$Dir/appcontainer_netlink_probe.exe" -Destination $fixture -Force
++  & $fixture $Dir $fixtureRoot
++} @('actual protected NETLINK authority: ok')
++
+diff --git a/tests/windows/tracks/72-net4-ifaddrs.ps1 b/tests/windows/tracks/72-net4-ifaddrs.ps1
+index 7964af56c..604909840 100644
+--- a/tests/windows/tracks/72-net4-ifaddrs.ps1
++++ b/tests/windows/tracks/72-net4-ifaddrs.ps1
+@@ -4 +4 @@
+-[string[]]$oracleRows = @(Get-Net4IfaddrsOracleRows)
++[string[]]$oracleRows = @(Get-Net4IfaddrsOracleRows -AddressOnly)
+@@ -15,2 +15,2 @@ try {
+-        $out -match 'net4 ifaddrs: all passed; .*host oracle ([0-9]+)' -and [int]$Matches[1] -ge 3) {
+-      Write-Host "PASS  net4 ifaddrs ($abi): standalone ELF matches actual Windows addresses, prefixes, scopes, hardware/index and independent allocation lifetime"
++        $out -match 'net4 ifaddrs: all passed; .*host oracle ([0-9]+)' -and [int]$Matches[1] -ge 2) {
++      Write-Host "PASS  net4 ifaddrs ($abi): standalone ELF matches Windows IP addresses, prefixes and scopes, keeps link-layer rows private, and owns independent lists"

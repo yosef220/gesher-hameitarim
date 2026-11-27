@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "fifo_internal.h"
 #include "internal.h"
 #include "rooted_storage_client.h"
 #include <gesher/file_description.h>
@@ -214,6 +215,9 @@ struct dirent* readdir(DIR* dir) {
       (dir->data.dwReserved0 == IO_REPARSE_TAG_SYMLINK ||
        dir->data.dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT)) {
     type = DT_LNK;  // as lstat reports them (stat.cc)
+  } else if ((attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0 &&
+             dir->data.dwReserved0 == gesher::kLxFifoReparseTag) {
+    type = DT_FIFO;
   } else {
     type = (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0 ? DT_DIR : DT_REG;
   }

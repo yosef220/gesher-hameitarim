@@ -93,6 +93,8 @@
       "57-devsvc.ps1",
       "58-devices.ps1",
       "61-bluetooth.ps1",
+      "61-hello-credential.ps1",
+      "62-hello-keys.ps1",
       "83-libcore-io.ps1",
       "geocoder-operation-fixture.ps1",
       "geocoder-operation.ps1"
@@ -107,6 +109,7 @@
       "70-exec4-exit.ps1",
       "74-exec4-actions.ps1",
       "77-exec4-spawn.ps1",
+      "78-ptrace.ps1",
       "93-microg-gms.ps1",
       "94-framework-fixes.ps1",
       "95-browser.ps1",

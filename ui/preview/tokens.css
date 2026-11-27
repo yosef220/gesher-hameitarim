@@ -1,0 +1,64 @@
+/* נוצר על ידי tools/ui/generate.py מתוך ui/tokens.json. לא לערוך ביד. לאבי-טיפוס בדפדפן בלבד. */
+@font-face { font-family: 'David Libre'; font-weight: 400; src: url('../../tools/package/ui-fonts/DavidLibre-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'David Libre'; font-weight: 500; src: url('../../tools/package/ui-fonts/DavidLibre-Medium.ttf') format('truetype'); }
+@font-face { font-family: 'David Libre'; font-weight: 700; src: url('../../tools/package/ui-fonts/DavidLibre-Bold.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 400; src: url('../../tools/package/ui-fonts/IBMPlexSansHebrew-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 500; src: url('../../tools/package/ui-fonts/IBMPlexSansHebrew-Medium.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 600; src: url('../../tools/package/ui-fonts/IBMPlexSansHebrew-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 700; src: url('../../tools/package/ui-fonts/IBMPlexSansHebrew-Bold.ttf') format('truetype'); }
+:root {
+  --surface: #F7F8FA;
+  --surface-raised: #FFFFFF;
+  --surface-hover: #EEF1F5;
+  --selection: #EDE4D3;
+  --ink: #142338;
+  --ink-muted: #55657B;
+  --ink-disabled: #8A96A8;
+  --fill-disabled: #EEF1F5;
+  --brand: #22406A;
+  --brand-hover: #2B5185;
+  --brand-pressed: #19304F;
+  --on-brand: #FFFFFF;
+  --line: #DDE3EA;
+  --line-strong: #7D8A9D;
+  --focus: #22406A;
+  --string: #9C7219;
+  --string-glow: #D9A43B;
+  --mast: #22406A;
+  --danger: #B42318;
+  --on-danger: #FFFFFF;
+  --font-display: 'David Libre', 'Segoe UI', sans-serif;
+  --font-ui: 'IBM Plex Sans Hebrew', 'Segoe UI', sans-serif;
+  --type-caption: 12px;
+  --type-body: 14px;
+  --type-list-title: 16px;
+  --type-section: 21px;
+  --type-screen-title: 24px;
+  --type-wordmark: 36px;
+  --radius-window: 10px;
+  --radius-panel: 8px;
+  --radius-button: 6px;
+  --radius-pill: 999px;
+}
+:root[data-theme='dark'] {
+  --surface: #0F1A2B;
+  --surface-raised: #16243A;
+  --surface-hover: #1E2D45;
+  --selection: #42392A;
+  --ink: #EAF0F7;
+  --ink-muted: #9DAABD;
+  --ink-disabled: #5D6C83;
+  --fill-disabled: #1C2A40;
+  --brand: #86A9DB;
+  --brand-hover: #9DBAE3;
+  --brand-pressed: #6F95CC;
+  --on-brand: #0F1A2B;
+  --line: #26364F;
+  --line-strong: #6C7D97;
+  --focus: #9DBAE3;
+  --string: #E9BE5C;
+  --string-glow: #D9A43B;
+  --mast: #FFFFFF;
+  --danger: #F97066;
+  --on-danger: #0F1A2B;
+}
