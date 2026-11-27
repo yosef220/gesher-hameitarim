@@ -4,6 +4,34 @@
 
 עד גרסה 1.1.0 השם היה "גשר המיתרים" (Gesher HaMeitarim).
 
+## Meitar, in English
+
+Meitar (Hebrew: *meitar*, a string) runs Android apps on Windows, with a Hebrew user
+interface. It is a continuation of **Gesher**, created by **palmoni5**: the idea and
+most of the code are theirs (see [Credit](#credit-the-original-gesher) below). How the
+technology works is described in Gesher's original README, further down this page.
+
+**Status: early.** Compatibility with Android apps has not been measured systematically,
+and some apps do not work. Please do not assume that an app works because Android runs it.
+
+- **Download:** the [Releases page](https://github.com/yosef220/gesher-hameitarim/releases). The
+  installer guide is in Hebrew: [docs/he/08-install-guide.md](docs/he/08-install-guide.md).
+- **An app does not work?** Open an
+  [issue](https://github.com/yosef220/gesher-hameitarim/issues/new/choose) with the template
+  "App does not work": it asks for the app and its version, your Meitar and Windows
+  versions, and the logs (Control Center, "Open the logs folder"). Every report is added to
+  our test corpus.
+- **Security:** apps are not isolated from Windows. Read [the security section](#security-apps-are-not-isolated-from-windows)
+  before installing an `.apk`.
+- **License:** Meitar's own code is under the [PolyForm Strict License 1.0.0](LICENSE):
+  source-available, **not open source**. Non-commercial use only, with no redistribution,
+  modification or derivative works. A business needs a separate written license from the
+  repository owner. The code that comes from Gesher, up to commit `303bb835d`, stays under
+  the [Apache License 2.0](LICENSE-APACHE). Details: [NOTICE.md](NOTICE.md).
+- **Contributing:** code suggestions are welcome, and the repository owner is not obliged
+  to accept or use them. Read [CONTRIBUTING.md](CONTRIBUTING.md), which includes the license
+  you grant when you submit one.
+
 ## הקרדיט: Gesher המקורי
 
 מיתר מבוסס על **Gesher**, שיצר **palmoni5**. הוא פתח את הפרויקט ב-19 באוקטובר 2026, ובחמישה שבועות כתב בעצמו את רובו המכריע: 3,163 מתוך 3,342 הקומיטים עד הגרסה האחרונה שפורסמה כקוד פתוח. תרמו לו גם yom-chadash, ‏Y-PLONI, ‏ztcebuck, ‏ARI212121, ‏dudu, ‏talmidhon, ‏Lev-Good, ‏israelv ו-tsoolgee, ועוד תורמים שה-PRs שלהם נכללו כאן, כמו dudua99. הקרדיט של כל אחד מהם שמור בהיסטוריית הקוד.
