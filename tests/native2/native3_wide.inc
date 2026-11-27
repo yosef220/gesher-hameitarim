@@ -28,7 +28,15 @@ Part Wide() {
   WIDE_ENTRY(unsigned_integer, "wcstoul");
 #undef WIDE_ENTRY
   if (!complete) return p;
-  WideContracts(api, [&](bool ok, const std::string& what) { p.Check(ok, what); });
+  // ‏p.Check מאפס את errno אחרי כל בדיקה, והחוזים של ASCII (#441) מניחים בודק שלא נוגע בו:
+  // הם מגדירים errno = 17 לפני ההמרה, ובודקים אותו אחרי כמה בדיקות, כמו בבדיקה על המארח
+  // (tests/native/wide_ascii_contract_host.cc.in). לכן הבודק כאן מחזיר את errno לערך שהיה
+  // לפניו. כל חוזה אחר שבודק errno מגדיר אותו בעצמו לפני הקריאה, ולכן לא מושפע.
+  WideContracts(api, [&](bool ok, const std::string& what) {
+    int preserved = errno;
+    p.Check(ok, what);
+    errno = preserved;
+  });
   using Compare = int (*)(const wchar_t*, const wchar_t*);
   using CompareN = int (*)(const wchar_t*, const wchar_t*, size_t);
   auto compare = reinterpret_cast<Compare>(dlsym(RTLD_DEFAULT, "wcscmp"));

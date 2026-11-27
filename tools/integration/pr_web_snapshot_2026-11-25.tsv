@@ -1,0 +1,165 @@
+493	open	Lev-Good	-	feat(net): support SOCKS5 proxy via Windows proxy settings and GESHER_PROXY
+492	open	palmoni5	-	perf(control-panel): eliminate redundant startup compilation and double refresh
+491	open	palmoni5	-	fix(control-panel): show informational App Info dialog instead of uninstall prompt
+490	open	palmoni5	-	feat(identity): report the PC's real manufacturer and model instead of a Pixel 8
+489	open	palmoni5	-	fix(logging): redact credentials before logs are persisted
+487	open	palmoni5	automerge	feat(camera): Control Center setting to choose a PC image instead of a camera capture
+479	open	palmoni5	-	fix(window): keep an app window within its display (decision needed)
+478	open	palmoni5	-	feat(arm64): real fork and clone for arm64 guest code
+475	open	dudua99	-	feat(auth): integrate Windows Hello credentials and Android Keystore
+473	open	dudua99	-	feat(credentials): passkeys through Windows' WebAuthn API (Credential Manager, ADR 0093)
+470	open	dudua99	-	feat(auth): device-credential confirmation reaches apps through Windows Hello (ADR 0091, phase 2b; stacked on #366)
+469	open	dudua99	-	fix(net): metered state and background-data restriction from Windows
+468	open	dudua99	-	feat(accessibility): CaptioningManager follows Windows' caption settings
+467	open	dudua99	automerge	feat(location): CountryDetector from Windows' home region
+466	open	dudua99	-	feat(intents): mailto, tel, sms and geo intents reach the Windows handler that is registered for them
+465	open	dudua99	-	feat(speech): Android speech recognition over Windows speech recognition
+464	open	dudua99	-	fix(gms): report no Play services, Google account or push token that does not exist (#335)
+461	open	palmoni5	-	feat(posix): real cross-process ptrace with Yama permissions and wait4 stops
+452	open	dudua99	-	feat(print): Android printing to Windows printers
+451	open	dudua99	-	feat(tts): Android Text-to-speech over Windows voices
+450	open	dudua99	-	feat(media): serve content://media from a MediaStore index over the shared volume
+441	open	yom-chadash	-	perf(bionic): bypass multibyte staging for ASCII wide conversion
+440	open	yom-chadash	-	test: restore the SQLite path fixture on #427
+437	open	yom-chadash	-	test: restore the ARM64 pending rollback fixture for #432
+436	open	yom-chadash	-	test(services): enforce fixture persistence and provider readmission
+435	open	yom-chadash	-	ci: bound recovery for unframed GitHub EOF reads
+434	open	yom-chadash	-	perf(uri-grants): retire installed grants once per package publication
+432	open	palmoni5	automerge	Run apps protected by NetEase Yidun (Dreamehome)
+430	open	yom-chadash	-	perf(bionic): bound stable scandir sorting after 8N swaps
+429	open	palmoni5	-	Add permission-scoped NETLINK_ROUTE on Windows
+428	open	yom-chadash	-	perf(media): skip zero-free Annex-B words in complete MP4 writes
+427	open	palmoni5	-	Run packaged Android guests in Windows AppContainers
+424	open	yom-chadash	-	perf(bionic): reuse the successful tree-deletion route
+421	open	palmoni5	-	Declare hardware system features from real hardware: sensors, Wi-Fi, telephony, GLES 3.0 and the rest
+420	open	yom-chadash	-	ci: reuse bounded authenticated reads for public release versions
+416	open	dudua99	-	feat(downloads): serve content://downloads and run DownloadManager requests in the system server
+415	open	yom-chadash	-	perf(java): avoid Formatter allocations in service identity digests
+414	open	palmoni5	-	USB storage and CardWake compatibility
+413	open	yom-chadash	-	perf(bionic): scan bounded words in reverse byte search
+412	open	yom-chadash	-	perf(media): reuse exact row conversion for odd I420 crops
+410	open	yom-chadash	-	test(dns): reserve loopback UDP and TCP peer ports together
+408	open	yom-chadash	-	perf(bionic): remove registry locking from pthread key assignment
+405	open	yom-chadash	-	test(windows): observe PID census across retained-root exit
+404	open	yom-chadash	-	media: reuse exact half-phase resampler coefficients within each mix
+401	open	yom-chadash	-	perf(media): walk exact ImageReader plane coordinates without per-pixel division
+394	open	yom-chadash	-	test(dns): wait for real timeout callback and executor retirement
+393	open	yom-chadash	-	fix(ci): isolate TSF output metadata observers from pending writers
+391	open	palmoni5	-	Round 2: cumulative integration, retained damage, usage and real storage
+390	open	yom-chadash	-	fix(audio): preserve prepared blocking input during catch-up mixing
+389	open	yom-chadash	-	perf(camera): reuse exact chroma terms for matching NV12 RGBA frames
+384	open	yom-chadash	-	perf(bionic): remove the registry mutex from pthread key reads
+382	open	yom-chadash	-	perf(media): copy matching ImageReader RGBA frames in bulk
+380	open	palmoni5	-	Implement Android volume effects for OpenSL ES players
+379	open	yom-chadash	-	test(accounts): remove owned identity files in #122 fixture cleanup
+373	open	yom-chadash	-	perf(package): reuse exact UID owner metadata and batch cold queries
+372	open	yom-chadash	-	perf(media): avoid repeated frame walks for equal-rate capture
+370	open	yom-chadash	-	perf(bionic): retain only caller-visible snprintf output
+363	open	yom-chadash	-	test(clipboard): verify the real clipboard challenge before the background probe
+362	open	palmoni5	-	Fix bidi rendering in package consent dialogs
+361	open	yom-chadash	-	perf(binder): serialize transactions directly into the connection reply
+360	open	yom-chadash	-	perf(media): avoid same-size RGBA coordinate remapping
+359	open	yom-chadash	-	test(alarms): restore AMS lifecycle observer owner in #158 fixture
+358	open	yom-chadash	-	test(alarms): initialize sensor owner in exact-alarm fixture for #245
+354	open	yom-chadash	-	perf(http2): resolve fixed provider bindings once per framework loader
+353	open	yom-chadash	-	perf(pm): generate component families once per intent query
+352	open	yom-chadash	-	perf(stdio): reuse pinned stream owners during formatted input
+350	open	yom-chadash	-	net: bound unary HTTP bursts and preserve cancellation progress
+349	open	yom-chadash	-	perf(media): transfer exact packed HEVC output without a frame copy
+348	open	yom-chadash	-	perf(arm64): trim unused active TLS pages after initialization
+347	open	yom-chadash	-	media: halve MP3, Vorbis and Opus decode allocations with owned scratch
+345	open	yom-chadash	-	perf(packages): reuse visibility metadata by package generation
+343	open	yom-chadash	-	perf(bionic): wake child waiters on lifecycle notifications
+342	open	yom-chadash	-	perf(media): transfer owned packed AVC frames without copying
+341	open	yom-chadash	-	feat(http): stream Brotli responses with bounded native ownership
+340	open	dudua99	-	feat(auth): register IAuthService with AOSP's sensor-less answers (ADR 0091, phase 1)
+338	open	yom-chadash	-	perf(content): index observer dispatch while preserving Android delivery
+337	open	yom-chadash	-	perf(bionic): scan buffered line spans under one stream owner
+336	open	yom-chadash	-	perf(media): reuse released AVC input and bitstream buffers
+332	open	palmoni5	automerge	Let the user grant special app access from the Control Center
+328	open	palmoni5	automerge	fix(dexopt): pass dex2oat and profman their arguments as UTF-8
+296	open	palmoni5	-	fix(posix): honor receiver-selected flags for native-fence SCM_RIGHTS
+290	open	palmoni5	-	ui: restore MessageBox icons and sounds in host prompts
+271	open	palmoni5	-	net: retire connectivity observation when no owner needs it
+269	open	palmoni5	-	perf(trust): verified certificate encoding reuse experiment (NATIVE-11)
+268	open	ztcebuck	-	Fix voice call WASAPI multi-group mixing and add NETLINK_ROUTE socket support
+266	open	palmoni5	-	perf(accounts): bound authenticator request lifetimes (NATIVE-10 A)
+260	open	palmoni5	-	services: enforce foreground promotion manifest permissions (F06)
+256	open	ztcebuck	-	feat(posix): implement mkfifo and POSIX FIFO descriptors
+245	open	palmoni5	-	sensors: connect NDK queues to the authenticated Windows sensor hub (H01)
+232	open	palmoni5	-	perf(audio): suspend output rendering and feeder work while idle
+226	open	palmoni5	-	test: prebuild the owned clipboard foreground actor
+164	open	palmoni5	-	Implement continuing Windows NSD service-info subscriptions (N46)
+158	open	palmoni5	-	Implement owned Windows NSD registration and unregistration (N46)
+149	open	palmoni5	-	Implement binary-preserving NSD resolution and cancellation (N46)
+122	open	palmoni5	-	Implement authenticated SQLite UserDictionary provider (F15)
+107	open	palmoni5	-	fix(native): enforce classloader namespaces and library identity (N02/N03)
+103	open	palmoni5	-	fix(elf): honor symbol versions and dlvsym across guest ABIs (N05)
+484	closed	palmoni5	-	fix(bionic): export Android's libstdc++.so (operator new/delete, guards)
+471	closed	dudua99	-	feat(keystore): enforce user authentication through a Windows Hello-bound key (ADR 0092; stacked on #366)
+455	closed	Lev-Good	-	fix(server): app compatibility fixes for AccountManager, ContentProviders, and Play Games START_1P
+454	closed	Lev-Good	-	fix(dexopt): normalize profman paths via Device.dataDir() 8.3 prefix (#355)
+411	closed	palmoni5	draft	Test UsbManager during installed app startup
+403	closed	palmoni5	draft	Wi-Fi part 2: network specifier requests and suggestions through user-approved Windows profiles
+402	closed	palmoni5	-	Wi-Fi part 1: complete SDK 36 WifiManager and declare android.hardware.wifi from real WLAN hardware
+400	closed	palmoni5	-	Telephony over a Windows cellular modem (read-only, data-only)
+397	closed	palmoni5	-	Report FEATURE_SENSOR_* for the sensors SensorManager lists
+396	closed	palmoni5	-	Report the system features Windows backs; declare OpenGL ES 3.0
+392	closed	yom-chadash	-	test(appops): probe retirement monitors without reversing lock order
+388	closed	palmoni5	-	fix: complete round 1 compatibility and performance work from #381
+378	closed	yom-chadash	-	test(alarms): retire owned policy writes before #325 fixture cleanup
+374	closed	palmoni5	-	ci(automerge): release with merge commits instead of squash
+365	closed	palmoni5	automerge	Configure GitHub Sponsors for Gesher
+346	closed	palmoni5	automerge	ci: pin framework.yml to a commit on main
+292	closed	palmoni5	automerge	ci: repin the framework recipe to a commit reachable from main
+234	closed	palmoni5	-	posix: account reaped direct-child CPU across native and Java (N38)
+225	closed	palmoni5	-	tests: keep clipboard foreground helper on harness PowerShell
+223	closed	palmoni5	draft	[Validation only] Correct authenticated system identity in #198 Bluetooth CI fixture
+222	closed	palmoni5	draft	Repair and verify Bluetooth request intents from #198
+211	closed	palmoni5	-	fix(statusbar): a statusbar service without a SystemUI bar
+210	closed	palmoni5	-	feat(memfd): store and enforce memfd seals; ASharedMemory as libcutils' memfd regions
+209	closed	palmoni5	-	feat(socket): AF_UNIX socketpair credentials (ADR 0088, phase 1)
+208	closed	palmoni5	draft	docs(adr): AF_UNIX credentials and descriptor passing (0088, proposed)
+207	closed	palmoni5	-	fix(thermal): register thermal status listeners, as Android does without a HAL
+206	closed	palmoni5	-	fix(bionic): export fnmatch to loaded libraries, with bionic's flag values
+205	closed	palmoni5	-	fix(jni): know a JNIEnv proxy by its identity, not by its table
+204	closed	palmoni5	-	fix(mman): never fail an ordinary mapping because of its hint
+203	closed	palmoni5	-	fix(posix): report sysname "Linux" from uname, as Android does
+202	closed	palmoni5	-	ci: overlap builds with preflight, split the media shard and save caches only from main
+201	closed	palmoni5	-	fix(providers): bind and validate each provider component once
+200	closed	palmoni5	-	fix(permission): ship android.safetycenter so the Play Store survives package installs
+195	closed	palmoni5	-	ci: cut GITHUB_TOKEN REST calls and wait for quota resets instead of failing
+194	closed	ztcebuck	-	bionic: bound SelectImpl fd_set clearing to nfds
+192	closed	palmoni5	-	ci: recover stuck automerge gates; make the legacy QA gate optional once the App gate is required
+189	closed	palmoni5	-	test(posix): reach the real deadline in timeout cleanup controls
+183	closed	palmoni5	-	CI gate runner pilot (fail fixture)
+182	closed	palmoni5	-	CI gate runner pilot (pass fixture)
+163	closed	palmoni5	-	Implement Wi-Fi channel and blocking option value contracts (A02)
+162	closed	palmoni5	-	Audit pinned SDK36/37 API history and extension metadata (A07)
+159	closed	palmoni5	-	Implement Wi-Fi Direct discovery and USD value contracts (A02)
+150	closed	palmoni5	-	Implement SDK36 Wi-Fi Direct value contracts (A02)
+148	closed	palmoni5	-	Implement WifiNetworkSuggestion and Passpoint value contracts (A02)
+146	closed	palmoni5	-	Propagate capture availability and disconnect errors across Android APIs
+145	closed	palmoni5	-	Preserve notification ownership when migrating Windows toast identities
+142	closed	palmoni5	-	Separate colliding notification records and images safely
+141	closed	palmoni5	-	Implement WifiNetworkSpecifier value and matching contracts (A02)
+136	closed	palmoni5	-	Release completed WebView geolocation timeouts
+131	closed	palmoni5	-	fix(bionic): implement binary128 parsing and ARM64 numeric returns (N39)
+128	closed	palmoni5	-	test(arm64): qualify native callback cleanup and preserve failure baseline (N15)
+127	closed	palmoni5	-	feat(wifi): implement SDK36 configuration value contracts (A02)
+125	closed	palmoni5	-	ci: refresh reviewed source identity helper pins
+123	closed	palmoni5	-	fix(arm64): add Windows unwind metadata for native ABI thunks (N15/N18)
+116	closed	yom-chadash	-	Implement persistent Android user extended attributes (N42)
+106	closed	yom-chadash	-	Support installed Android spell checkers and their Binder sessions (F38)
+104	closed	yom-chadash	-	media: implement live AVC bitrate control and MediaCodec metrics (M05)
+94	closed	yom-chadash	-	media: preserve MediaCodec output surface timestamps (M18)
+84	closed	palmoni5	-	F38: Dynamic Shortcuts support
+83	closed	palmoni5	-	F18: Ordered Broadcasts support
+82	closed	palmoni5	-	W08: Multi-window/Freeform support
+81	closed	palmoni5	-	M07: Implement SMTC synchronization in MediaSessionService
+71	closed	palmoni5	-	feat(saf): implement Storage Access Framework (SAF) and Tree URI provider (F13)
+70	closed	palmoni5	-	feat(security): implement per-package identity and UID isolation (F07)
+68	closed	palmoni5	-	compat: implement POSIX pipe semantics, O_NONBLOCK, backpressure and epoll readiness
+67	closed	palmoni5	-	feat(server): enforce Android 10+ clipboard focus and default IME contract (F37)
+54	closed	ztcebuck	-	Camera/sensor check scanning support and Bionic REG_NEWLINE/escape fixes
+15	closed	palmoni5	-	Let the device idle after apps close; live-refresh the control panel

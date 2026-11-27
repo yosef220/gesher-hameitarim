@@ -1,6 +1,7 @@
 // gesher-base: the Linux socket API (<sys/socket.h>), over the Winsock side
 // in winsock.cc (see socket_internal.h). Only Linux's constants here.
 #include <errno.h>
+#include <linux/netlink.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -20,6 +21,7 @@
 
 #include "internal.h"
 #include "linux_socket.h"
+#include "netlink_internal.h"
 #include "socket_internal.h"
 #include "record_lock_descriptors.h"
 
@@ -132,8 +134,12 @@ static std::atomic<int> g_inet_allowed{-1};
 namespace gesher {
 int ConnectWithObserver(int fd, const void* raw, uint32_t length, ConnectObserver observer, void* context) {
   SocketFd state;
+  if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) {
+    return gesher::NetlinkConnect(*state.description->netlink, raw, length);
+  }
   ws::Address address;
-  if (!Lookup(fd, &state) || !ToAddress(static_cast<const sockaddr*>(raw), length, &address) || !MapUnixPath(&address, false)) return -1;
+  if (!ToAddress(static_cast<const sockaddr*>(raw), length, &address) || !MapUnixPath(&address, false)) return -1;
   if (state.description->provider == ws::Provider::kNativeIpv4Tcp && address.family == ws::Family::kInet) {
     std::shared_ptr<ws::ConnectOperation> operation;
     bool nonblocking;
@@ -224,6 +230,7 @@ int gesher_inet_allowed(void) {
 int gesher_bind_socket_interface(int fd, uint32_t if_index) {
   SocketFd state;
   if (!Lookup(fd, &state)) return errno;
+  if (state.description->netlink) return EOPNOTSUPP;
   return ws::BindInterface(state.socket, if_index) == 0 ? 0 : errno;
 }
 
@@ -231,6 +238,7 @@ int gesher_socket_interface(int fd, uint32_t* if_index) {
   if (if_index == nullptr) return EINVAL;
   SocketFd state;
   if (!Lookup(fd, &state)) return errno;
+  if (state.description->netlink) return EOPNOTSUPP;
   return ws::BoundInterface(state.socket, if_index) == 0 ? 0 : errno;
 }
 
@@ -242,6 +250,18 @@ uint32_t gesher_process_interface(void) { return ws::ProcessInterface(); }
 
 int socket(int domain, int type, int protocol) {
   if (!ws::Startup()) return -1;
+  if (domain == AF_NETLINK) {
+    const int base_type = type & ~kTypeFlags;
+    if (base_type != SOCK_RAW && base_type != SOCK_DGRAM) {
+      return errno = (base_type == SOCK_STREAM || base_type == SOCK_SEQPACKET ||
+                      base_type == SOCK_RDM || base_type == SOCK_PACKET)
+                         ? ESOCKTNOSUPPORT
+                         : EINVAL,
+             -1;
+    }
+    if (protocol != NETLINK_ROUTE) return errno = EPROTONOSUPPORT, -1;
+    return gesher::RegisterNetlinkSocket((type & SOCK_NONBLOCK) != 0, base_type);
+  }
   ws::Family family = ToFamily(domain);
   if (family == ws::Family::kOther || family == ws::Family::kUnspec) {
     return errno = EAFNOSUPPORT, -1;
@@ -363,8 +383,12 @@ int socketpair(int domain, int type, int protocol, int fds[2]) {
 
 int bind(int fd, const struct sockaddr* addr, socklen_t len) {
   SocketFd state;
+  if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) {
+    return gesher::NetlinkBind(*state.description->netlink, addr, static_cast<uint32_t>(len));
+  }
   ws::Address address;
-  if (!Lookup(fd, &state) || !ToAddress(addr, len, &address) || !MapUnixPath(&address, true)) {
+  if (!ToAddress(addr, len, &address) || !MapUnixPath(&address, true)) {
     return -1;
   }
   if (state.description->provider == ws::Provider::kOther) return ws::Bind(state.socket, address);
@@ -379,6 +403,7 @@ int connect(int fd, const struct sockaddr* addr, socklen_t len) {
 int listen(int fd, int backlog) {
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) return errno = EOPNOTSUPP, -1;
   if (state.description->provider == ws::Provider::kOther) return ws::Listen(state.socket, backlog);
   if (!BeginControl(fd, state)) return -1;
   return EndControl(state, ws::Listen(state.socket, backlog, state.description));
@@ -388,6 +413,7 @@ int accept4(int fd, struct sockaddr* addr, socklen_t* len, int flags) {
   if ((flags & ~kTypeFlags) != 0) return errno = EINVAL, -1;
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) return errno = EOPNOTSUPP, -1;
   ws::Address peer;
   ws::Socket s = ws::Accept(state.socket, &peer);
   if (s == ws::kInvalidSocket) return -1;
@@ -400,6 +426,9 @@ int accept(int fd, struct sockaddr* addr, socklen_t* len) { return accept4(fd, a
 int getsockname(int fd, struct sockaddr* addr, socklen_t* len) {
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) {
+    return gesher::NetlinkGetSockName(*state.description->netlink, addr, len, false);
+  }
   ws::Address address;
   if (ws::GetSockName(state.socket, &address) < 0) return -1;
   FromAddress(address, addr, len);
@@ -409,6 +438,9 @@ int getsockname(int fd, struct sockaddr* addr, socklen_t* len) {
 int getpeername(int fd, struct sockaddr* addr, socklen_t* len) {
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) {
+    return gesher::NetlinkGetSockName(*state.description->netlink, addr, len, true);
+  }
   ws::Address address;
   if (ws::GetPeerName(state.socket, &address) < 0) return -1;
   FromAddress(address, addr, len);
@@ -418,6 +450,7 @@ int getpeername(int fd, struct sockaddr* addr, socklen_t* len) {
 int shutdown(int fd, int how) {
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) return errno = EOPNOTSUPP, -1;
   if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) return errno = EINVAL, -1;
   return ws::Shutdown(state.socket, how != SHUT_WR, how != SHUT_RD);
 }
@@ -455,6 +488,11 @@ ssize_t SendBuffers(int fd, ws::Buffer* buffers, size_t count, int flags,
                     const ws::RightsToken* rights = nullptr) {
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
+  if (state.description->netlink) {
+    if (rights != nullptr && rights->count != 0) return errno = EOPNOTSUPP, -1;
+    return gesher::NetlinkSend(*state.description->netlink, buffers, count, flags, addr,
+                               static_cast<uint32_t>(addrlen));
+  }
   ws::Address to;
   if (addr != nullptr && (!ToAddress(addr, addrlen, &to) || !MapUnixPath(&to, false))) return -1;
   if (WouldBlock(state, flags, ws::kPollOut)) return -1;
@@ -465,11 +503,30 @@ ssize_t SendBuffers(int fd, ws::Buffer* buffers, size_t count, int flags,
 ssize_t RecvBuffers(int fd, ws::Buffer* buffers, size_t count, int flags, sockaddr* addr,
                     socklen_t* addrlen, int* result_flags = nullptr,
                     ws::UnixCredentials* credentials = nullptr, bool* pass_credentials = nullptr,
-                    std::vector<int>* rights = nullptr) {
+                    std::vector<int>* rights = nullptr, ws::PacketInfo* packet_info = nullptr) {
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
   // There is no error queue: Linux reports EAGAIN when it is empty.
   if (flags & MSG_ERRQUEUE) return errno = EAGAIN, -1;
+  if (state.description->netlink) {
+    if (pass_credentials != nullptr) *pass_credentials = false;
+    socklen_t capacity = 0;
+    uint32_t actual = 0;
+    if (addr != nullptr) {
+      if (addrlen == nullptr || !ws::CopyFromUser(&capacity, addrlen, sizeof(capacity))) {
+        return errno = EFAULT, -1;
+      }
+      actual = static_cast<uint32_t>(capacity);
+    }
+    const ssize_t n = gesher::NetlinkRecv(
+        *state.description->netlink, buffers, count, flags, addr,
+        addr != nullptr ? &actual : nullptr, state.description->nonblocking.load(), result_flags);
+    if (n >= 0 && addr != nullptr && addrlen != nullptr) {
+      const socklen_t out_len = static_cast<socklen_t>(actual);
+      if (!ws::CopyToUser(addrlen, &out_len, sizeof(out_len))) return errno = EFAULT, -1;
+    }
+    return n;
+  }
   if (WouldBlock(state, flags, ws::kPollIn)) return -1;
   if (pass_credentials != nullptr) {
     *pass_credentials = state.description->unix_datagram_pair.load() &&
@@ -479,10 +536,15 @@ ssize_t RecvBuffers(int fd, ws::Buffer* buffers, size_t count, int flags, sockad
   ws::RightsToken token;
   // SCM_RIGHTS (ADR 0088): a stream pair's groups come with the read that
   // returns their first byte (RecvOwned), a datagram's with its token.
+  // IP_PKTINFO: the receive reports the datagram's packet information.
+  const bool want_packet_info = packet_info != nullptr && state.description->recv_pktinfo.load();
+  if (packet_info != nullptr) *packet_info = {};
+  if (want_packet_info) ws::SetReceivePacketInfo(packet_info);
   ssize_t n = ws::RecvOwned(state.socket, buffers, count, ToMsgFlags(flags),
                        addr != nullptr ? &from : nullptr, state.description,
                             (flags & MSG_DONTWAIT) != 0, result_flags, credentials,
                             rights != nullptr ? &token : nullptr, rights);
+  if (want_packet_info) ws::SetReceivePacketInfo(nullptr);
   if (n >= 0 && rights != nullptr && token.count != 0)
     gesher::ClaimRights(token, rights, (flags & MSG_CMSG_CLOEXEC) != 0);
   if (n >= 0 && addr != nullptr) {
@@ -604,6 +666,7 @@ ssize_t sendmsg(int fd, const struct msghdr* msg, int flags) {
   if (!rights.empty()) {
     SocketFd state;
     if (!Lookup(fd, &state)) return -1;
+    if (state.description->netlink) return errno = EOPNOTSUPP, -1;
     size_t total = 0;
     for (const ws::Buffer& b : buffers) total += b.len;
     if (state.description->unix_datagram_pair.load()) {
@@ -655,30 +718,46 @@ ssize_t recvmsg(int fd, struct msghdr* msg, int flags) {
   // Linux (also with no control buffer at all).
   const size_t capacity = local.msg_control != nullptr ? local.msg_controllen : 0;
   std::vector<int> rights;
+  ws::PacketInfo packet_info;
   ssize_t n;
   pthread_cleanup_push(ReleaseCanceledBuffers, &buffers);
   n = RecvBuffers(fd, buffers.data(), buffers.size(), flags,
                  static_cast<sockaddr*>(local.msg_name),
                  local.msg_name != nullptr ? &local.msg_namelen : nullptr, &result_flags,
-                 &credentials, &pass_credentials, &rights);
+                 &credentials, &pass_credentials, &rights, &packet_info);
   pthread_cleanup_pop(0);
   if (n >= 0) {
     local.msg_flags = (result_flags & ws::kMsgTrunc) ? MSG_TRUNC : 0;
     std::vector<unsigned char> control;
-    // Appends one control message, as much of it as fits (Linux's put_cmsg).
-    auto append = [&](int type, const void* data, size_t size) -> bool {
+    // Appends one control message, as much of it as fits, as Linux's put_cmsg:
+    // nothing if not even its header fits, else the header with cmsg_len
+    // cut to the room left and as much of the data. False if it did not all
+    // fit (the caller's MSG_CTRUNC).
+    auto append = [&](int type, const void* data, size_t size, int level = SOL_SOCKET) -> bool {
       const size_t at = control.size();
-      if (capacity - at < CMSG_LEN(size)) return false;
+      const size_t room = capacity - at;
+      if (room < sizeof(cmsghdr)) return false;
+      const size_t length = CMSG_LEN(size) < room ? CMSG_LEN(size) : room;
       cmsghdr header = {};
-      header.cmsg_len = CMSG_LEN(size);
-      header.cmsg_level = SOL_SOCKET;
+      header.cmsg_len = length;
+      header.cmsg_level = level;
       header.cmsg_type = type;
-      const size_t space = CMSG_SPACE(size) < capacity - at ? CMSG_SPACE(size) : capacity - at;
+      const size_t space = CMSG_SPACE(size) < room ? CMSG_SPACE(size) : room;
       control.resize(at + space, 0);
       memcpy(control.data() + at, &header, sizeof(header));
-      memcpy(control.data() + at + CMSG_LEN(0), data, size);
-      return true;
+      if (length > CMSG_LEN(0)) memcpy(control.data() + at + CMSG_LEN(0), data, length - CMSG_LEN(0));
+      return length == CMSG_LEN(size);
     };
+    if (packet_info.valid) {
+      // IP_PKTINFO: the interface and the datagram's destination; ipi_spec_dst
+      // is the local address it was received at (winsock.cc's
+      // SpecificDestination, Linux's fib_compute_spec_dst).
+      in_pktinfo value = {};
+      value.ipi_ifindex = static_cast<int>(packet_info.ifindex);
+      memcpy(&value.ipi_addr, packet_info.address, sizeof(value.ipi_addr));
+      memcpy(&value.ipi_spec_dst, packet_info.local, sizeof(value.ipi_spec_dst));
+      if (!append(IP_PKTINFO, &value, sizeof(value), IPPROTO_IP)) local.msg_flags |= MSG_CTRUNC;
+    }
     if (pass_credentials) {
       // SO_PASSCRED (ADR 0088): the sender's credentials, from the datagram's
       // header. A control buffer too small for them is MSG_CTRUNC, as on Linux.
@@ -810,6 +889,12 @@ bool WriteInt(int v, void* value, socklen_t* len) {
   return errno = EINVAL, false;
 }
 
+// An AF_UNIX socketpair (ADR 0088): loopback sockets underneath, but Linux's
+// AF_UNIX has no IP options (EOPNOTSUPP for their levels).
+bool IsUnixPair(const ws::SocketDescription& description) {
+  return description.unix_datagram_pair.load() || description.unix_stream_pair.load();
+}
+
 // The index of the interface with this IPv4 address; 0 for INADDR_ANY.
 bool IndexForAddress(in_addr address, uint32_t* index) {
   *index = 0;
@@ -921,6 +1006,10 @@ int setsockopt(int fd, int level, int name, const void* value, socklen_t len) {
   SocketFd state;
   if (!Lookup(fd, &state)) return -1;
   ws::Option option;
+  if (state.description->netlink) {
+    return gesher::NetlinkSetSockOpt(*state.description->netlink, level, name, value,
+                                     static_cast<uint32_t>(len));
+  }
   int v;
   if (ToIntOption(level, name, &option)) {
     if (!ReadInt(value, len, &v)) return -1;
@@ -932,6 +1021,21 @@ int setsockopt(int fd, int level, int name, const void* value, socklen_t len) {
     // without it. So the value is only recorded, for getsockopt.
     if (!ReadInt(value, len, &v)) return -1;
     state.description->reuse_addr.store(v != 0);
+    return 0;
+  }
+  if (level == IPPROTO_IP && name == IP_PKTINFO) {
+    // recvmsg then delivers each IPv4 datagram's in_pktinfo, also a dual-stack
+    // IPv6 socket's IPv4 ones. Windows reports it once asked (SetPacketInfo);
+    // a stream socket accepts the option as on Linux, which has nothing to
+    // deliver there. An AF_UNIX pair is not an IP socket (EOPNOTSUPP).
+    if (IsUnixPair(*state.description)) return errno = EOPNOTSUPP, -1;
+    // As Linux's do_ip_setsockopt: an int, else a byte, else (optlen 0) off.
+    v = 0;
+    if (len >= 1) {
+      if (!ReadInt(value, len >= sizeof(int) ? sizeof(int) : 1, &v)) return -1;
+    }
+    if (ws::SetPacketInfo(state.socket, v != 0) < 0 && errno != ENOPROTOOPT && errno != EINVAL) return -1;
+    state.description->recv_pktinfo.store(v != 0);
     return 0;
   }
   if (level == SOL_SOCKET && name == SO_PASSCRED) {
@@ -997,6 +1101,17 @@ int getsockopt(int fd, int level, int name, void* value, socklen_t* len) {
   if (!Lookup(fd, &state)) return -1;
   if (value == nullptr || len == nullptr) return errno = EFAULT, -1;
   ws::Option option;
+  if (state.description->netlink) {
+    socklen_t capacity = 0;
+    if (!ws::CopyFromUser(&capacity, len, sizeof(capacity))) return errno = EFAULT, -1;
+    uint32_t actual = static_cast<uint32_t>(capacity);
+    if (gesher::NetlinkGetSockOpt(*state.description->netlink, level, name, value, &actual) < 0) {
+      return -1;
+    }
+    const socklen_t out_len = static_cast<socklen_t>(actual);
+    if (!ws::CopyToUser(len, &out_len, sizeof(out_len))) return errno = EFAULT, -1;
+    return 0;
+  }
   int v;
   if (ToIntOption(level, name, &option)) {
     if (option == ws::Option::kError) {
@@ -1017,6 +1132,10 @@ int getsockopt(int fd, int level, int name, void* value, socklen_t* len) {
   }
   if (level == SOL_SOCKET && name == SO_REUSEADDR) {
     return WriteInt(state.description->reuse_addr.load() ? 1 : 0, value, len) ? 0 : -1;
+  }
+  if (level == IPPROTO_IP && name == IP_PKTINFO) {
+    if (IsUnixPair(*state.description)) return errno = EOPNOTSUPP, -1;
+    return WriteInt(state.description->recv_pktinfo.load() ? 1 : 0, value, len) ? 0 : -1;
   }
   if (level == SOL_SOCKET && name == SO_PASSCRED && state.description->unix_datagram_pair.load()) {
     return WriteInt(state.description->pass_credentials.load() ? 1 : 0, value, len) ? 0 : -1;
@@ -1106,18 +1225,23 @@ constexpr uint32_t kTransferPassCredentials = 0x4;
 constexpr uint32_t kTransferNonBlocking = 0x8;
 constexpr uint32_t kTransferPeerCredentials = 0x10;
 constexpr uint32_t kTransferUnixStream = 0x20;
-constexpr int kTransferPidShift = 6;
+constexpr uint32_t kTransferPacketInfo = 0x40;  // IP_PKTINFO
+// The pid fills bits 7..31: pid / 4 < 2^25, pids below 2^27.
+constexpr int kTransferPidShift = 7;
+static_assert((uint64_t{1} << kTransferPidShift) > kTransferPacketInfo, "bits overlap");
 }  // namespace
 
 bool gesher::TransferSocket(int fd, uintptr_t* socket, uint64_t* metadata) {
   SocketFd state;
   if (!gesher::LookupSocket(fd, &state)) return false;
   const ws::SocketDescription& d = *state.description;
+  if (d.netlink) return false;
   uint64_t m = kTransferredSocket;
   if (d.unix_datagram_pair.load()) m |= kTransferUnixDatagram;
   if (d.unix_stream_pair.load()) m |= kTransferUnixStream;
   if (d.pass_credentials.load()) m |= kTransferPassCredentials;
   if (d.nonblocking.load()) m |= kTransferNonBlocking;
+  if (d.recv_pktinfo.load()) m |= kTransferPacketInfo;
   if (d.has_peer_credentials && d.peer_pid > 0 && d.peer_pid % 4 == 0 &&
       (static_cast<uint32_t>(d.peer_pid) >> 2) < (1u << (32 - kTransferPidShift)) &&
       d.peer_gid == d.peer_uid) {
@@ -1144,6 +1268,8 @@ int gesher::AdoptSocket(uintptr_t socket, uint64_t metadata) {
     d.unix_datagram_pair.store((metadata & kTransferUnixDatagram) != 0);
     d.unix_stream_pair.store((metadata & kTransferUnixStream) != 0);
     d.pass_credentials.store((metadata & kTransferPassCredentials) != 0);
+    // The Winsock option travels with the socket itself (SetPacketInfo).
+    d.recv_pktinfo.store((metadata & kTransferPacketInfo) != 0);
     if ((metadata & kTransferPeerCredentials) != 0) {
       d.has_peer_credentials = true;
       d.peer_pid = static_cast<int32_t>(((metadata & 0xffffffffu) >> kTransferPidShift) << 2);

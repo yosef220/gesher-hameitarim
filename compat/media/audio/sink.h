@@ -33,6 +33,9 @@ class Sink {
   // Android type (AUDIO_DEVICE_OUT_SPEAKER, ..._WIRED_HEADPHONE, ...).
   virtual std::string DeviceName() const { return "Gesher audio output"; }
   virtual int DeviceType() const { return 0x2; }
+  // Wait for the engine's timer or for the output device to request a refill.
+  // The opaque timer is a borrowed Windows waitable timer handle.
+  virtual void WaitForRefill(void* timer);
   // One period: pull what the output needs now. Returns false when the
   // output is gone (the device was removed); the engine then opens another.
   virtual bool Tick(Mixer* mixer) = 0;
@@ -42,7 +45,8 @@ class Sink {
 
 // WASAPI shared mode on the default render endpoint; null with `error` set
 // when there is none or it fails.
-std::unique_ptr<Sink> OpenWasapiSink(const std::u16string& app_name, std::string* error);
+std::unique_ptr<Sink> OpenWasapiSink(const std::u16string& app_name, std::string* error,
+                                    uint32_t session_owner = 0);
 // The mixed output, paced by the clock, into a 16-bit stereo 48 kHz WAV file.
 std::unique_ptr<Sink> OpenCaptureSink(const std::wstring& path, std::string* error);
 // Nothing heard, paced by the clock.
