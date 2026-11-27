@@ -478,6 +478,49 @@ bool SplashFor(const std::wstring& here, Splash* splash) {
   return true;
 }
 
+// Whether the file name is of an Android package (as the shell's file types).
+bool IsPackageFileName(const std::wstring& name) {
+  const std::wstring lower = Lower(name);
+  for (const wchar_t* ext : {L".apk", L".apks", L".xapk", L".apkm", L".apk+"}) {
+    const size_t n = wcslen(ext);
+    if (lower.size() > n && lower.compare(lower.size() - n, n, ext) == 0) return true;
+  }
+  return false;
+}
+
+// A double-clicked package file installs the app and starts it. Nobody reads the
+// output of such a launch (Explorer started it), so this is where to ask: once per
+// file, before anything is installed. A file already installed as it is (its record
+// in apk-icons.list names a package) starts without a question, and GESHER_INSTALL_CONFIRM=0
+// turns the question off. Returns false when the user said no: nothing is launched.
+bool ConfirmPackageInstall(const std::wstring& here) {
+  if (Env(L"GESHER_INSTALL_CONFIRM") == L"0") return true;
+  int argc = 0;
+  LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+  if (argv == nullptr) return true;
+  std::wstring target;
+  if (argc > 2 && Lower(argv[1]) == L"launch") target = argv[2];
+  else if (argc > 1) target = argv[1];
+  LocalFree(argv);
+  if (target.empty() || !IsPackageFileName(target) || !IsFile(target)) return true;
+  wchar_t full[MAX_PATH * 4];
+  DWORD n = GetFullPathNameW(target.c_str(), MAX_PATH * 4, full, nullptr);
+  const std::wstring apk = n > 0 && n < MAX_PATH * 4 ? std::wstring(full, n) : target;
+  std::wstring icon, package;
+  if (ApkRecord(GetDataDirectory(here), apk, &icon, &package) && !package.empty()) return true;
+  const size_t slash = apk.find_last_of(L"\\/");
+  const std::wstring name = slash == std::wstring::npos ? apk : apk.substr(slash + 1);
+  const auto language = GesherUiCurrentLanguage();
+  std::wstring text = GesherUiText(language, "launch_install_confirm");
+  // The file name is data, never a template; isolated so it keeps its own direction.
+  const size_t at = text.find(L"{0}");
+  if (at != std::wstring::npos) text.replace(at, 3, L"⁨" + name + L"⁩");
+  return GesherHostPrompt(GesherUiText(language, "brand"), text.c_str(),
+                          GesherUiText(language, "launch_install_yes"),
+                          GesherUiText(language, "launch_install_no"),
+                          GesherUiRtl(language), nullptr) != FALSE;
+}
+
 // shell32's SHGetPropertyStoreForWindow, looked up when first used.
 HRESULT WindowPropertyStore(HWND hwnd, IPropertyStore** store) {
   using GetStoreFn = HRESULT(WINAPI*)(HWND, REFIID, void**);
@@ -934,6 +977,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       LocalFree(argv);
     }
   }
+
+  // Explorer's double-click on a package file: ask before installing it.
+  if (!inherit && !control_panel && !ConfirmPackageInstall(here)) return 0;
 
   auto find_script = [&](const wchar_t* name) -> std::wstring {
     std::wstring candidate = here + L"\\" + name;

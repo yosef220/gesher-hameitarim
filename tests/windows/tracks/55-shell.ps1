@@ -453,6 +453,9 @@ public static class SplashLifetimeProbe {
     $psi.WorkingDirectory = $splashDir
     $psi.EnvironmentVariables['LOCALAPPDATA'] = $splashData
     $psi.EnvironmentVariables['SPLASH_PROBE_MODE'] = $case.Mode
+    # The confirmation before installing a double-clicked package (ConfirmPackageInstall) is a modal
+    # dialog nobody answers here; these cases check the splash, not the question.
+    $psi.EnvironmentVariables['GESHER_INSTALL_CONFIRM'] = '0'
     $psi.EnvironmentVariables['SPLASH_PROBE_PARENT_RECEIPT'] = $probeOut
     $psi.EnvironmentVariables['SPLASH_PROBE_CHILD_RECEIPT'] = $childOut
     $psi.EnvironmentVariables['SPLASH_PROBE_CHILD_ERROR'] = $childError
