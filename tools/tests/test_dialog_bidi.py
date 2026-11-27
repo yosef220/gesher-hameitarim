@@ -17,12 +17,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = json.loads((ROOT / "tools/i18n/messages.json").read_text(encoding="utf-8"))["messages"]
 
-# Shown in a dialog or in the Control Center (not printed by gesher-app).
+# Shown in a dialog or in the Control Center (not printed by gesher-app). cp_about_body is not
+# listed: its value is a version number (digits and dots), and the About dialog's contract test
+# (tests/windows/shell/Issue32And33Contracts.ps1) expects the version run exactly as inserted.
 DIALOG_KEYS = [
     "install_request", "removal_request",
     "cp_uninstall_confirm", "cp_uninstall_failed", "cp_install_failed", "cp_proxy_invalid",
     "cp_proxy_app_title", "cp_proxy_app_value", "cp_open_logs_failed",
-    "cp_camera_image_picker_failed", "cp_proxy_save_failed", "cp_about_body",
+    "cp_camera_image_picker_failed", "cp_proxy_save_failed",
     "cp_downloading", "cp_installing", "cp_update_exit_code", "cp_action_failed",
     "cp_accounts_remove_confirm", "cp_web_intent_fallback_failed",
 ]
