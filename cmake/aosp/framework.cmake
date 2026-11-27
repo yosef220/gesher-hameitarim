@@ -112,9 +112,12 @@ add_library(framework_runtime OBJECT
   ${_fwjni}/android_util_jar_StrictJarFile.cpp
   ${_fwjni}/com_android_internal_util_VirtualRefBasePtr.cpp
   ${CMAKE_SOURCE_DIR}/compat/framework/android_runtime.cc
+  ${CMAKE_SOURCE_DIR}/compat/framework/rooted_storage_server.cc
   ${CMAKE_SOURCE_DIR}/compat/framework/services_natives.cc
   ${CMAKE_SOURCE_DIR}/compat/framework/services_natives_pic.cc
   ${CMAKE_SOURCE_DIR}/compat/framework/services_zygote.cc
+  ${CMAKE_SOURCE_DIR}/compat/framework/app_container.cc
+  ${CMAKE_SOURCE_DIR}/compat/framework/services_dexopt_watch.cc
   ${CMAKE_SOURCE_DIR}/compat/framework/attach_standins.cc
   ${CMAKE_SOURCE_DIR}/compat/framework/shared_memory.cc
   ${CMAKE_SOURCE_DIR}/compat/framework/memory_file.cc
@@ -131,6 +134,8 @@ target_include_directories(framework_runtime PRIVATE
 # AndroidCharacter uses ICU4C directly, as the platform build does.
 target_link_libraries(framework_runtime PUBLIC androidfw binder ziparchive nativehelper utils cutils log base
   icu_headers icuuc boringssl_crypto)
+# App processes in per-package AppContainers (app_container.cc, ADR 0090).
+target_link_libraries(framework_runtime PRIVATE advapi32 ole32)
 # Android.bp's libandroid_runtime warning set, plus what -Wextra and C++20
 # add that Soong's global flags do not report: a deprecated implicit copy
 # (utils/TypeHelpers.h), anonymous enum arithmetic (ResourceTypes.h), and an
@@ -145,3 +150,11 @@ target_compile_options(framework_runtime PRIVATE -Wall -Wextra -Werror
 set_target_properties(framework_runtime PROPERTIES CXX_STANDARD 23)
 
 target_link_libraries(dalvikvm PRIVATE framework_runtime)
+
+add_executable(rooted_storage_host_probe
+  ${CMAKE_SOURCE_DIR}/tests/sandbox/rooted-storage-host-probe.cc
+  ${CMAKE_SOURCE_DIR}/compat/framework/rooted_storage_server.cc
+  ${CMAKE_SOURCE_DIR}/compat/framework/app_container.cc)
+target_compile_options(rooted_storage_host_probe PRIVATE -Wall -Wextra -Werror)
+target_link_options(rooted_storage_host_probe PRIVATE -municode)
+target_link_libraries(rooted_storage_host_probe PRIVATE gesher_posix)

@@ -40,6 +40,7 @@ public final class Device {
     }
 
     public static final String STATE_DEVICE = "device";
+    public static final String STATE_PROTECTED = "protected_binder";
     public static final String STATE_SHUTDOWN_EVENT = "shutdown_event";
     public static final String BINDERD = "binderd";
     public static final String SERVICEMANAGER = "servicemanager";
@@ -59,6 +60,14 @@ public final class Device {
         return new File(dataDir(), "system/gesher-device.ready");
     }
 
+    public static File cohostOwnerFile() {
+        return new File(dataDir(), "system/gesher-cohost-owner");
+    }
+
+    public static File cohostOwnerReadyFile() {
+        return new File(dataDir(), "system/gesher-cohost-owner.ready");
+    }
+
     public static File logsDir() {
         String d = System.getenv("GESHER_LOGS");
         if (d != null && !d.isEmpty()) return new File(d);
@@ -73,6 +82,14 @@ public final class Device {
     /** Names of this data directory's Windows objects (a mutex, an event). */
     private static String key() {
         return Integer.toHexString(dataDir().toLowerCase(java.util.Locale.ROOT).hashCode());
+    }
+
+    /**
+     * This device's tag in names it leaves outside $ANDROID_DATA (WLAN profiles): the
+     * same key as its Windows objects, as eight hex digits.
+     */
+    public static String profileTag() {
+        return String.format(java.util.Locale.ROOT, "%08x", dataDir().toLowerCase(java.util.Locale.ROOT).hashCode());
     }
 
     /** The mutex launchers hold while they find or start the device. */

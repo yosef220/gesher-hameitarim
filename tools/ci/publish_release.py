@@ -1,4 +1,7 @@
-"""Publish one source-bound installer using the protected main workflow."""
+"""Publish source-bound installer and portable assets using the protected main workflow.
+
+גשר המיתרים: הקומיט שמתויג יכול להיות בהיסטוריה של main או של product (RELEASE_BRANCHES).
+"""
 from dataclasses import dataclass
 import hashlib
 import json
@@ -14,16 +17,20 @@ from urllib.parse import quote
 
 from github_jobs import get_jobs
 from github_read import GitHubReadError, get_json
-from release_version import (API, DIGEST, MAX_INSTALLER_SIZE, REPOSITORY, REPOSITORY_ID,
-                             installer_name, release_catalog, release_version,
+from release_version import (API, DIGEST, MAX_INSTALLER_SIZE, RELEASE_EVENTS, REPOSITORY, REPOSITORY_ID,
+                             installer_name, portable_name, release_catalog, release_version,
                              stable_version, timestamp, version_string)
 
 
 CI_PATH = '.github/workflows/ci.yml'
-CI_ID = 389851347
+# גשר המיתרים: מספר הזהות של ci.yml בריפו שלנו (ב-upstream הוא 389851347).
+CI_ID = 430092261
 PUBLISH_PATH = '.github/workflows/publish-release.yml'
 PUBLISH_NAME = 'Publish Gesher release'
 PUBLISH_REF = f'{REPOSITORY}/{PUBLISH_PATH}@refs/heads/main'
+# גשר המיתרים: גם הפעלה ידנית, על ריצת CI על תג שכבר הצליחה (source_run).
+PUBLISH_EVENTS = ('workflow_run', 'workflow_dispatch')
+CI_RUN_ID = re.compile(r'[1-9][0-9]{0,19}')
 RELEASE_STEP = 'Validate pushed version tag'
 UPLOAD_STEP = 'Upload tested installer artifact'
 PUBLISH_STEP = 'Verify and publish the exact tested installer'
@@ -34,6 +41,15 @@ OID = re.compile(r'[0-9a-f]{40}')
 NONCE = re.compile(r'[0-9a-f]{64}')
 LOG_PREFIX = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z ')
 MARKER = '<!-- gesher-release-publisher-v1 '
+# גשר המיתרים: הגרסאות יוצאות מענף המוצר, שהוא main ועוד ה-PRs שבתור
+# (docs/he/07-upstream-sync.md). קומיט שנבדק צריך להיות בהיסטוריה של אחד מהם.
+RELEASE_BRANCHES = ('main', 'product')
+RELEASE_NAME = 'מיתר {}'  # השם הקודם, "גשר המיתרים", היה עד 1.1.0
+INSTALL_GUIDE = f'https://github.com/{REPOSITORY}/blob/main/docs/he/08-install-guide.md'
+# גשר המיתרים: "מה חדש" לכל גרסה, בעברית: tools/ci/release-notes/vX.Y.Z.md, אם קיים. הקובץ נקרא
+# מהגרסה של main שהפרסום רץ ממנה (בתוך tools/ci, שנמצא ב-sparse checkout של publish-release.yml).
+RELEASE_NOTES = Path(__file__).resolve().parent / 'release-notes'
+MAX_RELEASE_NOTES = 16384
 
 
 class ReleaseError(RuntimeError):
@@ -124,7 +140,7 @@ class Source:
 
     @classmethod
     def from_run(cls, run):
-        require(run['workflow_id'] == CI_ID and run['event'] == 'push' and completed(run, 'ci')
+        require(run['workflow_id'] == CI_ID and run['event'] in RELEASE_EVENTS and completed(run, 'ci')
                 and official(run['repository']) and official(run['head_repository'])
                 and oid(run['head_sha']) and positive(run['id']) and positive(run['run_attempt'])
                 and positive(run['check_suite_id']),
@@ -180,16 +196,92 @@ def confirm_main_ancestor(api, head):
             'The tested commit is outside current protected main history')
 
 
+def contained_in(api, head, branch):
+    try:
+        kind, tip = ref_pointer(api, f'heads/{branch}')
+    except GitHubReadError:
+        return False
+    require(kind == 'commit', f'Protected {branch} did not resolve to a commit')
+    comparison = api.get(f'{API}/compare/{head}...{tip}')
+    return (comparison['status'] in ('ahead', 'identical')
+            and comparison['base_commit']['sha'] == head
+            and comparison['merge_base_commit']['sha'] == head)
+
+
+def confirm_release_ancestor(api, head):
+    for branch in RELEASE_BRANCHES:
+        if contained_in(api, head, branch):
+            return branch
+    raise ReleaseError('The tested commit is outside current main and product history')
+
+
+def release_name(source):
+    return RELEASE_NAME.format(version_string(source.version))
+
+
+def release_notes(source):
+    path = RELEASE_NOTES / f'v{version_string(source.version)}.md'
+    if not path.is_file():
+        return ''
+    raw = path.read_bytes()
+    require(len(raw) <= MAX_RELEASE_NOTES, 'Release notes are too large')
+    text = raw.decode('utf-8').strip()
+    require(MARKER not in text, 'Release notes must not contain the publisher marker')
+    return text
+
+
+def release_intro(source):
+    version = version_string(source.version)
+    notes = release_notes(source)
+    return '\n'.join([
+        f'## מיתר {version}',
+        'מבוסס על Gesher',
+        '',
+        f'**להתקנה:** מורידים את `{installer_name(source.version)}` ומפעילים אותו. אפשר להתקין מעל Gesher ומעל גשר המיתרים: '
+        'האפליקציות המותקנות והנתונים שלהן נשמרים.',
+        '',
+        '**אזהרת Windows:** קובץ ההתקנה עוד לא חתום בחתימה דיגיטלית. כשמופיע החלון "Windows הגן על המחשב שלך", '
+        'לוחצים על "מידע נוסף" ואז על "הפעל בכל זאת".',
+        '',
+        f'אפשר להשוות את טביעת האצבע של הקובץ ל-`{CHECKSUM_NAME}`. כל הפרטים, כולל רשת מסוננת: '
+        f'[מדריך ההתקנה]({INSTALL_GUIDE}).',
+        *(['', notes] if notes else []),
+    ])
+
+
 def confirm_ci_workflow(api, source, trusted_ci_blob):
     definition = api.get(f'{API}/contents/{CI_PATH}?ref={source.head}')
-    require(definition['type'] == 'file' and definition['path'] == CI_PATH
-            and definition['sha'] == trusted_ci_blob,
+    require(definition['type'] == 'file' and definition['path'] == CI_PATH,
+            'Tested CI definition is not the CI workflow file')
+    if definition['sha'] == trusted_ci_blob:
+        return
+    # גשר המיתרים: בענף המוצר ה-CI כולל גם את הבדיקות שה-PRs שבתור הוסיפו, ולכן הוא שונה
+    # מזה של main. קומיט מההיסטוריה של product נבדק מול ה-ci.yml שבראש product.
+    require(contained_in(api, source.head, 'product'),
             'Tested CI definition differs from the protected publisher snapshot')
+    product = api.get(f'{API}/contents/{CI_PATH}?ref=product')
+    require(product['type'] == 'file' and product['path'] == CI_PATH and product['sha'] == definition['sha'],
+            'Tested CI definition differs from the protected publisher and product snapshots')
 
 
 def job_identity(job, run, attempt, head):
     return (positive(job['id']) and job['run_id'] == run
             and job['run_attempt'] == attempt and job['head_sha'] == head)
+
+
+def artifact_inventory(api, run, max_pages=20):
+    """כל ה-artifacts של ריצה, בכל הדפים. רשימה חלקית או רשימה שהשתנתה בזמן הקריאה נדחות."""
+    rows, total = [], None
+    for page in range(1, max_pages + 1):
+        inventory = api.get(f'{API}/actions/runs/{run}/artifacts?per_page=100&page={page}')
+        require(type(inventory.get('total_count')) is int and (total is None or inventory['total_count'] == total),
+                'Incomplete artifact inventory')
+        total = inventory['total_count']
+        rows.extend(inventory['artifacts'])
+        if len(rows) >= total or not inventory['artifacts']:
+            break
+    require(len(rows) == total and len({row['id'] for row in rows}) == len(rows), 'Incomplete artifact inventory')
+    return rows
 
 
 def confirm_producer(api, source):
@@ -206,9 +298,12 @@ def confirm_producer(api, source):
     upload = exactly_one(job['steps'], UPLOAD_STEP, 'Missing or ambiguous installer upload step')
     require(completed(upload, UPLOAD_STEP), 'Exact package job did not upload its tested installer')
 
-    inventory = api.get(f'{API}/actions/runs/{source.run}/artifacts?per_page=100')
-    require(inventory['total_count'] == len(inventory['artifacts']), 'Incomplete artifact inventory')
-    artifact = exactly_one(inventory['artifacts'], ARTIFACT_NAME, 'Missing or ambiguous installer artifact')
+    # גשר המיתרים: אחרי הרצה חוזרת יש בריצה artifacts מכל הניסיונות, ולכן הרשימה נקראת בכל הדפים,
+    # והמתקין הוא היחיד שנוצר בזמן עבודת ה-package של הניסיון שנבדק. מתקין מניסיון אחר לא נבחר.
+    started, finished = timestamp(job['started_at']), timestamp(job['completed_at'])
+    produced = [row for row in artifact_inventory(api, source.run)
+                if row.get('name') == ARTIFACT_NAME and started <= timestamp(row['created_at']) <= finished]
+    artifact = exactly_one(produced, ARTIFACT_NAME, 'Missing or ambiguous installer artifact')
     origin = artifact['workflow_run']
     require(positive(artifact['id']) and positive(artifact['size_in_bytes'])
             and artifact['size_in_bytes'] <= MAX_INSTALLER_SIZE
@@ -245,14 +340,23 @@ class Asset:
 
 def read_payload(directory, source):
     name = installer_name(source.version)
-    require({path.name for path in directory.iterdir()} == {name, CHECKSUM_NAME},
-            'The verified archive must contain exactly the versioned installer and checksum')
+    portable = portable_name(source.version)
+    portable_checksum_name = portable + '.sha256'
+    require({path.name for path in directory.iterdir()} ==
+            {name, portable, portable_checksum_name, CHECKSUM_NAME},
+            'The verified archive must contain exactly the versioned installer, portable ZIP and checksums')
     installer = Asset.read(directory / name, MAX_INSTALLER_SIZE)
-    checksum = Asset.read(directory / CHECKSUM_NAME, 512)
-    line = f'{installer.digest.removeprefix("sha256:")}  {name}'.encode('ascii')
-    require(checksum.path.read_bytes() in (line + b'\r\n', line + b'\n'),
-            'SHA256SUMS.txt does not match the tested installer')
-    return installer, checksum
+    archive = Asset.read(directory / portable, MAX_INSTALLER_SIZE)
+    portable_checksum = Asset.read(directory / portable_checksum_name, 512)
+    checksum = Asset.read(directory / CHECKSUM_NAME, 1024)
+    lines = [f'{item.digest.removeprefix("sha256:")}  {item.name}'.encode('ascii')
+             for item in (installer, archive)]
+    require(portable_checksum.path.read_bytes() in (lines[1] + b'\r\n', lines[1] + b'\n'),
+            'Portable checksum does not match the tested ZIP')
+    require(checksum.path.read_bytes() in (b'\r\n'.join(lines) + b'\r\n',
+                                          b'\n'.join(lines) + b'\n'),
+            'SHA256SUMS.txt does not match the tested installer and portable ZIP')
+    return installer, archive, portable_checksum, checksum
 
 
 def download_artifact(artifact_id, digest, destination):
@@ -260,8 +364,8 @@ def download_artifact(artifact_id, digest, destination):
     try:
         subprocess.run([sys.executable, str(verifier), '--id', str(artifact_id), '--digest', digest,
                         '--destination', str(destination)], check=True,
-                       # Download time plus the downloader's 15-minute quota wait budget.
-                       timeout=360 + 15 * 60)
+                       # Download time plus the downloader's 61-minute quota wait budget.
+                       timeout=360 + 61 * 60)
     except (OSError, subprocess.SubprocessError):
         raise ReleaseError('Could not download and verify the exact installer archive') from None
 
@@ -278,7 +382,7 @@ class Issuer:
         require(run['id'] == self.run and run['run_attempt'] == self.attempt
                 and run['workflow_id'] == self.workflow
                 and run['path'] in (PUBLISH_PATH, f'{PUBLISH_PATH}@main', f'{PUBLISH_PATH}@refs/heads/main')
-                and run['name'] == PUBLISH_NAME and run['event'] == 'workflow_run'
+                and run['name'] == PUBLISH_NAME and run['event'] in PUBLISH_EVENTS
                 and run['head_branch'] == 'main' and run['head_sha'] == self.head
                 and official(run['repository']) and official(run['head_repository']),
                 'Draft issuer was not the canonical protected publisher')
@@ -335,7 +439,7 @@ def confirm_release(release, source, marker, expected_id=None):
     markers = [line for line in release['body'].splitlines() if line.startswith(MARKER)]
     require(positive(release['id']) and (expected_id is None or release['id'] == expected_id)
             and release['tag_name'] == source.tag and release['prerelease'] is False
-            and type(release['draft']) is bool and release['name'] == f'Gesher {version_string(source.version)}'
+            and type(release['draft']) is bool and release['name'] == release_name(source)
             and all(author.get(key) == value for key, value in BOT.items())
             and markers == [marker],
             'Release identity, ownership, or provenance changed')
@@ -437,7 +541,7 @@ def confirm_publication(api, response, endpoint, source, marker, release_id, ass
 def publish(api, source, issuer, trusted_ci_blob, directory, download=download_artifact):
     source.confirm_current(api)
     pointer = release_pointer(api, source)
-    confirm_main_ancestor(api, source.head)
+    confirm_release_ancestor(api, source.head)
     confirm_ci_workflow(api, source, trusted_ci_blob)
     package, artifact, digest = confirm_producer(api, source)
     download(artifact, digest, directory)
@@ -458,8 +562,9 @@ def publish(api, source, issuer, trusted_ci_blob, directory, download=download_a
         confirm_pointer(api, source, pointer)
         release = api.mutate('POST', f'{API}/releases', body={
             'tag_name': source.tag, 'target_commitish': source.head,
-            'name': f'Gesher {version_string(source.version)}', 'draft': True,
-            'prerelease': False, 'generate_release_notes': True, 'body': marker,
+            'name': release_name(source), 'draft': True,
+            'prerelease': False, 'generate_release_notes': True,
+            'body': marker + '\n\n' + release_intro(source),
         })
         confirm_release(release, source, marker)
         require(release['draft'] and not release['assets'], 'Create did not return a new empty draft')
@@ -491,7 +596,7 @@ def publish(api, source, issuer, trusted_ci_blob, directory, download=download_a
         known = visible_upload(api, endpoint, source, marker, release_id, assets, asset.name, known)
 
     source.confirm_current(api)
-    confirm_main_ancestor(api, source.head)
+    confirm_release_ancestor(api, source.head)
     catalog = list(release_catalog(api.get))
     draft = matching_release(catalog, source)
     require(draft is not None, 'Owned draft disappeared before publication')
@@ -515,24 +620,37 @@ def publish(api, source, issuer, trusted_ci_blob, directory, download=download_a
     return f'Publication confirmed for {source.tag} (release {release_id})'
 
 
+def source_run(api, environ, event):
+    """ריצת ה-CI שמפרסמים. אחרי workflow_run: הריצה שהסתיימה, מתוך האירוע. בהפעלה ידנית: הריצה
+    שהמספר שלה נמסר (PUBLISH_CI_RUN_ID), כפי ש-GitHub מחזיר אותה עכשיו. בשני המקרים Source.from_run
+    והבדיקות שאחריו זהים: ריצה מוצלחת של ci.yml על תג, בניסיון האחרון שלה."""
+    if environ.get('GITHUB_EVENT_NAME') == 'workflow_run':
+        require(event['action'] == 'completed' and official(event['repository'])
+                and event['repository']['default_branch'] == 'main'
+                and event['workflow']['id'] == CI_ID and event['workflow']['path'] == CI_PATH,
+                'The event is not a canonical CI completion')
+        return event['workflow_run']
+    run_id = environ.get('PUBLISH_CI_RUN_ID', '')
+    require(CI_RUN_ID.fullmatch(run_id) is not None, 'A manual publication needs the CI run id')
+    require(official(event['repository']) and event['repository']['default_branch'] == 'main',
+            'The manual publication is not from the canonical repository')
+    return api.get(f'{API}/actions/runs/{run_id}')
+
+
 def main(environ=os.environ):
     require(environ.get('GITHUB_ACTIONS') == 'true'
-            and environ.get('GITHUB_EVENT_NAME') == 'workflow_run'
+            and environ.get('GITHUB_EVENT_NAME') in PUBLISH_EVENTS
             and environ.get('GITHUB_WORKFLOW_REF') == PUBLISH_REF
             and environ.get('GITHUB_REPOSITORY') == REPOSITORY
             and environ.get('GITHUB_REPOSITORY_ID') == str(REPOSITORY_ID)
             and environ.get('GITHUB_REF') == 'refs/heads/main',
             'Publisher must run as a protected main workflow_run')
     event = json.loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-    require(event['action'] == 'completed' and official(event['repository'])
-            and event['repository']['default_branch'] == 'main'
-            and event['workflow']['id'] == CI_ID and event['workflow']['path'] == CI_PATH,
-            'The event is not a canonical CI completion')
-    source = Source.from_run(event['workflow_run'])
+    api = GitHub()
+    source = Source.from_run(source_run(api, environ, event))
     head, ci_blob = subprocess.check_output(['git', 'rev-parse', 'HEAD', f'HEAD:{CI_PATH}'], text=True).splitlines()
     require(oid(head) and oid(ci_blob) and head == environ['GITHUB_WORKFLOW_SHA'],
             'Publisher did not check out its exact protected workflow revision')
-    api = GitHub()
     publication_workflow = api.get(f'{API}/actions/workflows/publish-release.yml')
     require(publication_workflow['path'] == PUBLISH_PATH and positive(publication_workflow['id']),
             'Canonical publisher workflow identity is unavailable')
