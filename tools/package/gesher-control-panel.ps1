@@ -1857,7 +1857,8 @@ function Show-ModernMessageDialog {
     param(
         [Parameter(Mandatory)] [string] $Title,
         [Parameter(Mandatory)] [string] $Message,
-        [bool] $IsError = $false
+        [bool] $IsError = $false,
+        [switch] $About
     )
 
     # גשר המיתרים: שגיאה באדום, מידע בצבע המותג, לפי המצב של החלון
@@ -1866,7 +1867,7 @@ function Show-ModernMessageDialog {
 
     $dialog = New-PanelView 'message' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection; PanelMessageSymbol = $(if ($IsError) { '!' } else { 'i' }) }
     $dialog.Title = $Title
-    $dialog.FindName('DialogMessage').Text = $Message
+    if ($About) { Set-PanelAboutText $dialog $Message } else { $dialog.FindName('DialogMessage').Text = $Message }
     $dialog.FindName('BtnOk').Content = Get-GesherText 'cp_dialog_ok'
     $dialog.Owner = $window
     $dialog.Resources['PanelBadgeBackground'] = Get-PanelBrush $dialog $badgeRole
@@ -2323,6 +2324,14 @@ $btnOpenLogs.Add_Click({
     catch {
         Show-ModernMessageDialog -Title (Get-GesherText 'cp_title') -Message (Get-GesherText 'cp_open_logs_failed' @($_.Exception.Message)) -IsError $true
     }
+})
+
+# מיתר: "אודות", עם השורה "מבוסס על Gesher" והקרדיט ליוצר של Gesher. דיאלוג הודעה רגיל, כמו שאר הדיאלוגים.
+$btnAbout = $window.FindName('BtnAbout')
+$btnAbout.Add_Click({
+    $aboutVersion = Get-GesherInstalledVersion -InstallDirectory $here
+    if (-not $aboutVersion) { $aboutVersion = Get-GesherText 'cp_update_unknown' }
+    Show-ModernMessageDialog -Title (Get-GesherText 'cp_about_title') -Message (Get-GesherText 'cp_about_body' @($aboutVersion)) -About
 })
 
 # Attach click events through visual tree dispatcher

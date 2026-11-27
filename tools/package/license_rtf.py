@@ -1,4 +1,4 @@
-"""גשר המיתרים: מסך הרישיון של אשף ההתקנה (LicenseFile), בעברית ובאנגלית.
+"""מיתר: מסך הרישיון של אשף ההתקנה (LicenseFile), בעברית ובאנגלית.
 
 הקבצים license.he.rtf ו-license.en.rtf נבנים מכאן: תקציר במילים פשוטות (מה מותר, מה אסור,
 ולשימוש בעסק), ואחריו הנוסח המחייב מ-LICENSE בשורש המאגר, כמו שהוא. העיצוב לפי
@@ -22,7 +22,7 @@ INK, SKY, STEEL = 1, 2, 3
 
 SUMMARY = {
     'he': {
-        'lead': 'גשר המיתרים חינמי לשימוש אישי',
+        'lead': 'מיתר חינמי לשימוש אישי',
         'groups': (
             ('מה מותר', (
                 'להתקין ולהשתמש בבית, ללימוד ולתחביב.',
@@ -43,7 +43,7 @@ SUMMARY = {
         'legal': 'הנוסח המחייב (באנגלית)',
     },
     'en': {
-        'lead': 'Gesher HaMeitarim is free for personal use',
+        'lead': 'Meitar is free for personal use',
         'groups': (
             ('You may', (
                 'Install it and use it at home, for study and for hobbies.',
@@ -111,9 +111,9 @@ def legal_blocks():
         raise ValueError('ב-LICENSE חסרים הקו המפריד או הנוסח של PolyForm Strict 1.0.0')
     blocks = []
     for block in re.split(r'\n\s*\n', preface.strip()):
-        if re.search('[\u0590-\u05FF]', block) and not block.startswith('Gesher HaMeitarim'):
+        if re.search('[\u0590-\u05FF]', block) and not block.startswith('Meitar ('):
             continue
-        lines = block.splitlines() if block.startswith('Gesher HaMeitarim') else [' '.join(block.split())]
+        lines = block.splitlines() if block.startswith('Meitar (') else [' '.join(block.split())]
         blocks.extend(('body', line) for line in lines)
     for block in re.split(r'\n\s*\n', polyform.strip()):
         block = ' '.join(block.split())

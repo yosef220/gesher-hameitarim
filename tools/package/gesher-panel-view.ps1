@@ -117,3 +117,35 @@ function New-PanelView([ValidateSet('dashboard', 'confirm', 'message', 'proxy')]
 function Get-PanelBrush($View, [string] $Role) {
     return $View.FindResource("Gesher${Role}Brush")
 }
+
+# הדיאלוג "אודות": שם המוצר בגופן הכותרת (כמו בכותרת של מרכז הבקרה) והגרסה לידו, השורה "מבוסס על Gesher"
+# מתחתיו בצבע משני, והקרדיט כטקסט רגיל. השורה הראשונה היא "שם גרסה", והשנייה השורה הקבועה של המותג.
+function Set-PanelAboutText($View, [string] $Text) {
+    $block = $View.FindName('DialogMessage')
+    $lines = @($Text -split "`n")
+    $block.Inlines.Clear()
+    $head = $lines[0]
+    $cut = $head.LastIndexOf(' ')
+    $name = if ($cut -gt 0) { $head.Substring(0, $cut) } else { $head }
+    $version = if ($cut -gt 0) { $head.Substring($cut + 1) } else { '' }
+    $nameRun = [System.Windows.Documents.Run]::new($name)
+    $nameRun.FontFamily = $View.FindResource('PanelDisplayFont')
+    $nameRun.FontSize = 28
+    $nameRun.FontWeight = [System.Windows.FontWeights]::Bold
+    $nameRun.Foreground = Get-PanelBrush $View 'Ink'
+    $block.Inlines.Add($nameRun)
+    if ($version) {
+        $versionRun = [System.Windows.Documents.Run]::new(' ' + $version)
+        $versionRun.Foreground = Get-PanelBrush $View 'InkMuted'
+        $block.Inlines.Add($versionRun)
+    }
+    for ($i = 1; $i -lt $lines.Count; $i++) {
+        $block.Inlines.Add([System.Windows.Documents.LineBreak]::new())
+        $run = [System.Windows.Documents.Run]::new($lines[$i])
+        if ($i -eq 1) {
+            $run.FontSize = 12
+            $run.Foreground = Get-PanelBrush $View 'InkMuted'
+        }
+        $block.Inlines.Add($run)
+    }
+}

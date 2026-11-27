@@ -44,7 +44,7 @@ MARKER = '<!-- gesher-release-publisher-v1 '
 # גשר המיתרים: הגרסאות יוצאות מענף המוצר, שהוא main ועוד ה-PRs שבתור
 # (docs/he/07-upstream-sync.md). קומיט שנבדק צריך להיות בהיסטוריה של אחד מהם.
 RELEASE_BRANCHES = ('main', 'product')
-RELEASE_NAME = 'גשר המיתרים {}'
+RELEASE_NAME = 'מיתר {}'  # השם הקודם, "גשר המיתרים", היה עד 1.1.0
 INSTALL_GUIDE = f'https://github.com/{REPOSITORY}/blob/main/docs/he/08-install-guide.md'
 # גשר המיתרים: "מה חדש" לכל גרסה, בעברית: tools/ci/release-notes/vX.Y.Z.md, אם קיים. הקובץ נקרא
 # מהגרסה של main שהפרסום רץ ממנה (בתוך tools/ci, שנמצא ב-sparse checkout של publish-release.yml).
@@ -234,9 +234,10 @@ def release_intro(source):
     version = version_string(source.version)
     notes = release_notes(source)
     return '\n'.join([
-        f'## גשר המיתרים {version}',
+        f'## מיתר {version}',
+        'מבוסס על Gesher',
         '',
-        f'**להתקנה:** מורידים את `{installer_name(source.version)}` ומפעילים אותו. אפשר להתקין מעל Gesher: '
+        f'**להתקנה:** מורידים את `{installer_name(source.version)}` ומפעילים אותו. אפשר להתקין מעל Gesher ומעל גשר המיתרים: '
         'האפליקציות המותקנות והנתונים שלהן נשמרים.',
         '',
         '**אזהרת Windows:** קובץ ההתקנה עוד לא חתום בחתימה דיגיטלית. כשמופיע החלון "Windows הגן על המחשב שלך", '

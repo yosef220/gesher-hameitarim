@@ -89,6 +89,8 @@
                            FontSize="{StaticResource GesherTypeWordmarkSize}" FontWeight="Bold" LineHeight="44"
                            LineStackingStrategy="BlockLineHeight" Foreground="{StaticResource GesherInkBrush}"/>
                 <TextBlock Text="{DynamicResource Text_cp_subtitle}" FontSize="14" Foreground="{StaticResource GesherInkMutedBrush}"/>
+                <!-- השורה הקבועה של המותג: חלק מהחתימה, מתחת לשם. בלי הדגשה של מילה אחת (docs/he/design/01-design-plan.md) -->
+                <TextBlock Text="{DynamicResource Text_brand_tagline}" FontSize="12" Foreground="{StaticResource GesherInkMutedBrush}" Margin="0,1,0,0"/>
             </StackPanel>
             <!-- הגשר, בלי היפוך בעברית: אותו גשר כמו באייקון ובמסך הפתיחה. קצה המסלול בגובה 91 (182 חלקי 2) -->
             <Canvas Grid.Column="1" Width="148" Margin="20,0,0,0" FlowDirection="LeftToRight">
@@ -338,10 +340,12 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Name="StatusMessage" Grid.Column="0" Text="{DynamicResource Text_cp_status_ready}" Style="{StaticResource TextCaption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
             <ProgressBar Name="ActivityBar" Grid.Column="1" Width="140" IsIndeterminate="False" Visibility="Hidden" VerticalAlignment="Center" Margin="16,0"/>
             <Button Name="BtnOpenLogs" Grid.Column="2" Style="{StaticResource LinkButton}" FontSize="12" Content="{DynamicResource Text_cp_btn_open_logs}" VerticalAlignment="Center"/>
+            <Button Name="BtnAbout" Grid.Column="3" Style="{StaticResource LinkButton}" FontSize="12" Margin="16,0,0,0" Content="{DynamicResource Text_cp_btn_about}" VerticalAlignment="Center"/>
         </Grid>
     </Grid>
     </ScrollViewer>
