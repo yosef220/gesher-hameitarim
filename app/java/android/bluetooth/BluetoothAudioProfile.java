@@ -70,6 +70,10 @@ abstract class BluetoothAudioProfile implements BluetoothProfile {
         return BluetoothManagerService.isA2dp(d);
     }
 
+    static boolean isLeAudio(WindowsBluetooth.Device d) {
+        return BluetoothManagerService.isLeAudio(d);
+    }
+
     static boolean isHeadset(WindowsBluetooth.Device d) {
         return BluetoothManagerService.isHeadset(d);
     }
