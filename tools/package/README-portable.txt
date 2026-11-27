@@ -1,5 +1,6 @@
-Gesher Portable
+Meitar Portable
 ===============
+Based on Gesher
 
 Extract the complete GesherPortable folder, then open Gesher.exe to open the
 Control Center. Keep Gesher.exe, portable.marker, App and Data together.
@@ -30,7 +31,14 @@ To update manually with Setup, select portable mode and choose the existing App
 directory (or the runtime directory of a flat portable installation). Back up Data
 first. Never install the standard mode over a portable runtime directory.
 
-License: Gesher HaMeitarim is offered under the PolyForm Strict License 1.0.0
+License: Meitar is offered under the PolyForm Strict License 1.0.0
 (noncommercial use only; no distribution, no changes, no new works based on it).
 The parts that come from Gesher remain under the Apache License 2.0. See
 App\licenses\GESHER-HAMEITARIM-LICENSE.txt and GESHER-APACHE-LICENSE-2.0.txt.
+
+The original Gesher
+-------------------
+Meitar (until version 1.1.0: Gesher HaMeitarim) is based on Gesher, created by palmoni5, who started it in October 2026 and
+wrote the overwhelming majority of it, with other contributors. On 25 November 2026 Gesher moved
+to a proprietary license and its repository was closed. Meitar continues from its last
+version released under the Apache License 2.0. Thank you to palmoni5 and every contributor.

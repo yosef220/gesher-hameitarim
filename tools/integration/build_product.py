@@ -55,7 +55,9 @@ QUEUE = Path("tools/integration/product-queue.tsv")
 LICENSE_CHANGE = "52aa3980f9c109b35085528f8c52d1f752fcf845"
 LICENSE_CHANGE_TIME = 1795606780
 # הכותבים שלנו: קומיטים שלהם הם עבודה שלנו, ולא קוד של upstream, גם אם נוצרו אחרי השינוי
-OUR_AUTHORS = {"140768348+yosef220@users.noreply.github.com", "noreply@anthropic.com"}
+# ‏github-actions[bot]: הצילומים ש-hameitarim-design.yml (ה-workflow שלנו) שומר בענף העיצוב. הם עבודה שלנו, לא קוד של upstream.
+OUR_AUTHORS = {"140768348+yosef220@users.noreply.github.com", "noreply@anthropic.com",
+               "41898282+github-actions[bot]@users.noreply.github.com"}
 APACHE_UPSTREAM = "303bb835d46ed4837a8a6f55c045bc8f47aa6149"
 CANDIDATE = "product-candidate"
 PRODUCT = "product"

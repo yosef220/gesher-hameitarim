@@ -1,3 +1,29 @@
+# מיתר
+
+**מבוסס על Gesher.** אפליקציות אנדרואיד על Windows, עם ממשק בעברית.
+
+עד גרסה 1.1.0 השם היה "גשר המיתרים" (Gesher HaMeitarim).
+
+## הקרדיט: Gesher המקורי
+
+מיתר מבוסס על **Gesher**, שיצר **palmoni5**. הוא פתח את הפרויקט ב-19 באוקטובר 2026, ובחמישה שבועות כתב בעצמו את רובו המכריע: 3,163 מתוך 3,342 הקומיטים עד הגרסה האחרונה שפורסמה כקוד פתוח. תרמו לו גם yom-chadash, ‏Y-PLONI, ‏ztcebuck, ‏ARI212121, ‏dudu, ‏talmidhon, ‏Lev-Good, ‏israelv ו-tsoolgee, ועוד תורמים שה-PRs שלהם נכללו כאן, כמו dudua99. הקרדיט של כל אחד מהם שמור בהיסטוריית הקוד.
+
+**למה יש המשך:** ב-25 בנובמבר 2026 עבר Gesher לרישיון קנייני, ובאותו ערב המאגר שלו נסגר לציבור. הגרסה האחרונה שפורסמה תחת Apache 2.0 נשארת פתוחה לפי הרישיון הזה, וממנה מיתר ממשיך: עם התיקונים שנכנסו ל-Gesher ולא יצאו בגרסה רשמית, ממשק בעברית, עדכונים אוטומטיים, והתקנה מעל Gesher ששומרת את האפליקציות.
+
+**תודה** ל-palmoni5 ולכל מי שתרם ל-Gesher. בלי העבודה שלהם, הפרויקט הזה לא היה קיים.
+
+## Credit: the original Gesher
+
+Meitar is based on **Gesher**, created by **palmoni5**, who started the project on 19 October 2026 and wrote the overwhelming majority of it: 3,163 of the 3,342 commits up to its last open-source release. Contributors include yom-chadash, Y-PLONI, ztcebuck, ARI212121, dudu, talmidhon, Lev-Good, israelv and tsoolgee, and others whose pull requests are included here, such as dudua99. Each contributor's credit is kept in the git history.
+
+On 25 November 2026 Gesher moved to a proprietary license, and its repository was closed to the public that evening. Its last version released under the Apache License 2.0 remains available under that license, and Meitar continues from it.
+
+Thank you to palmoni5 and everyone who contributed to Gesher.
+
+---
+
+*מכאן והלאה: ה-README המקורי של Gesher, שמתאר את הטכנולוגיה. The rest of this page is Gesher's original README.*
+
 <p align="center">
   <img src="assets/gesher.png" alt="Gesher Logo" width="160"/>
 </p>
@@ -154,14 +180,14 @@ See [updating Gesher](docs/updates.md) for behavior, release packaging and tests
 
 ## License / רישיון
 
-Gesher HaMeitarim is offered under the [PolyForm Strict License 1.0.0](LICENSE):
+Meitar is offered under the [PolyForm Strict License 1.0.0](LICENSE):
 noncommercial use only, with no right to distribute it or to make changes or new
 works based on it. Any other use, including use in a business, needs a separate
 written license from the repository owner. The parts that come from Gesher, up to
 its last version released under the Apache License 2.0, remain under
 [Apache 2.0](LICENSE-APACHE). See [NOTICE.md](NOTICE.md).
 
-גשר המיתרים מופץ לפי [PolyForm Strict License 1.0.0](LICENSE): שימוש למטרות לא
+מיתר מופץ לפי [PolyForm Strict License 1.0.0](LICENSE): שימוש למטרות לא
 מסחריות בלבד, בלי זכות להפיץ, לשנות או לבנות ממנו גרסאות. לכל שימוש אחר, כולל
 בעסק, צריך רישיון נפרד בכתב מבעל המאגר. החלקים שמקורם ב-Gesher נשארים תחת
 [Apache 2.0](LICENSE-APACHE). פירוט ב-[NOTICE.md](NOTICE.md).

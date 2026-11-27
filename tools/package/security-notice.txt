@@ -1,7 +1,7 @@
-﻿Security: Android apps in Gesher HaMeitarim are not isolated from Windows
+﻿Security: Android apps in Meitar are not isolated from Windows
 =========================================================================
 
-Gesher HaMeitarim runs each Android app as an ordinary Windows program,
+Meitar runs each Android app as an ordinary Windows program,
 with the permissions of your Windows account.
 
 Android's permission prompts (camera, location, contacts and so on) control

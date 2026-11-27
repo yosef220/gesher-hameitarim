@@ -27,10 +27,10 @@ AppVersion={#AppVersion}
 VersionInfoVersion={#AppVersion}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoProductTextVersion={#AppVersion}
-AppPublisher=Gesher HaMeitarim
+AppPublisher=Meitar
 ; AppName מכיל קבוע, ולכן פרטי הגרסה של קובץ ההתקנה נקבעים כאן במפורש.
-VersionInfoProductName=Gesher HaMeitarim
-VersionInfoDescription=Gesher HaMeitarim Setup
+VersionInfoProductName=Meitar
+VersionInfoDescription=Meitar Setup
 DefaultDirName={localappdata}\Programs\Gesher
 DisableDirPage=no
 DefaultGroupName=Gesher
@@ -171,6 +171,12 @@ Source: "gesher-panel-view.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-dashboard.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-confirm.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-message.xaml"; DestDir: "{app}"; Flags: ignoreversion
+; גשר המיתרים: דיאלוג הפרוקסי, הסגנונות המשותפים והצבעים של מרכז הבקרה (בהיר, כהה וניגודיות גבוהה)
+Source: "gesher-panel-proxy.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-panel-styles.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-tokens-light.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-tokens-dark.xaml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gesher-tokens-contrast.xaml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-panel-native.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gesher-update.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; גשר המיתרים: סוכן העדכונים, ש-gesher-app מפעיל ברקע כשפותחים אפליקציה.
@@ -215,6 +221,11 @@ Type: files; Name: "{autoprograms}\Gesher Control Center.lnk"; Check: not IsPort
 Type: files; Name: "{autoprograms}\לוח הבקרה של גשר.lnk"; Check: not IsPortableInstall
 Type: files; Name: "{autoprograms}\Gesher README.lnk"; Check: not IsPortableInstall
 Type: files; Name: "{autoprograms}\גשר — מידע והוראות.lnk"; Check: not IsPortableInstall
+; מיתר: הקיצורים של גשר המיתרים (גרסה 1.0.0 ו-1.1.0) בשמות הקודמים. השינוי של השם לא משאיר קיצור כפול.
+Type: files; Name: "{autoprograms}\Gesher HaMeitarim Control Center.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\Gesher HaMeitarim README.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\מרכז הבקרה של גשר המיתרים.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\גשר המיתרים — מידע והוראות.lnk"; Check: not IsPortableInstall
 
 [Registry]
 ; The `.apk` association, per user (HKCU\Software\Classes). Gesher.Apk opens
@@ -429,6 +440,9 @@ procedure InitializeWizard();
 var
   I: Integer;
 begin
+  // מיתר: השורה הקבועה "מבוסס על Gesher" בעמוד הפתיחה, לפני הטקסט של האשף.
+  WizardForm.WelcomeLabel2.Caption := CustomMessage('brand_tagline') + #13#10#13#10 + WizardForm.WelcomeLabel2.Caption;
+
   DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), SetupMessage(msgPreparingDesc), @OnDownloadProgress);
 
   InstallTypePage := CreateInputOptionPage(

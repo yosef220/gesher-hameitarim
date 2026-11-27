@@ -316,7 +316,7 @@ class PublisherTests(unittest.TestCase):
         self.api.product_comparison = {'status': 'ahead', 'base_commit': {'sha': HEAD}, 'merge_base_commit': {'sha': HEAD}}
         self.assertIn('Publication confirmed', self.publish())
         self.assertFalse(self.api.own['draft'])
-        self.assertEqual(self.api.own['name'], 'גשר המיתרים 0.2.1')
+        self.assertEqual(self.api.own['name'], 'מיתר 0.2.1')
 
     def test_outside_main_and_product_or_missing_product_fails_without_mutation(self):
         for change in ('diverged', 'missing', 'other-base'):

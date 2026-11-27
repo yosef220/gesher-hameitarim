@@ -1155,6 +1155,13 @@ public class RecordActivity extends Activity {
                 buffersLost.incrementAndGet();
             }
         }, h);
+        // On a loaded machine the first frame can arrive seconds after the request (a run lost 5.7 s
+        // before it and collected 19 frames in a fixed 2 s). The 2 s of video count from the first
+        // frame; if none arrives within 15 s the check still fails, with 0 frames.
+        long firstFrameWaitNs = System.nanoTime();
+        while (firstFrame.get() < 0 && System.nanoTime() - firstFrameWaitNs < 15_000_000_000L) {
+            Thread.sleep(20);
+        }
         Thread.sleep(2000);
         long collectStopNs = System.nanoTime();
         session[0].stopRepeating();
