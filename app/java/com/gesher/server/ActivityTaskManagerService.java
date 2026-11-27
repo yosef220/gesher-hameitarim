@@ -103,7 +103,7 @@ import java.util.function.Consumer;
  * no process starts one ({@link #startProcess}, ProcessList.startProcessLocked): a new
  * dalvikvm running {@code android.app.GesherAppProcess} for the package ({@link Zygote}: no
  * fork on Windows), which attaches with the start sequence number it was given
- * ({@code ActivityThread.attach} → {@link ActivityManagerService#attachApplication}) and is
+ * ({@code ActivityThread.attach} ג†’ {@link ActivityManagerService#attachApplication}) and is
  * bound to the package ({@code IApplicationThread.bindApplication}). A process may also
  * start by itself and offer itself (gesher-app {@code --system-server}): a start asked by
  * such a process goes to it. The activities start once the process reports
@@ -562,6 +562,7 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
     /** Accepted system Settings requests, including queued/headless windows. Guarded by this. */
     private final java.util.Set<ExactAlarmSettingsSession> mExactAlarmSettingsSessions = new java.util.HashSet<>();
     private BluetoothRequests mBluetoothRequests; // server-local backend injection for tests
+    private volatile AuthService mAuth; // confirms ACTION_CONFIRM_DEVICE_CREDENTIAL (ADR 0094)
     private final Set<NativeUiActivity> mNativeUiActivities = new HashSet<>();
     private final ThreadLocal<String> mVerifiedCreator = new ThreadLocal<>();
     private final ThreadLocal<ProcessRecord> mVerifiedIntentSenderSource = new ThreadLocal<>();
@@ -646,6 +647,8 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
     /** Processes started for a package and not attached yet, by start sequence number. */
     private final Map<Long, PendingProcess> mStarting = new HashMap<>();
     private long mNextStartSeq = 1;
+    private boolean mDeviceStopping;
+    private final Map<String, Integer> mProtectedStops = new HashMap<>();
     /** How app processes are started; null: they start by themselves and attach. */
     private volatile ProcessStarter mStarter;
     /** The OS exit code of the latest start, unknown until that process actually exits. */
@@ -736,11 +739,17 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
     }
 
     ActivityTaskManagerService(PackageManagerService pm) {
+        this(pm, new PermissionRequests(pm));
+    }
+
+    ActivityTaskManagerService(PackageManagerService pm, PermissionRequests permissionRequests) {
         mPm = pm;
-        mPermissionRequests = new PermissionRequests(pm);
+        mPermissionRequests = permissionRequests;
         mExactAlarmRequests = pm.exactAlarmAccessRequests();
         mBluetoothRequests = new BluetoothRequests(pm);
     }
+
+    PermissionRequests permissionRequests() { return mPermissionRequests; }
 
     void setActivityManager(ActivityManagerService am) {
         mAm = am;
@@ -1583,6 +1592,11 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
                         : android.app.Activity.RESULT_OK, result);
         if (resumeCovered) { realStartActivity(session.covered); resume(session.covered); }
         updateTopResumed();
+    }
+
+    /** The auth service that confirms ACTION_CONFIRM_DEVICE_CREDENTIAL (ADR 0094). */
+    void setAuthService(AuthService auth) {
+        mAuth = auth;
     }
 
     /** Lets the server start app processes on demand ({@link #startProcess}). */
@@ -2817,6 +2831,93 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
         final BluetoothRequests requests = mBluetoothRequests;
         // Validate before consuming a forwarded result route or scheduling host work.
         requests.validate(action, pkg, captured);
+        return startSystemUi("Bluetooth", intent, callingProcess, internalCreator, delegated,
+                publication, resultToToken, resultWho, requestCode,
+                (source, lifetime, awaitPause, completion) ->
+                        requests.request(action, pkg, captured, lifetime, awaitPause, completion));
+    }
+
+    /** The work of a system activity that Gesher shows as Windows UI over the caller. */
+    private interface SystemUiRequest {
+        /**
+         * Starts the work. {@code completion} gets the activity result exactly once;
+         * {@code lifetime} says whether the request's caller is still there to receive it.
+         */
+        void start(ProcessRecord source, java.util.function.BooleanSupplier lifetime,
+                Runnable awaitPause, java.util.function.IntConsumer completion);
+    }
+
+    /**
+     * ACTION_CONFIRM_DEVICE_CREDENTIAL (ConfirmCredential, ADR 0094): Windows Hello's prompt
+     * over the calling activity, owned by the calling process's window, RESULT_OK only
+     * when Windows verified the user. The request ends as canceled when its caller goes
+     * away, which also closes Windows' prompt.
+     */
+    private int confirmDeviceCredential(Intent intent, String verifiedCaller,
+            ProcessRecord callingProcess, boolean internalCreator,
+            java.util.function.BooleanSupplier delegated,
+            java.util.function.BooleanSupplier publication,
+            IBinder resultToToken, String resultWho, int requestCode) {
+        final AuthService auth = mAuth;
+        final Intent request = new Intent(intent);
+        return startSystemUi("Credential", intent, callingProcess, internalCreator, delegated,
+                publication, resultToToken, resultWho, requestCode,
+                (source, lifetime, awaitPause, completion) -> {
+                    // The prompt's owner is the process that asked: the activity that gets
+                    // the result, or else the caller itself. Never another app's window.
+                    final ProcessRecord owner = source != null ? source : callingProcess;
+                    final String pkg = owner != null && owner.packageName != null
+                            ? owner.packageName : verifiedCaller;
+                    Thread worker = new Thread(() -> {
+                        long identity = Binder.clearCallingIdentity();
+                        try {
+                            awaitPause.run();
+                            if (owner == null || !lifetime.getAsBoolean()) {
+                                completion.accept(android.app.Activity.RESULT_CANCELED);
+                                return;
+                            }
+                            final java.util.concurrent.atomic.AtomicBoolean done =
+                                    new java.util.concurrent.atomic.AtomicBoolean();
+                            AuthService.Confirmation confirmation = ConfirmCredential.request(auth,
+                                    request, owner.uid, owner.pid, pkg, result -> {
+                                        done.set(true);
+                                        completion.accept(result);
+                                    });
+                            // The caller finishing or dying ends the request (Settings'
+                            // activity would be destroyed with its task): close the prompt.
+                            while (confirmation != null && !done.get()) {
+                                if (!lifetime.getAsBoolean()) {
+                                    confirmation.cancel();
+                                    break;
+                                }
+                                try {
+                                    Thread.sleep(250);
+                                } catch (InterruptedException interrupted) {
+                                    confirmation.cancel();
+                                    break;
+                                }
+                            }
+                        } catch (RuntimeException | LinkageError failure) {
+                            SystemServer.log("confirm-credential: request failed: " + failure);
+                            completion.accept(android.app.Activity.RESULT_CANCELED);
+                        } finally {
+                            Binder.restoreCallingIdentity(identity);
+                        }
+                    }, "confirm-credential");
+                    worker.setDaemon(true);
+                    worker.start();
+                });
+    }
+
+    /**
+     * Starts a system activity that is Windows UI: covers and pauses the caller's activity
+     * (NativeUiActivity), routes the result as ActivityStarter does (to the caller, or
+     * forwarded), and resumes the caller when the work completes.
+     */
+    private int startSystemUi(String what, Intent intent, ProcessRecord callingProcess,
+            boolean internalCreator, java.util.function.BooleanSupplier delegated,
+            java.util.function.BooleanSupplier publication,
+            IBinder resultToToken, String resultWho, int requestCode, SystemUiRequest work) {
         final ActivityRecord source, recipient;
         final ProcessRecord sourceProcess, expectedProcess;
         final String targetWho;
@@ -2829,10 +2930,10 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
                     || source.finishing || source.state == State.DESTROYED || !activityEnabled(source)
                     || (internalCreator ? publication == null || !publication.getAsBoolean()
                             : callingProcess == null || source.app != callingProcess))) {
-                throw new SecurityException("Bluetooth result must belong to its live caller activity");
+                throw new SecurityException(what + " result must belong to its live caller activity");
             }
             if (requestCode >= 0 && source == null) {
-                throw new SecurityException("Bluetooth result requires a live activity");
+                throw new SecurityException(what + " result requires a live activity");
             }
             sourceProcess = source == null ? null : source.app;
             forwarded = source != null && (intent.getFlags() & Intent.FLAG_ACTIVITY_FORWARD_RESULT) != 0;
@@ -2895,7 +2996,7 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
             }
             activity.pauseCovered((intent.getFlags() & Intent.FLAG_ACTIVITY_NO_USER_ACTION) == 0);
             updateTopResumed();
-            requests.request(action, pkg, captured, lifetime, activity::awaitPause, completion);
+            work.start(sourceProcess, lifetime, activity::awaitPause, completion);
         } catch (SecurityException revoked) {
             // Permission may be revoked after admission consumed a forwarded route.
             // That accepted launch must finish with cancellation, not lose its result.
@@ -3082,6 +3183,14 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
                     }
                 }
                 return requestBluetoothState(intent, verifiedCaller, originalProcess,
+                        internalCreator, delegated, publication, resultToToken, resultWho, requestCode);
+            }
+            if (requiredTask == null && mAuth != null
+                    && ConfirmCredential.handles(intent, resolvedType)) {
+                // Settings' ConfirmDeviceCredentialActivity on Android; here Windows Hello's
+                // prompt over the caller. A caller without a live app process has no
+                // window to own the prompt: its request ends as canceled.
+                return confirmDeviceCredential(intent, verifiedCaller, originalProcess,
                         internalCreator, delegated, publication, resultToToken, resultWho, requestCode);
             }
             if (requiredTask == null && PrintManagerService.handles(intent)) {
@@ -3867,6 +3976,13 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
                 && !mPm.isRemovalPending(code.packageName) ? code : null;
     }
 
+    /** Windows process generation of the admitted Binder caller. */
+    synchronized long authenticatedStartTime(int pid, int uid) {
+        ApkPackage code = authenticatedPackageCodeForPid(pid, uid);
+        ProcessRecord process = code == null ? null : attachedProcessByPid(pid);
+        return process == null ? 0 : process.nativeStartTime;
+    }
+
     /** One-time enrollment in a mode that already permits real self-attachment. */
     private synchronized boolean legacyBootstrapProcess(ProcessRecord app,
             IApplicationThread thread, int pid, int uid) {
@@ -3931,7 +4047,7 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
     }
 
     private boolean pendingCurrent(PendingProcess pending) {
-        return !pending.cancelled && pending.owner != null
+        return !mDeviceStopping && !pending.cancelled && pending.owner != null
                 && mPm.get(pending.packageName) == pending.owner
                 && !mPm.isRemovalPending(pending.packageName)
                 && pending.enabledLifetime != null && pending.enabledLifetime.getAsBoolean();
@@ -3983,6 +4099,12 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
         com.gesher.app.window.AppWindows.retired(packageName);
     }
 
+    synchronized boolean protectedStartCurrent(ApkPackage pkg, long startSeq) {
+        PendingProcess pending = mStarting.get(startSeq);
+        return pending != null && pending.owner == pkg && pendingCurrent(pending)
+                && !mProtectedStops.containsKey(pkg.packageName);
+    }
+
     private void startProcess(String packageName, String processName, String reason, String sourceMode) {
         ProcessStarter starter = mStarter;
         if (starter == null) return;
@@ -4000,6 +4122,7 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
         synchronized (this) {
             if (mPm.get(packageName) != owner || !owner.matchesEnabledApplication(0)
                     || mPm.isRemovalPending(packageName) || !enabledLifetime.getAsBoolean()) return;
+            if (mDeviceStopping || mProtectedStops.containsKey(packageName)) return;
             if (processFor(packageName, processName) != null || starting(packageName, processName)) return;
             seq = mNextStartSeq++;
             mExitStatus.started(processKey(packageName, processName), seq);
@@ -4323,7 +4446,11 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
      */
     void forceStopPackage(String packageName) {
         List<ProcessRecord> stop = new ArrayList<>();
+        ApkPackage installation;
+        long stopThrough;
         synchronized (this) {
+            installation = SystemServer.isProtectedDevice() ? mPm.get(packageName) : null;
+            stopThrough = mNextStartSeq - 1;
             Set<Integer> affectedTasks = new HashSet<>();
             // Force stop removes transient grants both from and to the package,
             // including ownerless grants and packages with no live process.
@@ -4363,10 +4490,21 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
                 if (topOf(taskId) == null) discardAppTaskLocked(taskId);
             }
             if (!affectedTasks.isEmpty()) notifyTaskStackChangedLocked();
+            if (installation != null) mProtectedStops.merge(packageName, 1, Integer::sum);
             notifyAll();
         }
         // Also cancel sticky-service restarts when the old process has died.
-        if (mAm != null) mAm.stopServicesForPackage(packageName);
+        try {
+            if (mAm != null) mAm.stopServicesForPackage(packageName);
+            if (installation != null) Zygote.stopProtectedInstallation(installation, stopThrough);
+        } finally {
+            if (installation != null) {
+                synchronized (this) {
+                    mProtectedStops.computeIfPresent(packageName,
+                            (name, count) -> count > 1 ? count - 1 : null);
+                }
+            }
+        }
         if (stop.isEmpty()) return;
         SystemServer.log("force-stopping " + packageName);
         endProcesses(stop, 5000);
@@ -4611,6 +4749,24 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
             }
         }
         endProcesses(all, waitMs);
+    }
+
+    void stopDeviceProcesses() {
+        long stopThrough;
+        synchronized (this) {
+            mDeviceStopping = true;
+            stopThrough = mNextStartSeq - 1;
+        }
+        // A live native descendant can outlast the Java parent. Retire the
+        // ordinary per-install jobs without touching standalone cohost jobs.
+        for (ApkPackage pkg : mPm.packages()) {
+            Zygote.stopProtectedInstallation(pkg, stopThrough);
+        }
+        endAllProcesses(5000);
+    }
+
+    synchronized void resumeDeviceProcesses() {
+        mDeviceStopping = false;
     }
 
     /** Retire one unresponsive broadcast generation, retaining normal service recovery. */

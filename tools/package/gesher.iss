@@ -108,6 +108,7 @@ Source: "licenses\GESHER-HAMEITARIM-LICENSE.txt"; DestDir: "{app}\licenses"; Fla
 Source: "licenses\GESHER-APACHE-LICENSE-2.0.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 Source: "etc\permissions\privapp-permissions-microg.xml"; DestDir: "{app}\etc\permissions"; Flags: ignoreversion
 Source: "{#BuildDir}\binderd.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\gesher-drop-worker.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\servicemanager.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; gesher-exec (docs/exec.md): runs an app's ELF executables (ProcessBuilder) next to dalvikvm.
 Source: "{#BuildDir}\gesher-exec.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -131,6 +132,8 @@ Source: "{#BuildDir}\lifecycle.apk"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\gesher-camera.apk"; DestDir: "{app}"; Flags: ignoreversion
 ; Gesher Speech Recognition (docs/speech-recognition.md): the RecognitionService, installed by the Gesher device when Windows has speech recognizers.
 Source: "{#BuildDir}\gesher-stt.apk"; DestDir: "{app}"; Flags: ignoreversion
+; Gesher Text-to-speech (docs/tts.md): the TextToSpeechService engine, installed by the Gesher device when Windows has voices.
+Source: "{#BuildDir}\gesher-tts.apk"; DestDir: "{app}"; Flags: ignoreversion
 ; The boot image (docs/boot-image.md): the boot class path's classes, verified
 ; and linked by dex2oat, which dalvikvm maps instead of loading them one by one.
 Source: "{#BuildDir}\framework\x86_64\*"; DestDir: "{app}\framework\x86_64"; Flags: ignoreversion
@@ -154,7 +157,7 @@ Source: "{#BuildDir}\tzdata\*"; DestDir: "{app}\tzdata"; Flags: ignoreversion re
 Source: "{#BuildDir}\TZDATA-NOTICES.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 ; Networking (docs/network.md): Android's CA certificates, which dalvikvm joins
 ; with the roots Windows trusts as the system CAs ($ANDROID_ROOT/etc/security/cacerts),
-; and the licenses of BoringSSL, Conscrypt, OkHttp and BouncyCastle.
+; and the licenses of BoringSSL, Conscrypt, OkHttp, Brotli and BouncyCastle.
 Source: "{#BuildDir}\cacerts\*"; DestDir: "{app}\cacerts"; Flags: ignoreversion
 Source: "{#BuildDir}\NET-NOTICES.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 ; Gesher's default ringtone, notification and alarm sounds (docs/media.md):

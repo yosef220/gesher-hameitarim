@@ -23,12 +23,16 @@
 #include <utility>
 #include <vector>
 
+#include <gesher/binder_bootstrap.h>
+
 #include "internal.h"
+#include "fifo_internal.h"
 #include "revocable_internal.h"
 #include "binder_internal.h"
 #include "event_internal.h"
 #include "record_lock_descriptors.h"
 #include "pipe_io.h"
+#include "rooted_storage_client.h"
 #include "system_linker.h"
 
 namespace {
@@ -38,6 +42,8 @@ namespace {
 // process's uid does not change).
 uid_t AppUid() {
   static const uid_t uid = [] {
+    const uint32_t protected_uid = gesher::binder_bootstrap::GuestUid();
+    if (protected_uid != 0) return static_cast<uid_t>(protected_uid);
     const char* env = getenv("GESHER_UID");
     char* end = nullptr;
     unsigned long value = env != nullptr ? strtoul(env, &end, 10) : 0;
@@ -54,6 +60,10 @@ std::atomic<unsigned long long> rand_state{0x853c49e6748fea9bULL};
 // The file open on a handle, as a Linux path (LinuxPath). False with errno
 // set if it has no file name (a pipe, a console, NUL).
 bool FinalPath(HANDLE h, std::string* out) {
+  if (const auto scoped = gesher::storage_root::DescriptorPath(h); !scoped.empty()) {
+    *out = gesher::LinuxPath(scoped.c_str());
+    return true;
+  }
   wchar_t buf[32768];
   DWORD n = GetFinalPathNameByHandleW(h, buf, 32768, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
   if (n == 0) {
@@ -481,6 +491,7 @@ int gesher_ftruncate(int fd, off_t length) {
   gesher::FileOperationLease operation(snapshot);
   if (operation.Error()) return errno = operation.Error(), -1;
   const HANDLE file = snapshot->handle;
+  if (GetFileType(file) != FILE_TYPE_DISK) return errno = EINVAL, -1;
   if (gesher::FileDescriptionIsMemfd(snapshot)) {
     if (int error = gesher::MemfdResizeHandleError(file, static_cast<uint64_t>(length))) return errno = error, -1;
   }
@@ -774,7 +785,9 @@ off_t lseek(int fd, off_t offset, int whence) {
   if (flags < 0) return -1;
   if ((flags & O_PATH) != 0) return errno = EBADF, -1;
   if (whence < SEEK_SET || whence > SEEK_HOLE) return errno = EINVAL, -1;
-  if (is_stream) return errno = ESPIPE, -1;
+  if (is_stream || gesher::StatFifoDescription(snapshot, nullptr, nullptr, nullptr)) {
+    return errno = ESPIPE, -1;
+  }
   if (no_position) return 0;
   const HANDLE file = snapshot->handle;
   SetLastError(ERROR_SUCCESS);
@@ -869,15 +882,29 @@ char* realpath(const char* path, char* resolved_path) {
     return nullptr;
   }
   if (kind == gesher::PathKind::kFile) {
-    HANDLE h = CreateFileW(wpath.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                           nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    const auto rooted = gesher::storage_root::Lookup(wpath);
+    HANDLE h;
+    if (rooted) {
+      const int error = gesher::storage_root::Open(rooted, gesher::rooted_storage_wire::kMetadata, &h);
+      if (error != 0) return errno = error, nullptr;
+    } else {
+      h = gesher::OpenPathMaybeFifo(wpath, 0, true);
+    }
     if (h == INVALID_HANDLE_VALUE) {
       gesher::FailWithLastError();
       return nullptr;
     }
-    // Gesher's ELF loader by its name, however it was reached (system_linker.h).
-    bool ok = gesher::system_linker::IsFileHandle(h) ? (out = gesher::system_linker::kPath, true)
-                                                      : FinalPath(h, &out);
+    bool ok;
+    if (rooted.drop_alias) {
+      out = gesher::LinuxPath(wpath.c_str());
+      ok = true;
+    } else if (gesher::system_linker::IsFileHandle(h)) {
+      // Gesher's ELF loader by its name, however it was reached (system_linker.h).
+      out = gesher::system_linker::kPath;
+      ok = true;
+    } else {
+      ok = FinalPath(h, &out);
+    }
     CloseHandle(h);
     if (!ok) return nullptr;
   } else if (kind != gesher::PathKind::kVirtual) {

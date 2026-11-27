@@ -145,11 +145,17 @@ jobs:
       - name: Java DNS admission and completion ownership on Windows
         if: ${{ !cancelled() }}
         shell: bash
-        run: python tools/test_dns_resolver_admission.py --java-home "$JAVA_HOME"
+        run: |
+          python tools/test_dns_resolver_admission.py --java-home "$JAVA_HOME"
+          python tools/test_dns_deadline_retirement_controls.py --java-home "$JAVA_HOME"
       - name: Durable settings journal, replacement and crash recovery contracts
         if: ${{ !cancelled() }}
         shell: bash
         run: python tools/test_java_performance_contracts.py --java-home "$JAVA_HOME" --component settings
+      - name: DownloadManager provider, queue and transfer contracts on a Windows JVM
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python tools/test_download_manager_contracts.py --java-home "$JAVA_HOME"
       - name: Build actual app identity restart implementation
         shell: cmd
         run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 compat\framework\services_zygote.cc compat\framework\app_container.cc tests\clipboard\standalone_restart_windows_test.cc /Fe:app-identity-restart.exe user32.lib advapi32.lib ole32.lib
@@ -195,7 +201,31 @@ jobs:
         run: |
           & .\print-windows-test.exe
           if ($LASTEXITCODE -ne 0) { throw 'Windows print host contracts failed' }
-      - name: Build actual Windows Hello verifier contracts (ADR 0091)
+      - name: Build actual Windows speech synthesis contracts (docs/tts.md)
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 /Icompat\devices tests\tts\tts_windows_test.cc compat\devices\speech_win.cc compat\devices\winrt.cc /Fe:tts-windows.exe ole32.lib uuid.lib
+      - name: Windows voices enumerate and synthesize PCM without UI
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          & .\tts-windows.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows speech synthesis contracts failed' }
+      - name: Text-to-speech engine contracts on Windows' JVM (docs/tts.md)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python tools/test_tts_engine_contracts.py --java-home "$JAVA_HOME"
+      - name: Build actual Windows WebAuthn contracts (ADR 0093)
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 /Icompat\devices tests\credentials\webauthn_windows_test.cc compat\devices\webauthn_win.cc /Fe:webauthn-windows.exe user32.lib
+      - name: WebAuthn API version, cancellation ids, error names and owner refusal without UI
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          & .\webauthn-windows.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows WebAuthn contracts failed' }
+      - name: Build actual Windows Hello verifier contracts (ADR 0094)
         if: ${{ !cancelled() }}
         shell: cmd
         run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 /Icompat\devices tests\biometrics\hello_windows_test.cc compat\devices\hello_win.cc compat\devices\winrt.cc /Fe:hello-windows.exe ole32.lib user32.lib
@@ -205,6 +235,26 @@ jobs:
         run: |
           & .\hello-windows.exe
           if ($LASTEXITCODE -ne 0) { throw 'Windows Hello verifier contracts failed' }
+      - name: Build actual Windows Hello key contracts (ADR 0095)
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 /Icompat\devices tests\biometrics\hello_key_windows_test.cc compat\devices\hello_key_win.cc compat\devices\hello_win.cc compat\devices\winrt.cc /Fe:hello-key-windows.exe ole32.lib user32.lib
+      - name: Windows Hello key support, missing key and foreground-owner refusal without UI
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          & .\hello-key-windows.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Hello key contracts failed' }
+      - name: Build actual Windows Hello prompt-owner contracts (ADR 0094)
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 /Icompat\devices tests\biometrics\hello_owner_windows_test.cc compat\devices\hello_owner.cc compat\devices\hello_win.cc compat\devices\winrt.cc /Fe:hello-owner.exe ole32.lib user32.lib
+      - name: Windows build number and prompt-owner classification without UI
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          & .\hello-owner.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Hello prompt-owner contracts failed' }
       - name: Exact native reader ownership and handle reuse controls
         if: ${{ !cancelled() }}
         shell: pwsh
@@ -233,6 +283,16 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: python tools/test_storage_stats_scans.py --java-home "$JAVA_HOME"
+      - name: Build actual connection cost event sink (Network List Manager)
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /DNOGDI /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0A00 /DWINVER=0x0A00 compat\net\cost_events_win.cc tests\metered-network\cost_events_windows_test.cc /Fe:cost-events-test.exe ole32.lib uuid.lib
+      - name: Connection cost events wake the network watcher; subscribe and unsubscribe against Windows
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          & .\cost-events-test.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows connection cost event checks failed' }
       - name: Build actual Windows Country or region lookup
         if: ${{ !cancelled() }}
         shell: cmd
@@ -243,6 +303,20 @@ jobs:
         run: |
           & .\home-region-test.exe
           if ($LASTEXITCODE -ne 0) { throw 'Windows Country or region checks failed' }
+      - name: MediaStore provider over real SQLite and NTFS paths, file-move rollback and crash recovery
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python tools/test_media_provider_contracts.py --java-home "$JAVA_HOME"
+      - name: Build actual Windows caption style reader (ClosedCaptionProperties)
+        if: ${{ !cancelled() }}
+        shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /D_WIN32_WINNT=0x0A00 /DWINVER=0x0A00 /Icompat\devices compat\devices\caption_win.cc compat\devices\winrt.cc tests\captioning\caption_windows_test.cc /Fe:caption-test.exe ole32.lib uuid.lib
+      - name: Caption style values and PropertiesChanged watch lifetime against real Windows
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          & .\caption-test.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Windows caption style checks failed' }
       - name: Release updater and control panel contracts on Windows PowerShell 5.1
         if: ${{ !cancelled() }}
         shell: powershell
@@ -419,6 +493,8 @@ jobs:
           python3 tools/test_socket_control_contract.py --sanitize
           python3 tools/test_socket_timeout_contracts.py --sanitize --linux-reference
           python3 tools/test_bionic_directory_contracts.py --sanitize
+          python3 tools/test_search_delete_contracts.py --sanitize --negative-controls
+          python3 tools/test_search_delete_report.py
           python3 tools/test_bionic_semaphore_contracts.py --sanitize
           python3 tools/test_file_allocation_contracts.py --sanitize
           python3 tools/test_positioned_io_contracts.py --sanitize
@@ -433,6 +509,7 @@ jobs:
           python3 tools/test_deferred_rewrite_failures.py --sanitize
           python3 tools/test_msync_contracts.py --sanitize
           python3 tools/test_retriever_frame_contracts.py --sanitize
+          python3 tools/test_i420_crop.py --sanitize --negative-controls
           python3 tools/test_utc_time_contracts.py --sanitize
           python3 tools/test_sleep_contracts.py --sanitize
 
@@ -523,7 +600,9 @@ jobs:
           python3 tools/test_art_jni_dispatch.py --sanitize
           python3 tools/test_audio_mixer_allocations.py --sanitize
           python3 tools/test_audio_unity_rate.py --sanitize
+          python3 tools/test_audio_resampler_weights.py --sanitize --negative-controls
           python3 tools/test_audio_capture_allocations.py --sanitize
+          python3 tools/test_audio_capture_unity.py --sanitize --negative-controls
           python3 tools/test_capture_stream_selection.py --sanitize
           python3 tools/test_audio_file_source.py --sanitize
           python3 tools/test_audio_rate_history.py --sanitize
@@ -538,6 +617,7 @@ jobs:
             tests/native/event_loop_reference.c -o "$RUNNER_TEMP/event-loop-reference"
           "$RUNNER_TEMP/event-loop-reference"
           python3 tools/test_audio_state_contracts.py --sanitize
+          python3 tools/test_audio_blocked_write.py --sanitize --negative-controls
           python3 tools/test_surface_geometry_contracts.py --sanitize
           python3 tools/test_video_scaling_contracts.py --sanitize
           python3 tools/test_native_window_dispatch.py --sanitize
@@ -569,6 +649,12 @@ jobs:
           "$RUNNER_TEMP/gesher-noreplace-holes"
           python3 tools/test_madvise_reference.py
 
+      - name: Actual wide conversion, pinned Android and guard-page contracts
+        run: python3 tools/test_wide_ascii_contracts.py --sanitize
+
+      - name: Validate wide conversion measurement evidence
+        run: python3 tools/test_wide_ascii_performance_evidence.py
+
       - name: Filesystem metadata and media source ownership contracts
         run: |
           python3 tools/test_file_timestamp_contracts.py --sanitize
@@ -584,6 +670,8 @@ jobs:
           python3 tools/test_media_surface_contracts.py --sanitize
           python3 tools/test_codec_output_storage.py --sanitize
           python3 tools/test_codec_reader_delivery.py --sanitize
+          python3 tools/test_reader_plane_scaling.py --sanitize --negative-controls
+          python3 tools/test_nv12_rgba.py --sanitize --negative-controls
           cc -std=gnu11 -O1 -Wall -Wextra -Werror -DGESHER_FILESYSTEM_REFERENCE_MAIN \
             tests/native/filesystem_contract_guest.c -o "$RUNNER_TEMP/filesystem-metadata-reference"
           "$RUNNER_TEMP/filesystem-metadata-reference"
@@ -610,8 +698,16 @@ jobs:
       - name: Android HttpEngine requests over real HTTP sockets
         run: python3 tools/test_http_engine.py --java-home "$JAVA_HOME"
 
+      - name: DownloadManager provider, queue and transfer over real HTTP sockets
+        run: python3 tools/test_download_manager_contracts.py --java-home "$JAVA_HOME"
+
       - name: Java DNS admission, cancellation, callback ownership and actual deadlines
-        run: python3 tools/test_dns_resolver_admission.py --java-home "$JAVA_HOME"
+        run: |
+          python3 tools/test_dns_resolver_admission.py --java-home "$JAVA_HOME"
+          python3 tools/test_dns_deadline_retirement_controls.py --java-home "$JAVA_HOME"
+
+      - name: MediaStore provider ownership, pending items, queries and scanning over real SQLite
+        run: python3 tools/test_media_provider_contracts.py --java-home "$JAVA_HOME"
 
       - name: WebStorage origin, owned WebView responses and running-task contracts
         run: |
@@ -634,8 +730,15 @@ jobs:
 
       - name: Speech recognition service contracts (docs/speech-recognition.md)
         run: python3 tools/test_speech_recognition_engine_contracts.py --java-home "$JAVA_HOME"
-      - name: Biometric and device-credential auth service contracts (ADR 0091)
+      - name: Text-to-speech engine contracts (docs/tts.md)
+        run: python3 tools/test_tts_engine_contracts.py --java-home "$JAVA_HOME"
+      - name: Credential Manager passkey contracts (ADR 0093)
+        run: python3 tools/test_credential_manager_contracts.py --java-home "$JAVA_HOME"
+      - name: Biometric and device-credential auth service contracts (ADR 0094)
         run: python3 tools/test_auth_service_contracts.py --java-home "$JAVA_HOME"
+
+      - name: AndroidKeyStore user authentication contracts (ADR 0095)
+        run: python3 tools/test_keystore_auth_contracts.py --java-home "$JAVA_HOME"
 
       - name: MediaDataSource adapter contracts with checked JNI and UBSan
         run: python3 tools/test_media_callback_adapter.py
@@ -651,6 +754,8 @@ jobs:
 
       - name: CountryDetector contracts (AOSP android-16 Country, CountryDetector and ICountryDetector)
         run: python3 tools/test_country_detector_contracts.py --java-home "$JAVA_HOME"
+      - name: Caption style contracts (AOSP android-16 Settings.Secure and CaptionStyle)
+        run: python3 tools/test_captioning_contracts.py --java-home "$JAVA_HOME"
 
       - name: Portable code relocation, shell ownership and native profile selection
         run: |
@@ -674,6 +779,7 @@ jobs:
           python3 tools/test_capture_permission_flow.py --java-home "$JAVA_HOME"
           python3 tools/test_camera_callback_admission.py --java-home "$JAVA_HOME"
           python3 tools/test_camera2_capture_dispatch.py --java-home "$JAVA_HOME"
+          python3 tools/test_recorder_camera_ready.py --java-home "$JAVA_HOME" --negative-controls
           python3 tools/test_dexopt_work.py --java-home "$JAVA_HOME"
 
       - name: Validate user interface translations
@@ -718,6 +824,37 @@ jobs:
           python3 tools/test_media_recorder_rollover.py --sanitize
           python3 tools/test_mp4_rollover_work.py
           python3 tools/test_media_mux_limits.py --libwebm third_party/aosp/external/libwebm
+          python3 tools/test_annexb_scan.py --sanitize --negative-controls
+          python3 tools/test_annexb_report.py
+
+      - name: Real software AVC ownership and reusable storage
+        run: python3 tools/test_soft_avc_reuse.py --libavc-root third_party/aosp/external/libavc --sanitize
+
+      - name: Actual RGBA input conversion and real AVC output
+        run: |
+          python3 tools/test_rgba_i420.py --libavc-root third_party/aosp/external/libavc --sanitize --negative-controls
+
+      - name: Real software HEVC output ownership and independent decoded pixels
+        run: >-
+          python3 tools/test_soft_hevc_output.py
+          --libhevc-root third_party/aosp/external/libhevc
+          --vpx-root third_party/aosp/external/libvpx
+          --dav1d-root third_party/aosp/external/libdav1d --sanitize --negative-controls
+          --output-dir out/media-hevc-output-fixtures
+
+      - name: Real software audio decoder scratch and output ownership
+        run: |
+          python3 tools/test_audio_decoder_scratch.py \
+            --frameworks-av-root third_party/aosp/frameworks/av-media \
+            --tremolo-root third_party/aosp/external/tremolo \
+            --opus-root third_party/aosp/external/libopus \
+            --sanitize --output-dir out/media-audio-scratch-fixtures
+
+      - name: Real software AVC output ownership and independent decoded pixels
+        run: >-
+          python3 tools/test_soft_avc_output.py
+          --libavc-root third_party/aosp/external/libavc --sanitize
+          --output-dir out/media-avc-output-fixtures
 
       - name: libcore System.nanoTime shares Android awake-time domain
         run: python3 tools/test_system_nanotime.py --source third_party/aosp/libcore/ojluni/src/main/native/System.c
@@ -730,6 +867,12 @@ jobs:
       - name: Build test apps
         run: tests/build-test-apps.sh out/test-apps
 
+      - name: Incremental Brotli native and real HTTP provider contracts
+        run: >-
+          python3 tools/test_http_brotli.py --java-home "$JAVA_HOME"
+          --brotli-source third_party/aosp/external/brotli
+          --okhttp-source third_party/aosp/external/okhttp
+
       - name: Build boot class path (core-oj, core-libart)
         run: tools/build-boot-jars.sh out/boot-jars
 
@@ -739,7 +882,13 @@ jobs:
       - name: Collect framework assets
         run: |
           mkdir -p framework-assets
+          mkdir -p framework-assets/media-audio-scratch-fixtures
+          cp out/media-audio-scratch-fixtures/*.audt out/media-audio-scratch-fixtures/fixtures.json framework-assets/media-audio-scratch-fixtures/
           cp out/test-apps/* out/boot-jars/*.jar framework-assets/
+          mkdir -p framework-assets/media-avc-output-fixtures
+          cp out/media-avc-output-fixtures/*.avct out/media-avc-output-fixtures/fixtures.json framework-assets/media-avc-output-fixtures/
+          mkdir -p framework-assets/media-hevc-output-fixtures
+          cp out/media-hevc-output-fixtures/*.hevct out/media-hevc-output-fixtures/fixtures.json framework-assets/media-hevc-output-fixtures/
           # ICU's data, which the runtime maps from $ANDROID_I18N_ROOT/etc/icu.
           cp third_party/aosp/external/icu/icu4c/source/stubdata/icudt*l.dat framework-assets/
           # The system fonts and fonts.xml, for $ANDROID_ROOT (docs/fonts.md).
@@ -1373,7 +1522,7 @@ jobs:
           # gesher-app and the framework it runs on are installed, and the
           # installed copy takes the bundled app to onResume.
           foreach ($f in 'gesher-app.cmd', 'framework.jar', 'framework-res.apk', 'gesher-app.jar', 'org.apache.http.legacy.jar', 'etc\permissions\org.apache.http.legacy.xml', 'android.test.base.jar', 'android.test.mock.jar', 'android.test.runner.jar', 'etc\permissions\android.test.runner.xml', 'licenses\JUNIT-CPL-NOTICES.txt', 'libEGL.dll', 'libGLESv2.dll', 'licenses\ANGLE-NOTICES.txt', 'gesher-exec.exe', 'dex2oat.exe', 'profman.exe', 'oatdump.exe',
-                      'tzdata\etc\tz\versioned\9\tzdata', 'tzdata\etc\tz\versioned\9\icu\zoneinfo64.res', 'licenses\TZDATA-NOTICES.txt', 'licenses\BIONIC-GDTOA-NOTICES.txt', 'gesher-camera.apk', 'gesher-stt.apk') {
+                      'tzdata\etc\tz\versioned\9\tzdata', 'tzdata\etc\tz\versioned\9\icu\zoneinfo64.res', 'licenses\TZDATA-NOTICES.txt', 'licenses\BIONIC-GDTOA-NOTICES.txt', 'gesher-camera.apk', 'gesher-stt.apk', 'gesher-tts.apk') {
             if (-not (Test-Path "$app\$f")) { throw "The installer left out $f" }
           }
           $oatdumpOutput = & "$app\oatdump.exe" "--oat-file=$app/framework/x86_64/boot-framework.oat" --header-only --no-disassemble 2>&1 | Out-String
@@ -1386,22 +1535,12 @@ jobs:
           foreach ($f in [regex]::Matches((Get-Content -Raw "$app\fonts\fonts.xml"), '[A-Za-z0-9_-]+\.ttf') | ForEach-Object Value | Sort-Object -Unique) {
             if (-not (Test-Path "$app\fonts\$f")) { throw "The installer left out fonts\$f, which fonts.xml names" }
           }
-          $out = & "$app\gesher-app.cmd" "$app\lifecycle.apk" --single-process 2>&1 | Out-String
-          $code = $LASTEXITCODE
-          Write-Host "gesher-app lifecycle.apk --single-process (exit $code):"
-          Write-Host (($out -split "`n" | Select-Object -Last 15) -join "`n")
-          if ($code -ne 0 -or $out -notmatch 'gesher-app: done' -or $out -notmatch 'stand-in services in this process') {
-            throw "The installed gesher-app --single-process did not take lifecycle.apk to onResume (exit $code)"
-          }
-          $fonts = $out -split "`n" | Select-String -Pattern 'gesher-app: system fonts' | Select-Object -First 1
-          Write-Host $fonts
-          if ($out -notmatch 'gesher-app: system fonts: \d+ typefaces') { throw 'The installed gesher-app did not load the system fonts' }
-          if ($out -notmatch 'gesher: boot image loaded: 5 spaces') { throw 'The installed gesher-app did not load the installed boot image with its extensions' }
-          'PASS  installer: the installed boot image loads (gesher: the primary image, 3 spaces; gesher-app: with the framework and gesher-app extensions, 5 spaces)' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
-          'PASS  installer: gesher-app loads the installed system fonts' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           # The default: the Gesher device (binderd, servicemanager and a
           # persistent system server, detached), the APK installed, its
           # process started by the system server (docs/services.md).
+          # Run the cold device launch before the single-process probe. A
+          # protected single-process launch can start a policy owner that the
+          # default launch would reuse instead of starting a fresh device.
           $device = "$env:LOCALAPPDATA\Gesher\data\system\gesher-device"
           function DevicePids {
             if (-not (Test-Path $device)) { return @() }
@@ -1416,13 +1555,16 @@ jobs:
           $env:GESHER_APP_WINDOW = 'headless'
           # The device's processes log how they execute (checked below, ADR 0081).
           $env:GESHER_LOG_EXECUTION = '1'
-          $out = & "$app\gesher-app.cmd" "$app\lifecycle.apk" 2>&1 | Out-String
+          # CardWake (#407) looks up UsbManager during Activity.onCreate.
+          $out = & "$app\gesher-app.cmd" "$app\lifecycle.apk" --ez com.gesher.lifecycle.CHECK_ANDROID_DATA true --ez com.gesher.lifecycle.CHECK_USB_SERVICE true 2>&1 | Out-String
           $code = $LASTEXITCODE
           Remove-Item Env:GESHER_LOG_EXECUTION
           Write-Host "gesher-app lifecycle.apk (exit $code):"
           Write-Host (($out -split "`n" | Select-Object -Last 15) -join "`n")
           if ($code -ne 0 -or $out -notmatch 'gesher-app: done' -or $out -notmatch 'started the Gesher device' -or
-              $out -notmatch 'installed com\.gesher\.lifecycle' -or $out -notmatch 'LifecycleActivity onResume') {
+              $out -notmatch 'installed com\.gesher\.lifecycle' -or $out -notmatch 'LifecycleActivity onResume' -or
+              $out -notmatch 'LifecycleActivity Android data capacity verified' -or
+              $out -notmatch 'LifecycleActivity onCreate: USB service available') {
             Get-Content "$env:LOCALAPPDATA\Gesher\logs\*.log" -ErrorAction SilentlyContinue | Select-Object -Last 60 | Out-Host
             throw "The installed gesher-app did not run lifecycle.apk on the Gesher device (exit $code)"
           }
@@ -1463,6 +1605,19 @@ jobs:
           }
           if ($out -notmatch 'Windows AppUserModelID Gesher\.App\.com\.gesher\.lifecycle') { throw 'The app process did not set its AppUserModelID' }
           'PASS  installer: the first launch of lifecycle.apk makes its Start menu shortcut; its process sets the AppUserModelID Gesher.App.com.gesher.lifecycle' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          $out = & "$app\gesher-app.cmd" "$app\lifecycle.apk" --single-process 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host "gesher-app lifecycle.apk --single-process (exit $code):"
+          Write-Host (($out -split "`n" | Select-Object -Last 15) -join "`n")
+          if ($code -ne 0 -or $out -notmatch 'gesher-app: done' -or $out -notmatch 'stand-in services in this process') {
+            throw "The installed gesher-app --single-process did not take lifecycle.apk to onResume (exit $code)"
+          }
+          $fonts = $out -split "`n" | Select-String -Pattern 'gesher-app: system fonts' | Select-Object -First 1
+          Write-Host $fonts
+          if ($out -notmatch 'gesher-app: system fonts: \d+ typefaces') { throw 'The installed gesher-app did not load the system fonts' }
+          if ($out -notmatch 'gesher: boot image loaded: 5 spaces') { throw 'The installed gesher-app did not load the installed boot image with its extensions' }
+          'PASS  installer: the installed boot image loads (gesher: the primary image, 3 spaces; gesher-app: with the framework and gesher-app extensions, 5 spaces)' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          'PASS  installer: gesher-app loads the installed system fonts' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           $out = & "$app\gesher-app.cmd" uninstall com.gesher.lifecycle 2>&1 | Out-String
           $code = $LASTEXITCODE
           Write-Host $out
