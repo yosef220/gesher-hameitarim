@@ -2,8 +2,9 @@
 # מיתר: צילומי מסך של העמוד הראשון באשף ההתקנה, בעברית ובאנגלית, לביקורת העיצוב.
 # בונה מתקין קטן עם אותן הגדרות אשף ואותו קוד של InitializeWizard כמו tools/package/gesher.iss (השורה הקבועה
 # "מבוסס על Gesher" בעמוד הפתיחה), מריץ אותו, מצלם את החלון וסוגר אותו בלי להתקין כלום.
-# שני מצבים: "default" בדיוק כמו gesher.iss (בלי DisableWelcomePage), ו-"welcome" עם DisableWelcomePage=no,
-# כדי לדעת אם עמוד הפתיחה מוצג בכלל. רץ ב-Windows PowerShell 5.1. ב-CI: ‏.github/workflows/hameitarim-design.yml.
+# שלושה מצבים: "default" כמו gesher.iss לפני התיקון (בלי DisableWelcomePage), "welcome" עם DisableWelcomePage=no,
+# ו-"brand" עם עמוד הפתיחה ותמונות המותג, כמו gesher.iss עכשיו. רץ ב-Windows PowerShell 5.1.
+# ב-CI: ‏.github/workflows/hameitarim-design.yml.
 param([Parameter(Mandatory = $true)][string] $OutDir)
 
 $ErrorActionPreference = 'Stop'
@@ -80,7 +81,8 @@ public static class WelcomeShot {
 }
 '@
 
-$variants = [ordered]@{ 'default' = ''; 'welcome' = 'DisableWelcomePage=no' }
+$images = "WizardImageFile=$package\wizard-164x314.bmp,$package\wizard-246x459.bmp,$package\wizard-328x604.bmp`r`nWizardSmallImageFile=$package\small-55x55.bmp,$package\small-83x80.bmp,$package\small-110x106.bmp"
+$variants = [ordered]@{ 'default' = ''; 'welcome' = 'DisableWelcomePage=no'; 'brand' = "DisableWelcomePage=no`r`n$images" }
 foreach ($variant in $variants.Keys) {
     $name = "welcome-$variant"
     $setup = New-Installer $name $variants[$variant]

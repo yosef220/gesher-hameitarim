@@ -25,6 +25,7 @@ DefaultDirName={localappdata}\GesherLicensePreview
 PrivilegesRequired=lowest
 WizardStyle=modern
 SetupIconFile=$package\gesher.ico
+WizardSmallImageFile=$package\small-55x55.bmp,$package\small-83x80.bmp,$package\small-110x106.bmp
 LanguageDetectionMethod=uilanguage
 ShowLanguageDialog=no
 UsePreviousLanguage=no
