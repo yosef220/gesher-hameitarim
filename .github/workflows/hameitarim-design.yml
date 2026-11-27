@@ -120,6 +120,10 @@ jobs:
       - name: צילום הדף בעברית ובאנגלית
         shell: powershell
         run: tools/ui/license-page-preview.ps1 -OutDir license-screens
+      - name: צילום העמוד הראשון באשף (עמוד הפתיחה) בעברית ובאנגלית
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: tools/ui/installer-welcome-preview.ps1 -OutDir license-screens
       - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
         shell: pwsh
         run: |
