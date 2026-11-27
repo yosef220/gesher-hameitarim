@@ -242,6 +242,15 @@ foreach ($a in $manifestData.apps) {
 }
 
 # --- The .apk association and the Start menu shortcut, for the first app that passed.
+# גשר המיתרים: קיצור נקרא דרך Shell.Application, כמו בסייר הקבצים. ‏WScript.Shell מחזיר קיצור ריק
+# כשבנתיב שלו יש תווים שאינם בדף הקוד של המערכת, למשל משתמש Windows בשם עברי
+# (tests/install-env, ריצה 45898222625).
+function Read-Shortcut([string] $Path) {
+  $folder = (New-Object -ComObject Shell.Application).NameSpace([IO.Path]::GetDirectoryName($Path))
+  $link = $folder.ParseName([IO.Path]::GetFileName($Path)).GetLink
+  return [pscustomobject]@{ TargetPath = $link.Path; Arguments = $link.Arguments }
+}
+
 $first = $passed | Where-Object { -not $_.knownFailure } | Select-Object -First 1
 if ($null -eq $first) { $first = $passed | Select-Object -First 1 }
 if ($null -ne $first) {
@@ -259,13 +268,13 @@ if ($null -ne $first) {
     Set-E2eCheck $pkg 'association' $(if ($r.Problems) { 'failed' } else { 'passed' }) $r.Problems
     Set-E2eCheck $pkg 'shortcut' 'running'
     $lnk = Get-ChildItem (Join-Path ([Environment]::GetFolderPath('Programs')) 'Gesher Apps') -Filter *.lnk -ErrorAction SilentlyContinue |
-      Where-Object { (New-Object -ComObject WScript.Shell).CreateShortcut($_.FullName).Arguments -match "launch $pkg" } | Select-Object -First 1
+      Where-Object { (Read-Shortcut $_.FullName).Arguments -match "launch $pkg" } | Select-Object -First 1
     if ($null -eq $lnk) {
       Report "FAIL  e2e: $pkg has no Start menu shortcut in Gesher Apps"; $script:failed++
       Set-E2eCheck $pkg 'shortcut' 'failed' @('no Start menu shortcut in Gesher Apps')
     }
     else {
-      $link = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk.FullName)
+      $link = Read-Shortcut $lnk.FullName
       $r = RunWindow $first "`"$($link.TargetPath)`" $($link.Arguments)" 'shortcut' -NoInput
       foreach ($l in $r.Info) { Report "INFO  e2e: $pkg (Start menu): $l" }
       if ($r.Problems) { Report "FAIL  e2e: $pkg through its Start menu shortcut '$($lnk.Name)': $($r.Problems -join '; ')"; $script:failed++ }
