@@ -37,7 +37,7 @@ $pythonChecks = @(
 )
 
 function Invoke-Check([string] $name, [string] $exe, [string] $arguments) {
-    $log = Join-Path $OutDir ($name -replace '[\\/:]', '_') + '.log'
+    $log = Join-Path $OutDir (($name -replace '[\\/: ]', '_') + '.log')
     $info = [System.Diagnostics.ProcessStartInfo]::new($exe)
     $info.Arguments = $arguments
     $info.WorkingDirectory = $repo
