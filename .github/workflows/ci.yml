@@ -292,6 +292,8 @@ jobs:
           tests/windows/shell/PortableModeChecks.ps1
           python tools/tests/test_portable_package.py
           if ($LASTEXITCODE -ne 0) { throw 'Portable package contracts failed' }
+          python tools/tests/test_panel_resize.py
+          if ($LASTEXITCODE -ne 0) { throw 'Panel resize contracts failed' }
       - name: API 37 report gate failure and selection contracts
         if: ${{ !cancelled() }}
         shell: bash
