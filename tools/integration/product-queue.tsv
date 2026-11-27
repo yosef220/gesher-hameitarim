@@ -11,7 +11,7 @@ lev-app-compat	origin:refs/heads/topic/lev-app-compat	2c0f496ceef606e222172a546f
 # ‏pr-427 (27.11): נכנס דרך topic/pr-427, אחרי פתרון 28 קבצים בהתנגשות. הגרסה של ה-PR מפעילה את הבידוד
 # בכל הפעלה מהמשגרים המותקנים, ולכן שם הוחזרה ברירת המחדל הרגילה (הצטרפות מפורשת בלבד), לפי התוכנית: ברירת
 # מחדל רק אחרי בדיקות "אפליקציה עוינת". פירוט בהודעת הקומיט של הענף.
-pr-427	origin:refs/heads/topic/pr-427	e1ba6a70d0c9b32c1971ea3ca550c5746a355308	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל: הקוד נכנס במלואו, והמשגרים המותקנים נשארים בריצה הרגילה. הצטרפות: GESHER_SANDBOX=appcontainer-trusted
+pr-427	origin:refs/heads/topic/pr-427	199d2645083654e2601015d994f868727ca0a793	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל: הקוד נכנס במלואו, והמשגרים המותקנים נשארים בריצה הרגילה. הצטרפות: GESHER_SANDBOX=appcontainer-trusted
 # הוצא ב-25.11: ‏main כבר מממש את הייצוא של libstdc++.so ב-compat/bionic/cxx_bionic.cc (מ-#432, התיקון של Dreame),
 # כולל SIGABRT למטפל של האפליקציה (tests/native2/libstdcxx_fatal_test.cpp). ‏#484 מוסיף מימוש שני של אותן
 # פונקציות ב-shim.cc, ושני מימושים יחד היו מתנגשים.
@@ -93,5 +93,8 @@ pr-347	origin:refs/heads/topic/pr-347	41c41e1ce8391a14b905aeada7e90704dfacfc09	3
 pr-342	origin:refs/heads/topic/pr-342	42130a090b44f396d1ed02e7c50b2e2722db775a	342	3	ביצועים: העברה של פריימים ארוזים של AVC בבעלות, בלי העתקה
 pr-440	origin:refs/heads/topic/pr-440	5c4895308d7fbc44be970f0c5470b9bddaa577f1	440	4	בדיקה: נתיבי SQLite אחרי #427 (גל 4)
 pr-405	origin:refs/heads/topic/pr-405	74db474b527e7eacccf11c7371dbd497ba14f79d	405	4	בדיקה: מפקד PID אחרי יציאה של שורש נשמר (גל 4)
-pr-435	origin:refs/heads/topic/pr-435	71718637027e58888d8d3c2ce3c7b464c31822a9	435	4	CI: התאוששות מקריאה של GitHub שנחתכה (גל 4)
+# הוצא ב-27.11: ‏#435 (ניסיון חוזר רק על EOF "לא ממוסגר" של gh) סותר את הטיפול שכבר נמצא ב-main מ-#330: שם חוזרים גם על
+# EOF שהגיע אחרי כותרת HTTP 2xx. הבדיקה של #435 (test_http_framing_prevents_the_unframed_eof_exception) דורשת את ההפך, ושתי
+# הבדיקות לא יכולות לעבור יחד. נשארים עם הגרסה של main, שכבר יצאה ב-1.1.0. העבודה נשמרת בענף topic/pr-435.
+# pr-435	origin:refs/heads/topic/pr-435	71718637027e58888d8d3c2ce3c7b464c31822a9	435	4	CI: התאוששות מקריאה של GitHub שנחתכה (גל 4)
 pr-429	origin:refs/heads/topic/pr-429	eb39a36fc51b5fd3a4c62730761cccd76ae2e2ff	429	4	רשת: NETLINK_ROUTE על Windows, מוגבל להרשאה (גל 4)
