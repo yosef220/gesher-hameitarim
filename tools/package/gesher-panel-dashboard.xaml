@@ -262,7 +262,7 @@
             </Border>
 
             <!-- המערכת: עמודה שקטה על המשטח, בלי מסגרת. קו דק מפריד בין נושאים -->
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="0,0,0,8">
+            <ScrollViewer Name="RailScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="0,0,0,8">
                 <!-- מרווח בקצה, כדי שפס הגלילה לא ייגע בטקסט -->
                 <StackPanel Margin="0,0,10,0">
                     <StackPanel Name="ServicesCards">
