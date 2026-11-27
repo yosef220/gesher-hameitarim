@@ -18,6 +18,10 @@
 #include <string>
 #include <vector>
 
+namespace gesher {
+struct NetlinkState;
+}  // namespace gesher
+
 namespace gesher::ws {
 
 using Socket = uintptr_t;
@@ -70,6 +74,7 @@ enum class ConnectState { kInitial, kConnecting, kConnected, kFailed };
 enum class Provider { kOther, kNativeIpv4Tcp, kNativeIpv4Udp };
 struct ConnectOperation;
 struct SocketDescription {
+  std::shared_ptr<gesher::NetlinkState> netlink;
   std::atomic<ConnectState> state{ConnectState::kInitial};
   Provider provider = Provider::kOther;  // exact base-provider identity before publication
   bool native_nonblocking_datagram = false;  // immutable after ownership registration
@@ -91,6 +96,7 @@ struct SocketDescription {
   // sender's credentials (winsock.cc's UnixDatagramHeader); SO_PASSCRED delivers them.
   std::atomic<bool> unix_datagram_pair{false};
   std::atomic<bool> pass_credentials{false};  // SO_PASSCRED
+  std::atomic<bool> recv_pktinfo{false};  // IP_PKTINFO: recvmsg delivers in_pktinfo
   // A stream pair (SOCK_STREAM): SCM_RIGHTS goes through the broker's queue for
   // the connection, keyed by both loopback ports (stream_ports: local << 16 |
   // peer, 0 until first needed), at stream positions that SendOwned and
@@ -190,6 +196,21 @@ int UnixDatagramPayload(int available);
 // A stream pair end's loopback ports (SocketDescription::stream_ports, cached
 // there); false with errno if they cannot be known.
 bool StreamPorts(Socket s, SocketDescription& description, uint16_t* local, uint16_t* peer);
+
+// IP_PKTINFO of an IPv4 datagram: the interface it arrived on, its
+// destination address and the local address it was received at (Linux's
+// ipi_spec_dst, fib_compute_spec_dst), each 4 bytes in network order.
+struct PacketInfo {
+  bool valid = false;
+  uint32_t ifindex = 0;
+  uint8_t address[4] = {};
+  uint8_t local[4] = {};
+};
+// Asks Windows to report each received IPv4 datagram's packet information.
+int SetPacketInfo(Socket s, bool on);
+// While set on this thread, a UDP receive (Recv) stores its IPv4 datagram's
+// packet information there (a dual-stack IPv6 socket's v4-mapped ones too) (valid = false if there was none). Null: none.
+void SetReceivePacketInfo(PacketInfo* info);
 
 int GetOption(Socket s, Option option, int* value);
 int SetOption(Socket s, Option option, int value);
@@ -292,9 +313,14 @@ inline constexpr unsigned kIfPointToPoint = 32;
 struct InterfaceAddress {
   Address address;
   int prefix_len;
+  enum class State { kPreferred, kDeprecated, kTentative, kDuplicate };
+  State state = State::kPreferred;
+  bool permanent = false;
+  bool temporary = false;
 };
 
 struct Interface {
+  enum class LinkKind { kOther, kLoopback, kEthernet, kPpp };
   std::string name;
   uint32_t index = 0;
   unsigned flags = 0;
@@ -302,9 +328,15 @@ struct Interface {
   uint8_t hardware[8] = {};
   size_t hardware_len = 0;
   std::vector<InterfaceAddress> addresses;
+  LinkKind kind = LinkKind::kOther;
 };
 
 bool ListInterfaces(std::vector<Interface>* interfaces);
+struct InterfaceChangeWatch;
+enum class InterfaceChangeKind { kLink, kAddress };
+InterfaceChangeWatch* WatchInterfaceChanges(InterfaceChangeKind kind, void (*changed)(void*),
+                                             void* context);
+void StopInterfaceChanges(InterfaceChangeWatch* watch);
 
 }  // namespace gesher::ws
 
@@ -365,6 +397,8 @@ uint64_t AdvanceStream(uint16_t port, bool sent, uint64_t bytes);
 // Takes ownership of `state.socket`: returns its new fd, or -1 with errno set
 // (the socket is then closed).
 int RegisterSocket(const SocketFd& state);
+// Registers an in-process AF_NETLINK descriptor backed by `netlink`.
+int RegisterNetlinkSocket(bool nonblocking, int sock_type);
 // False if fd is not a socket.
 bool LookupSocket(int fd, SocketFd* state);
 

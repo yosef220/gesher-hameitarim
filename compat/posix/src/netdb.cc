@@ -17,6 +17,8 @@
 #include <string.h>
 #include <sys/ioctl.h>
 
+#include <gesher/binder_endpoint.h>
+#include <gesher/fork.h>
 #include <gesher/inet.h>
 
 #include <string>
@@ -85,6 +87,16 @@ int gesher_getaddrinfo_interface(const char* node, const char* service, const st
   if (res == nullptr) return EAI_FAIL;
   *res = nullptr;
   if (node == nullptr && service == nullptr) return EAI_NONAME;
+  if (node != nullptr && gesher::InForkedChild()) {
+    // A forked child (gesher/fork.h, ADR 0092) cannot resolve names: Windows'
+    // resolver (dnsapi) faults loading in a clone, and the shared resolver
+    // runs on a thread pool the child has not. Numeric addresses still parse.
+    unsigned char numeric[16];
+    if (inet_pton(AF_INET, node, numeric) != 1 && inet_pton(AF_INET6, node, numeric) != 1) {
+      errno = ENOSYS;
+      return EAI_SYSTEM;
+    }
+  }
   if (node != nullptr && !gesher_inet_allowed()) {
     // No INTERNET permission (<gesher/inet.h>): only numeric addresses resolve.
     unsigned char numeric[16];
@@ -198,6 +210,11 @@ const char* gai_strerror(int errcode) {
 
 int getnameinfo(const struct sockaddr* addr, socklen_t addrlen, char* host, socklen_t hostlen,
                 char* serv, socklen_t servlen, int flags) {
+  // A forked child cannot look names up (see getaddrinfo).
+  if (gesher::InForkedChild() && host != nullptr && hostlen != 0 && (flags & NI_NUMERICHOST) == 0) {
+    errno = ENOSYS;
+    return EAI_SYSTEM;
+  }
   ws::Address address;
   if (!ToAddress(addr, addrlen, &address)) return EAI_FAMILY;
   if (address.family != ws::Family::kInet && address.family != ws::Family::kInet6) {
@@ -443,28 +460,6 @@ char* inet_ntoa(struct in_addr in) {
 
 namespace {
 
-// Windows' interface names ("ethernet_32769", the names its own
-// if_indextoname gives); one that does not fit IFNAMSIZ becomes "if<index>",
-// the same way in every function here.
-bool ListNamedInterfaces(std::vector<ws::Interface>* interfaces) {
-  if (!ws::ListInterfaces(interfaces)) return false;
-  for (ws::Interface& iface : *interfaces) {
-    if (iface.name.size() >= IFNAMSIZ) iface.name = "if" + std::to_string(iface.index);
-  }
-  return true;
-}
-
-unsigned ToIfFlags(unsigned flags) {
-  unsigned result = 0;
-  if (flags & ws::kIfUp) result |= IFF_UP;
-  if (flags & ws::kIfRunning) result |= IFF_RUNNING;
-  if (flags & ws::kIfLoopback) result |= IFF_LOOPBACK;
-  if (flags & ws::kIfBroadcast) result |= IFF_BROADCAST;
-  if (flags & ws::kIfMulticast) result |= IFF_MULTICAST;
-  if (flags & ws::kIfPointToPoint) result |= IFF_POINTOPOINT;
-  return result;
-}
-
 // One allocation per entry, freed by freeifaddrs.
 struct IfAddrsBlock {
   ifaddrs ifa;
@@ -550,33 +545,36 @@ void if_freenameindex(struct if_nameindex* ptr) {
   free(ptr);
 }
 
-// As on Linux: an AF_PACKET entry per interface, holding its hardware
-// address (which libcore's NetworkInterface reads), then one per IP address.
+// Android exposes IP addresses to ordinary apps. Link-layer entries come from
+// the same authenticated system-only inspection as RTM_GETLINK.
 int getifaddrs(struct ifaddrs** ifap) {
   if (ifap == nullptr) return errno = EFAULT, -1;
   *ifap = nullptr;
   std::vector<ws::Interface> interfaces;
   if (!ListNamedInterfaces(&interfaces)) return -1;
+  const bool include_link_layer = gesher::binder_endpoint::MayInspectNetlink();
   ifaddrs** tail = ifap;
   auto append = [&tail](IfAddrsBlock* block) {
     *tail = &block->ifa;
     tail = &block->ifa.ifa_next;
   };
   for (const ws::Interface& iface : interfaces) {
-    IfAddrsBlock* packet = NewEntry(iface);
-    if (packet == nullptr) {
-      freeifaddrs(*ifap);
-      *ifap = nullptr;
-      return errno = ENOMEM, -1;
+    if (include_link_layer) {
+      IfAddrsBlock* packet = NewEntry(iface);
+      if (packet == nullptr) {
+        freeifaddrs(*ifap);
+        *ifap = nullptr;
+        return errno = ENOMEM, -1;
+      }
+      auto* sll = reinterpret_cast<sockaddr_ll*>(&packet->address);
+      sll->sll_family = AF_PACKET;
+      sll->sll_ifindex = static_cast<int>(iface.index);
+      sll->sll_hatype = (iface.flags & ws::kIfLoopback) != 0 ? ARPHRD_LOOPBACK : ARPHRD_ETHER;
+      sll->sll_halen = static_cast<unsigned char>(iface.hardware_len);
+      memcpy(sll->sll_addr, iface.hardware, iface.hardware_len);
+      packet->ifa.ifa_addr = reinterpret_cast<sockaddr*>(&packet->address);
+      append(packet);
     }
-    auto* sll = reinterpret_cast<sockaddr_ll*>(&packet->address);
-    sll->sll_family = AF_PACKET;
-    sll->sll_ifindex = static_cast<int>(iface.index);
-    sll->sll_hatype = (iface.flags & ws::kIfLoopback) != 0 ? ARPHRD_LOOPBACK : ARPHRD_ETHER;
-    sll->sll_halen = static_cast<unsigned char>(iface.hardware_len);
-    memcpy(sll->sll_addr, iface.hardware, iface.hardware_len);
-    packet->ifa.ifa_addr = reinterpret_cast<sockaddr*>(&packet->address);
-    append(packet);
 
     for (const ws::InterfaceAddress& a : iface.addresses) {
       IfAddrsBlock* block = NewEntry(iface);
@@ -607,6 +605,26 @@ int getifaddrs(struct ifaddrs** ifap) {
 }  // extern "C"
 
 namespace gesher::sock {
+
+// Match the names returned by if_indextoname, including the IFNAMSIZ fallback.
+bool ListNamedInterfaces(std::vector<ws::Interface>* interfaces) {
+  if (!ws::ListInterfaces(interfaces)) return false;
+  for (ws::Interface& iface : *interfaces) {
+    if (iface.name.size() >= IFNAMSIZ) iface.name = "if" + std::to_string(iface.index);
+  }
+  return true;
+}
+
+unsigned ToIfFlags(unsigned flags) {
+  unsigned result = 0;
+  if (flags & ws::kIfUp) result |= IFF_UP;
+  if (flags & ws::kIfRunning) result |= IFF_RUNNING;
+  if (flags & ws::kIfLoopback) result |= IFF_LOOPBACK;
+  if (flags & ws::kIfBroadcast) result |= IFF_BROADCAST;
+  if (flags & ws::kIfMulticast) result |= IFF_MULTICAST;
+  if (flags & ws::kIfPointToPoint) result |= IFF_POINTOPOINT;
+  return result;
+}
 
 namespace {
 

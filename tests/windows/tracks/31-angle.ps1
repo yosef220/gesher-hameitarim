@@ -68,25 +68,30 @@ GraphicsDex 'HardwareRenderer: SkiaGL chosen by debug.hwui.renderer, on ANGLE''s
   HardwareRendererGlTest @($hwuiFont, $hwuiFrame, 'gl', 'debug.hwui.renderer')
 $env:ANDROID_ROOT = $androidRoot
 
-# Without ANGLE (the files of $Dir, hard-linked, less libEGL.dll and
-# libGLESv2.dll), skiagl falls back to the CPU pipeline with a line saying so.
-$env:GESHER_HWUI_RENDERER = 'skiagl'
-$noAngle = Join-Path $env:RUNNER_TEMP 'dist-no-angle'
-New-Item -ItemType Directory -Force $noAngle | Out-Null
-foreach ($file in Get-ChildItem -File $Dir) {
-  if ($file.Name -in @('libEGL.dll', 'libGLESv2.dll')) { continue }
-  $link = Join-Path $noAngle $file.Name
-  if (-not (Test-Path $link)) {
-    try { New-Item -ItemType HardLink -Path $link -Target $file.FullName -ErrorAction Stop | Out-Null }
-    catch { Copy-Item $file.FullName $link }
-  }
-}
+# Without ANGLE, skiagl falls back to the CPU pipeline with a line saying so.
+# Copy the files so the protected runtime can still grant access to the
+# original distribution, which requires its files to have a single link.
 $distDir = $Dir
-$Dir = $noAngle
-GraphicsDex 'HardwareRenderer: skiagl without ANGLE falls back to the CPU pipeline, the same frame' `
-  HardwareRendererGlTest @($hwuiFont, $hwuiFrame, 'fallback', 'GESHER_HWUI_RENDERER')
-$Dir = $distDir
-Remove-Item Env:GESHER_HWUI_RENDERER
+$previousRenderer = $env:GESHER_HWUI_RENDERER
+$noAngle = Join-Path $env:RUNNER_TEMP "dist-no-angle-$([Guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Path $noAngle -ErrorAction Stop | Out-Null
+try {
+  foreach ($file in Get-ChildItem -LiteralPath $distDir -File) {
+    if ($file.Name -in @('libEGL.dll', 'libGLESv2.dll')) { continue }
+    Copy-Item -LiteralPath $file.FullName -Destination $noAngle -ErrorAction Stop
+  }
+  $Dir = $noAngle
+  $env:GESHER_HWUI_RENDERER = 'skiagl'
+  GraphicsDex 'HardwareRenderer: skiagl without ANGLE falls back to the CPU pipeline, the same frame' `
+    HardwareRendererGlTest @($hwuiFont, $hwuiFrame, 'fallback', 'GESHER_HWUI_RENDERER')
+} finally {
+  $Dir = $distDir
+  $env:GESHER_HWUI_RENDERER = $previousRenderer
+  Get-ChildItem -LiteralPath $noAngle -File -Force | ForEach-Object {
+    Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+  }
+  [IO.Directory]::Delete($noAngle, $false)
+}
 
 # The framework's Java OpenGL ES/EGL bindings over ANGLE (docs/angle.md, "Java
 # apps"; tests/dex-graphics/gesher/GlBindingsTest.java), what GLSurfaceView and
@@ -111,10 +116,32 @@ GraphicsDex 'SurfaceTexture in OpenGL ES: updateTexImage latches frames into an 
   SurfaceTextureGlTest @()
 GraphicsDex 'ImageReader native surface: EGL pixels, Canvas notification, queue overflow and close lifetime' `
   ImageReaderEglTest @()
+# A PRIVATE, GPU-sampled reader, as Flutter's platform views create it: drawn into
+# through lockHardwareCanvas, lockCanvas and EGL, its images' HardwareBuffers imported
+# by an NDK library (AHardwareBuffer_fromHardwareBuffer, reader_buffer_test.so from
+# native-libs.yml), and camera frames still delivered to it.
+GraphicsDex 'ImageReader PRIVATE: drawn into, imported through AHardwareBuffer_fromHardwareBuffer, camera frames kept' `
+  ImageReaderPrivateTest @((NoDrive (Resolve-Path "$Dir/reader_buffer_test.so").Path))
 # Independently exercise the old staging path even if ANGLE supports the
 # direct readback extension. All ImageReader pixel/lifetime checks must pass.
 $env:GESHER_EGL_DIRECT_READBACK = '0'
 GraphicsDex 'ImageReader surface: forced staging fallback preserves pixels and lifetime' `
   ImageReaderEglTest @()
 Remove-Item Env:GESHER_EGL_DIRECT_READBACK
+
+# A boot that declared OpenGL ES 3.0 (ro.opengles.version=196608 in this
+# process's build.prop, a copy of the test root's; docs/system-features.md) on
+# WARP: the default display is WARP uncapped and gives ES 3.0, so the runners,
+# which have no GPU, check the ES 3 ImageReader on Android's default display
+# and that the Java bindings' eglCreateContext (compat/hwui/gl/angle_gl.cc)
+# refuses an ES 3.1 context with EGL_BAD_MATCH.
+$gles3Root = Join-Path $env:RUNNER_TEMP 'gesher-root-gles3'
+New-Item -ItemType Directory -Force $gles3Root | Out-Null
+@(Get-Content (Join-Path $root 'system/build.prop')) + 'ro.opengles.version=196608' |
+  Set-Content (Join-Path $gles3Root 'build.prop')
+$androidRoot = $env:ANDROID_ROOT
+$env:ANDROID_ROOT = NoDrive $gles3Root
+GraphicsDex 'ImageReader on a boot that declared ES 3.0 (WARP uncapped): GLES3 readback on the default display, ES 3.1 refused through EGL14' `
+  ImageReaderEglTest @('declared-es3')
+$env:ANDROID_ROOT = $androidRoot
 Remove-Item Env:GESHER_EGL_DEVICE

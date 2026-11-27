@@ -55,6 +55,13 @@ static std::map<int, Object> objects;
 static bool Lookup(int fd, Object* object) {
   auto it = objects.find(fd); if (it == objects.end()) return false; *object = it->second; return true;
 }
+// Both registry interfaces retain the same native Linux descriptor boundary;
+// source-ref controls can execute the preceding and shared-owner dispatch.
+struct ObjectOwner { Object object; };
+static std::shared_ptr<ObjectOwner> Lookup(int fd) {
+  auto it = objects.find(fd);
+  return it == objects.end() ? nullptr : std::make_shared<ObjectOwner>(ObjectOwner{it->second});
+}
 static int WriteEventFd(EventFd& object, const void* bytes, unsigned count) { return ::write(object.native, bytes, count); }
 @VIRTUAL_WRITE@
 struct SocketFd { int socket; std::shared_ptr<int> description; };
@@ -81,8 +88,10 @@ static int notified, woke;
 static void InotifyNoteWrite(int) { ++notified; }
 static bool HasPollWaiters() { return true; }
 static void WakePollers() { ++woke; }
+enum class DescriptorKind : uint32_t { kFile = 0, kZero = 1, kRandom = 2, kUnshareable = 3 };
 struct DescriptorSnapshot {
   HANDLE handle;
+  DescriptorKind kind = DescriptorKind::kFile;
   ~DescriptorSnapshot() { ::close(static_cast<int>(handle)); }
 };
 using DescriptorSnapshotPtr = std::shared_ptr<DescriptorSnapshot>;

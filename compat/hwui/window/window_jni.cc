@@ -9,6 +9,7 @@
 #include <jni.h>
 #include <string.h>
 
+#include <cstdio>
 #include <mutex>
 #include <set>
 #include <string>
@@ -21,6 +22,7 @@
 
 #include "gesher_device_standins.h"
 #include "gesher_window.h"
+#include <gesher/drop_mount.h>
 #include "win32_surface.h"
 
 using gesher::Win32Surface;
@@ -59,9 +61,43 @@ jobject BlastSurface(JNIEnv* env, int64_t blast) {
   return android::android_view_Surface_createFromSurface(env, surface);
 }
 
+// Window::Create or CreatePopup returned null: IllegalStateException with the
+// Windows call that failed and its error, so a report says why.
+void ThrowCreateFailure(JNIEnv* env, const char* what, int width, int height) {
+  unsigned long error = 0;
+  const char* call = gesher::Window::LastCreateFailure(&error);
+  char message[200];
+  std::snprintf(message, sizeof(message),
+                "Windows refused to create a %s (%dx%d): %s failed, Win32 error %lu", what, width,
+                height, call != nullptr ? call : "window creation", error);
+  jclass c = env->FindClass("java/lang/IllegalStateException");
+  if (c != nullptr) env->ThrowNew(c, message);
+}
+
+std::wstring HostedDropPath(JNIEnv* env, jstring path) {
+  if (path == nullptr) return {};
+  const auto* chars = env->GetStringChars(path, nullptr);
+  if (!chars) return {};
+  const auto count = static_cast<size_t>(env->GetStringLength(path));
+  std::wstring value(reinterpret_cast<const wchar_t*>(chars), count);
+  env->ReleaseStringChars(path, chars);
+  return value;
+}
+
+jboolean JNICALL NativeWindow_keepHostedDrop(JNIEnv* env, jclass, jstring path) {
+  return gesher::drop_mount::Keep(HostedDropPath(env, path)) ? JNI_TRUE : JNI_FALSE;
+}
+
+void JNICALL NativeWindow_releaseHostedDrop(JNIEnv* env, jclass, jstring path) {
+  gesher::drop_mount::Release(HostedDropPath(env, path));
+}
+
 jlong JNICALL NativeWindow_create(JNIEnv* env, jclass, jstring title, jint width, jint height) {
   gesher::Window* window = gesher::Window::Create(Utf8(env, title), width, height);
-  if (window == nullptr) return 0;
+  if (window == nullptr) {
+    ThrowCreateFailure(env, "window", width, height);
+    return 0;
+  }
   auto* surface = new Win32Surface(window);
   surface->incStrong(reinterpret_cast<void*>(&NativeWindow_create));
   {
@@ -239,7 +275,10 @@ jlong JNICALL NativeWindow_createPopup(JNIEnv* env, jclass, jstring title, jint 
                                        jint height, jlong owner) {
   gesher::Window* window =
       gesher::Window::CreatePopup(Utf8(env, title), width, height, WindowOf(owner));
-  if (window == nullptr) return 0;
+  if (window == nullptr) {
+    ThrowCreateFailure(env, "popup window", width, height);
+    return 0;
+  }
   auto* surface = new Win32Surface(window);
   surface->incStrong(reinterpret_cast<void*>(&NativeWindow_create));
   {
@@ -309,6 +348,8 @@ void JNICALL NativeWindow_setScreenPosition(JNIEnv*, jclass, jlong ptr, jint x, 
 }
 
 const JNINativeMethod kMethods[] = {
+    {"nKeepHostedDrop", "(Ljava/lang/String;)Z", reinterpret_cast<void*>(&NativeWindow_keepHostedDrop)},
+    {"nReleaseHostedDrop", "(Ljava/lang/String;)V", reinterpret_cast<void*>(&NativeWindow_releaseHostedDrop)},
     {"nCreate", "(Ljava/lang/String;II)J", reinterpret_cast<void*>(&NativeWindow_create)},
     {"nDestroy", "(J)V", reinterpret_cast<void*>(&NativeWindow_destroy)},
     {"nShow", "(J)V", reinterpret_cast<void*>(&NativeWindow_show)},

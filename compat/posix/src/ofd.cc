@@ -2,12 +2,17 @@
 // owns one table for all modules; explicitly inherited descriptions share a
 // kernel section rather than copying their status into the child process.
 #include "ofd_internal.h"
+#include <gesher/binder_bootstrap.h>
 #include "internal.h"
 #include "record_lock_descriptors.h"
 #include "record_lock_liveness.h"
 #include "pipe_io.h"
 
 #include <gesher/file_description.h>
+// The fork set (gesher/fork.h); absent where a host test compiles this file alone.
+#if __has_include(<gesher/fork.h>)
+#include <gesher/fork.h>
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <io.h>
@@ -15,6 +20,7 @@
 #include <bcrypt.h>
 
 #include <array>
+#include <atomic>
 #include <charconv>
 #include <cstring>
 #include <new>
@@ -23,9 +29,25 @@
 
 namespace gesher {
 
+namespace {
+std::atomic<FifoAdoptHookFn> g_fifo_adopt_hook{nullptr};
+std::atomic<OpenFileDescription::FifoCleanupFn> g_fifo_cleanup_hook{nullptr};
+}  // namespace
+
+void RegisterFifoAdoptHook(FifoAdoptHookFn adopt_hook, OpenFileDescription::FifoCleanupFn cleanup_hook) {
+  g_fifo_cleanup_hook.store(cleanup_hook, std::memory_order_release);
+  g_fifo_adopt_hook.store(adopt_hook, std::memory_order_release);
+}
+
 OpenFileDescription::~OpenFileDescription() {
+  Shared* view = shared.load(std::memory_order_relaxed);
+  if (fifo_cleanup && view && (view->fifo_vol || view->fifo_idx_hi || view->fifo_idx_lo)) {
+    fifo_cleanup(view->fifo_vol, view->fifo_idx_hi, view->fifo_idx_lo, fifo_read_holder, fifo_write_handle);
+  }
+  if (fifo_read_holder && fifo_read_holder != INVALID_HANDLE_VALUE) CloseHandle(fifo_read_holder);
+  if (fifo_write_handle && fifo_write_handle != INVALID_HANDLE_VALUE) CloseHandle(fifo_write_handle);
   if (pipe_mutex) CloseHandle(pipe_mutex);
-  if (Shared* view = shared.load(std::memory_order_relaxed)) UnmapViewOfFile(view);
+  if (view) UnmapViewOfFile(view);
   if (mapping) CloseHandle(mapping);
 }
 
@@ -38,6 +60,10 @@ bool OpenFileDescription::KnownPipeStatus() const {
   return view && view->pipe_gate[0] != 0 &&
       InterlockedCompareExchange(&view->pipe_native, 0, 0) == 0 &&
       InterlockedCompareExchange(&view->pipe_transition, 0, 0) == 0;
+}
+bool OpenFileDescription::IsFifo() const {
+  auto* view = shared.load(std::memory_order_acquire);
+  return view && (view->fifo_vol != 0 || view->fifo_idx_hi != 0 || view->fifo_idx_lo != 0);
 }
 void OpenFileDescription::ExposePipe(bool exposed) {
   InterlockedExchange(&shared.load(std::memory_order_acquire)->pipe_native, exposed ? 1 : 0);
@@ -131,6 +157,9 @@ bool OpenFileDescription::Adopt(HANDLE inherited) {
   pipe_mutex = gate;
   shared.store(view, std::memory_order_release);
   initialized.store(true, std::memory_order_release);
+  if (view->fifo_vol || view->fifo_idx_hi || view->fifo_idx_lo) {
+    fifo_cleanup = g_fifo_cleanup_hook.load(std::memory_order_acquire);
+  }
   return true;
 }
 
@@ -216,15 +245,20 @@ int InitializeSnapshotFlags(const DescriptorSnapshotPtr& snapshot) {
 int ImportStartup(Table* state) try {
   STARTUPINFOW startup{};
   GetStartupInfoW(&startup);
-  if (!startup.lpReserved2 || startup.cbReserved2 < sizeof(int) + sizeof(ofd_transfer::Startup)) return 0;
+  size_t descriptor_bytes = startup.cbReserved2;
+  binder_bootstrap::Startup admission;
+  if (binder_bootstrap::ReadStartupRecord(&admission)) {
+    descriptor_bytes -= sizeof(admission);
+  }
+  if (!startup.lpReserved2 || descriptor_bytes < sizeof(int) + sizeof(ofd_transfer::Startup)) return 0;
   ofd_transfer::Startup extension{};
-  std::memcpy(&extension, startup.lpReserved2 + startup.cbReserved2 - sizeof(extension), sizeof(extension));
+  std::memcpy(&extension, startup.lpReserved2 + descriptor_bytes - sizeof(extension), sizeof(extension));
   if (extension.magic != ofd_transfer::kMagic) return 0;
   int descriptor_count = 0;
   std::memcpy(&descriptor_count, startup.lpReserved2, sizeof(descriptor_count));
   if (descriptor_count < 0 || static_cast<unsigned>(descriptor_count) > ofd_transfer::kDescriptorLimit) return EINVAL;
   const size_t crt_size = sizeof(int) + static_cast<size_t>(descriptor_count) * (1 + sizeof(intptr_t));
-  if (crt_size > startup.cbReserved2 || startup.cbReserved2 - crt_size != sizeof(ofd_transfer::Startup)) return EINVAL;
+  if (crt_size > descriptor_bytes || descriptor_bytes - crt_size != sizeof(ofd_transfer::Startup)) return EINVAL;
   const size_t maximum = sizeof(ofd_transfer::Header) +
                          ofd_transfer::kDescriptorLimit * sizeof(ofd_transfer::Entry);
   if (extension.manifest_size < sizeof(ofd_transfer::Header) || extension.manifest_size > maximum ||
@@ -273,6 +307,11 @@ int ImportStartup(Table* state) try {
     }
     description->kind = static_cast<DescriptorKind>(entry.kind);
     HANDLE inherited = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(entry.file_handle));
+    if (description->IsFifo()) {
+      if (auto adopt_hook = g_fifo_adopt_hook.load(std::memory_order_acquire)) {
+        adopt_hook(description.get(), inherited);
+      }
+    }
     if (entry.descriptor < descriptor_count) {
       if (HandleFromFd(entry.descriptor) != inherited) { error = EBADF; break; }
     } else {
@@ -599,6 +638,11 @@ DescriptorSnapshotPtr CaptureFileHandle(HANDLE file) {
   const auto* owner = Owner();
   return owner ? owner->capture_handle(file) : DescriptorSnapshotPtr{};
 }
+std::wstring DropDescriptorPath(const DescriptorSnapshotPtr& descriptor) {
+  if (!descriptor || !descriptor->description) return {};
+  std::lock_guard<std::mutex> guard(descriptor->description->mutex);
+  return descriptor->description->drop_path;
+}
 int AttachFileDescription(const DescriptorSnapshotPtr& snapshot, bool close_on_exec) {
   const auto* owner = Owner();
   return owner ? owner->attach(snapshot, close_on_exec) : -1;
@@ -647,6 +691,45 @@ int InitializePipeDescription(const DescriptorSnapshotPtr& snapshot, int flags) 
 } catch (const std::bad_alloc&) {
   return errno = ENOMEM, -1;
 }
+int InitializeFifoDescription(const DescriptorSnapshotPtr& snapshot, int flags,
+                              uint32_t fifo_vol, uint32_t fifo_idx_hi, uint32_t fifo_idx_lo,
+                              uint32_t fifo_mode, uint64_t writer_gen,
+                              const char* pipe_gate, HANDLE write_handle) try {
+  if (!snapshot || !snapshot->description || !pipe_gate || GetFileType(snapshot->handle) != FILE_TYPE_PIPE)
+    return errno = EINVAL, -1;
+  const int native = NativeFlags(snapshot->handle);
+  if (native < 0) return -1;
+  if (((native ^ flags) & (O_ACCMODE | O_PATH)) != 0) return errno = EINVAL, -1;
+  std::wstring name = L"Local\\gesher-pipe-";
+  bool valid = true;
+  for (unsigned i = 0; i != 32; ++i) {
+    char digit = pipe_gate[i];
+    valid = valid && ((digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f'));
+    name += static_cast<wchar_t>(digit);
+  }
+  valid = valid && pipe_gate[32] == 0;
+  if (!valid) return errno = EINVAL, -1;
+  auto& description = *snapshot->description;
+  std::lock_guard<std::mutex> lock(description.mutex);
+  if (description.OwnedPipe()) return errno = EALREADY, -1;
+  HANDLE gate = CreateMutexW(nullptr, FALSE, name.c_str());
+  if (!gate) return FailWithLastError();
+  if (!description.Share()) { const int error = errno; CloseHandle(gate); return errno = error, -1; }
+  description.SetFlags(flags & kOpenDescriptionFlagsMask);
+  description.pipe_mutex = gate;
+  description.fifo_write_handle = write_handle;
+  description.fifo_cleanup = g_fifo_cleanup_hook.load(std::memory_order_acquire);
+  auto* view = description.shared.load(std::memory_order_relaxed);
+  std::memcpy(view->pipe_gate, pipe_gate, 33);
+  view->fifo_vol = fifo_vol;
+  view->fifo_idx_hi = fifo_idx_hi;
+  view->fifo_idx_lo = fifo_idx_lo;
+  view->fifo_mode = fifo_mode;
+  view->fifo_writer_gen = writer_gen;
+  return 0;
+} catch (const std::bad_alloc&) {
+  return errno = ENOMEM, -1;
+}
 int SetFileDescriptionFlags(const DescriptorSnapshotPtr& snapshot, int arg) {
   if (InitializeSnapshotFlags(snapshot) < 0) return -1;
   auto& description = *snapshot->description;
@@ -673,7 +756,7 @@ int SetFileDescriptionFlags(const DescriptorSnapshotPtr& snapshot, int arg) {
     int flags = (old_flags & ~kModifiableStatusFlags) | (arg & kModifiableStatusFlags);
     // A normal Linux file has no fasync callback: this bit stays unchanged.
     if (type == FILE_TYPE_DISK) flags = (flags & ~O_ASYNC) | (old_flags & O_ASYNC);
-    if (type == FILE_TYPE_PIPE && ((flags ^ old_flags) & O_NONBLOCK) != 0) {
+    if (type == FILE_TYPE_PIPE && !description.IsFifo() && ((flags ^ old_flags) & O_NONBLOCK) != 0) {
       // Never queue a mode query/change behind a pending synchronous transfer,
       // including one in another runtime process. NPFS can also reject an idle
       // transition while bytes remain buffered; retain the old flags on failure.
@@ -722,6 +805,7 @@ int ValidateNativeFileDescription(const DescriptorSnapshotPtr& snapshot) {
   int native = NativeFlags(snapshot->handle);
   if (native < 0) return -1;
   if (GetFileType(snapshot->handle) == FILE_TYPE_PIPE) {
+    if (snapshot->description->IsFifo() && (flags & O_ACCMODE) == O_RDWR) return errno = EOPNOTSUPP, -1;
     if (((flags ^ native) & (O_ACCMODE | O_PATH)) != 0) return errno = EOPNOTSUPP, -1;
     if (snapshot->description->KnownPipeStatus() && (flags & (O_NONBLOCK | O_ASYNC)) != 0)
       return errno = EOPNOTSUPP, -1;
@@ -796,6 +880,11 @@ int AdoptFileDescription(HANDLE file, HANDLE shared, DescriptorKind kind, bool c
   if (!description->Adopt(shared)) return -1;
   cleanup.shared = nullptr;
   description->kind = kind;
+  if (description->IsFifo()) {
+    if (auto adopt_hook = g_fifo_adopt_hook.load(std::memory_order_acquire)) {
+      adopt_hook(description.get(), file);
+    }
+  }
   auto snapshot = std::make_shared<DescriptorSnapshot>();
   snapshot->handle = file;
   cleanup.file = nullptr;
@@ -853,3 +942,9 @@ struct StartupImport {
 StartupImport startup_import;
 }  // namespace
 }  // namespace gesher
+
+#ifdef GESHER_FORK_LOCK
+// fork (gesher/fork.h): the descriptor table is consistent in the child.
+GESHER_FORK_LOCK_PTR(gesher::kForkOrderDescriptors, std::mutex,
+                     gesher::table != nullptr ? &gesher::table->mutex : nullptr);
+#endif

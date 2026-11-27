@@ -165,6 +165,51 @@ public final class AppOpsService extends IAppOpsService.Default {
         if (packageFor(uid, name) == null) return MODE_ERRORED;
         return raw(mStore.state(), op, uid, name);
     }
+
+    /** Clipboard policy for a host-admitted signed APK, including transient APKs. */
+    boolean scopedClipboardAllowed(PermissionPolicy.ScopedOwner owner, int op,
+            boolean foreground, String tag, boolean checkOnly) {
+        if (!owner.isCurrent() || (op != OP_READ_CLIPBOARD && op != OP_WRITE_CLIPBOARD)) {
+            return false;
+        }
+        ApkPackage code = owner.code();
+        return scopedClipboardMode(code, op, foreground, attribution(code, tag), checkOnly) == MODE_ALLOWED;
+    }
+
+    private int scopedClipboardMode(ApkPackage code, int op, boolean foreground,
+            String tag, boolean checkOnly) {
+        if (restricted(op, code.uid(), code.packageName, tag, checkOnly)) return MODE_IGNORED;
+        int switchOp = switchOp(op);
+        int mode = raw(mStore.state(), switchOp, code.uid(), code.packageName);
+        if (mode != MODE_FOREGROUND) return mode;
+        if (foreground) {
+            return evaluateForeground(switchOp, new UidState(UID_STATE_TOP, 0));
+        }
+        refreshUidStates();
+        synchronized (mLock) {
+            return evaluate(op, code.uid(), mode);
+        }
+    }
+
+    /** Note a transfer against the native lease's package and UID, even before installation. */
+    boolean noteScopedClipboard(PermissionPolicy.ScopedOwner owner, int op, boolean foreground,
+            String tag) {
+        if (!owner.isCurrent() || (op != OP_READ_CLIPBOARD && op != OP_WRITE_CLIPBOARD)) {
+            return false;
+        }
+        ApkPackage code = owner.code();
+        OpKey key = new OpKey(op, code.uid(), code.packageName, attribution(code, tag), 0);
+        int mode = scopedClipboardMode(code, op, foreground, key.tag, false);
+        if (!owner.isCurrent()) return false;
+        synchronized (mLock) {
+            long state = foreground ? AppOpsManager.makeKey(UID_STATE_TOP, OP_FLAG_SELF)
+                    : eventKey(key.uid, OP_FLAG_SELF);
+            recordAtState(key, mode == MODE_ALLOWED, state, null);
+            notifyNoted(key, OP_FLAG_SELF, mode);
+        }
+        return mode == MODE_ALLOWED;
+    }
+
     @Override public int checkOperationRaw(int code, int uid, String name, String tag) {
         return checkOperationRawForDevice(code, uid, name, tag, 0);
     }
@@ -194,14 +239,23 @@ public final class AppOpsService extends IAppOpsService.Default {
 
     @Override public void setMode(int code, int uid, String name, int mode) {
         enforce(Manifest.permission.MANAGE_APP_OPS_MODES);
+        setModeChecked(code, uid, name, null, mode);
+    }
+    /** setMode, committed only while this exact installed package generation is current. */
+    public boolean setModeIfCurrent(int code, ApkPackage expected, int mode) {
+        enforce(Manifest.permission.MANAGE_APP_OPS_MODES);
+        Objects.requireNonNull(expected);
+        return setModeChecked(code, expected.uid(), expected.packageName, expected, mode);
+    }
+    private boolean setModeChecked(int code, int uid, String name, ApkPackage expected, int mode) {
         int op = switchOp(code); validateMode(mode);
         // Android 16's checking service ignores package modes for runtime permission ops.
-        if (mPm.permissions().runtimePermissionForOp(op) != null) return;
+        if (mPm.permissions().runtimePermissionForOp(op) != null) return false;
         List<Change> changes;
         synchronized (mMutationLock) {
             synchronized (mPm) {
                 ApkPackage pkg = packageFor(uid, name);
-                if (pkg == null) return;
+                if (pkg == null || expected != null && pkg != expected) return false;
                 State before = mStore.state();
                 Map<PackageOp, PackageMode> packages = new HashMap<>(before.packages());
                 PackageOp key = new PackageOp(uid, name, op);
@@ -213,7 +267,15 @@ public final class AppOpsService extends IAppOpsService.Default {
             }
         }
         changed(changes);
+        return true;
     }
+    /** Serialize an install's final authorization and package commit against mode writes. */
+    <T> T withInstallSourceMode(java.util.concurrent.Callable<T> publication) throws Exception {
+        synchronized (mMutationLock) {
+            return publication.call();
+        }
+    }
+
     @Override public void setUidMode(int code, int uid, int mode) {
         enforce(Manifest.permission.MANAGE_APP_OPS_MODES);
         setUidModeChecked(code, uid, null, mode);
@@ -473,16 +535,22 @@ public final class AppOpsService extends IAppOpsService.Default {
         return AppOpsManager.makeKey(mUidStates.getOrDefault(uid, UidState.absent()).state, flags);
     }
     private void record(OpKey key, boolean allowed, int flags, AppOpsManager.OpEventProxyInfo proxy) {
+        recordAtState(key, allowed, eventKey(key.uid, flags), proxy);
+    }
+    private void recordAtState(OpKey key, boolean allowed, long state, AppOpsManager.OpEventProxyInfo proxy) {
         History history = mHistory.computeIfAbsent(key, ignored -> new History());
-        (allowed ? history.access : history.reject).put(eventKey(key.uid, flags),
+        (allowed ? history.access : history.reject).put(state,
                 new AppOpsManager.NoteOpEvent(System.currentTimeMillis(), -1, proxy));
     }
     private void startRunning(Started started) {
+        startRunning(started, eventKey(started.key.uid, started.operationFlags));
+    }
+    private void startRunning(Started started, long stateKey) {
         if (started.running) return;
         started.running = true; started.startTime = SystemClock.elapsedRealtime(); started.wallTime = System.currentTimeMillis();
         History history = mHistory.computeIfAbsent(started.key, ignored -> new History());
         if (history.active++ == 0) notifyActive(started, true);
-        started.stateKey = eventKey(started.key.uid, started.operationFlags);
+        started.stateKey = stateKey;
         history.access.put(started.stateKey, new AppOpsManager.NoteOpEvent(started.wallTime, -1, started.proxy));
         if (started.everStarted) notifyStarted(started.key, MODE_ALLOWED, started.operationFlags,
                 started.attributionFlags, started.chain, START_TYPE_RESUMED);
@@ -512,6 +580,63 @@ public final class AppOpsService extends IAppOpsService.Default {
     }
     private static boolean shouldStart(int mode, boolean startDefault) {
         return mode == MODE_ALLOWED || mode == MODE_DEFAULT && startDefault;
+    }
+
+    // These sessions originate in the trusted Windows camera broker. They also
+    // cover a transient scoped APK which is not published as an installed app.
+    private final Set<Started> mCameraDeliveries = new HashSet<>();
+
+    final class CameraDelivery implements AutoCloseable {
+        private final Started mStarted;
+        private final java.util.function.IntSupplier mPolicy;
+
+        CameraDelivery(Started started, java.util.function.IntSupplier policy) {
+            mStarted = started;
+            mPolicy = policy;
+        }
+
+        boolean check() {
+            int foregroundState = mPolicy.getAsInt();
+            synchronized (mLock) {
+                if (foregroundState >= 0 && mCameraDeliveries.contains(mStarted)) {
+                    if (!restricted(OP_CAMERA, mStarted.key.uid, mStarted.key.name,
+                            mStarted.key.tag, false)) return true;
+                }
+                close();
+                return false;
+            }
+        }
+
+        @Override public void close() {
+            synchronized (mLock) {
+                if (mCameraDeliveries.remove(mStarted)) stopRunning(mStarted);
+            }
+        }
+    }
+
+    CameraDelivery startCameraDelivery(ApkPackage owner, String tag, java.util.function.IntSupplier policy) {
+        int state = policy.getAsInt();
+        OpKey key = new OpKey(OP_CAMERA, owner.uid(), owner.packageName, attribution(owner, tag), 0);
+        synchronized (mLock) {
+            if (state < 0 || restricted(OP_CAMERA, key.uid, key.name, key.tag, false)) {
+                record(key, false, OP_FLAG_SELF, null);
+                notifyStarted(key, MODE_IGNORED, OP_FLAG_SELF, 0, -1, START_TYPE_FAILED);
+                return null;
+            }
+            Started started = new Started(key, false, 0, -1, OP_FLAG_SELF, null);
+            mCameraDeliveries.add(started);
+            startRunning(started, AppOpsManager.makeKey(state, OP_FLAG_SELF));
+            notifyStarted(key, MODE_ALLOWED, OP_FLAG_SELF, 0, -1, START_TYPE_STARTED);
+            return new CameraDelivery(started, policy);
+        }
+    }
+
+    private void stopCameraDeliveries(String name) {
+        mCameraDeliveries.removeIf(started -> {
+            if (!started.key.name.equals(name)) return false;
+            stopRunning(started);
+            return true;
+        });
     }
     private void refreshRunningOperations() {
         synchronized (mLock) {
@@ -817,6 +942,7 @@ public final class AppOpsService extends IAppOpsService.Default {
                 });
                 if (client.starts.isEmpty()) empty.add(client);
             }
+            stopCameraDeliveries(name);
             mHistory.keySet().removeIf(key -> key.name.equals(name));
         }
         for (Client client : empty) releaseEmpty(client);
@@ -831,6 +957,7 @@ public final class AppOpsService extends IAppOpsService.Default {
         // identity's mode, and an obsolete process cannot keep attributed starts alive.
         List<Client> empty = new ArrayList<>();
         synchronized (mLock) {
+            stopCameraDeliveries(pkg.packageName);
             for (Client client : mClients.values()) {
                 client.starts.entrySet().removeIf(entry -> {
                     Started started = entry.getValue();

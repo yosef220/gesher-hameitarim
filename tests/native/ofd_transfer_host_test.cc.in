@@ -83,7 +83,8 @@ constexpr DWORD GENERIC_READ = 0x80000000, GENERIC_WRITE = 0x40000000,
     FILE_SHARE_READ = 1, FILE_SHARE_WRITE = 2, OPEN_EXISTING = 3;
 constexpr DWORD PROC_THREAD_ATTRIBUTE_HANDLE_LIST = 0x20002, STARTF_USESTDHANDLES = 0x100;
 constexpr DWORD CREATE_UNICODE_ENVIRONMENT = 0x400, EXTENDED_STARTUPINFO_PRESENT = 0x80000,
-    CREATE_NO_WINDOW = 0x8000000, DETACHED_PROCESS = 0x8, CREATE_NEW_CONSOLE = 0x10;
+    CREATE_NO_WINDOW = 0x8000000, DETACHED_PROCESS = 0x8, CREATE_NEW_CONSOLE = 0x10,
+    CREATE_SUSPENDED = 0x4, CREATE_BREAKAWAY_FROM_JOB = 0x1000000;
 constexpr int _O_BINARY = 0x8000;
 constexpr int _O_NOINHERIT = 0x0080;
 struct SECURITY_ATTRIBUTES { DWORD length; void* security; BOOL inherit; };
@@ -442,7 +443,46 @@ static void DeleteProcThreadAttributeList(AttributeList*) {
 static BOOL CreateProcessW(const wchar_t*, wchar_t*, void*, void*, BOOL, DWORD, void*, const wchar_t*,
                            STARTUPINFOW*, PROCESS_INFORMATION*);
 
+@BINDER_STARTUP_RECORD@
+
+// The Linux fixture exercises ordinary OFD transport. A real AppContainer
+// child is covered by the Windows admission and descriptor fixtures.
+static BOOL TerminateProcess(HANDLE, DWORD) { std::abort(); }
+static DWORD ResumeThread(HANDLE) { std::abort(); }
+
+namespace gesher::binder_bootstrap {
+static uint32_t GuestUid() { std::abort(); }
+}
+namespace gesher::binder_endpoint {
+struct FixtureEndpoint {
+  bool IsGuest() const { return false; }
+  bool IsStandalone() const { std::abort(); }
+  bool DuplicateToGuestChild(HANDLE*) const { std::abort(); }
+};
+static const FixtureEndpoint& Current() {
+  static const FixtureEndpoint endpoint;
+  return endpoint;
+}
+static bool EnrollChild(HANDLE) { std::abort(); }
+}
+namespace gesher::cohost_bootstrap {
+struct FixtureScope {
+  explicit operator bool() const { std::abort(); }
+  bool DuplicateForChild(HANDLE*, HANDLE*) const { std::abort(); }
+};
+static const FixtureScope& Current() {
+  static const FixtureScope scope;
+  return scope;
+}
+}
+
 namespace gesher {
+static HANDLE OpenDescriptorPlaceholder(bool inherit) {
+  SECURITY_ATTRIBUTES attributes{sizeof(attributes), nullptr, inherit ? TRUE : FALSE};
+  return CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    &attributes, OPEN_EXISTING, 0, nullptr);
+}
+static HANDLE OpenNullDevice(DWORD, bool) { std::abort(); }
 // This corpus uses ordinary files; the memfd-seal corpus exercises the EA
 // boundary separately. No ordinary descriptor may be registered as a memfd.
 static bool FileHasMemfdSeals(HANDLE) { return false; }
@@ -512,6 +552,16 @@ bool VisitEnvironment(void (*visit)(const char*, void*), void* context) {
   visit("GESHER_OFD_TRANSFER_ENV=fixture", context);
   return true;
 }
+// gesher/fork.h (ADR 0092): this fixture is never a forked child, so the
+// builder creates its process itself, under the spawn lock a fork excludes.
+static int spawn_lock_depth = 0;
+bool InForkedChild() { return false; }
+void AcquireSpawnLock() { ++spawn_lock_depth; }
+void ReleaseSpawnLock() { --spawn_lock_depth; }
+DWORD BrokeredCreateProcess(const wchar_t*, const wchar_t*, const wchar_t*, const wchar_t*, DWORD,
+                            const STARTUPINFOW&, const HANDLE*, size_t, PROCESS_INFORMATION*) {
+  std::abort();  // only a forked child asks its root
+}
 }
 namespace gesher::exec {
 static wchar_t* GetEnvironmentStringsW() {
@@ -553,6 +603,7 @@ static BOOL CreateProcessW(const wchar_t* app, wchar_t* command, void*, void*, B
                            DWORD flags, void* environment, const wchar_t* cwd,
                            STARTUPINFOW* raw_startup, PROCESS_INFORMATION* info) {
   ++host::create_process_calls;
+  if (gesher::spawn_lock_depth != 1) std::abort();  // a fork may not clone meanwhile
   const auto* inherited = static_cast<const wchar_t*>(environment);
   static constexpr wchar_t expected[] = L"=C:=C:\\fixture\xd800\0"
       L"=D:=D:\\fixture\xd83d\xde00\0GESHER_OFD_TRANSFER_ENV=fixture\0";
