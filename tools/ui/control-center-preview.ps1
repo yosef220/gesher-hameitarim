@@ -226,7 +226,7 @@ foreach ($theme in 'light', 'dark') {
         # הדיאלוג "אודות": שם המוצר, השורה "מבוסס על Gesher" והקרדיט ל-palmoni5, באותו מבנה כמו Show-ModernMessageDialog
         $dialog = New-PanelView 'message' @{ PanelFlowDirection = $flow; PanelMessageSymbol = 'i' }
         try {
-            $dialog.FindName('DialogMessage').Text = Get-GesherText 'cp_about_body' @('1.2.0')
+            Set-PanelAboutText $dialog (Get-GesherText 'cp_about_body' @('1.2.0'))
             $dialog.FindName('BtnOk').Content = Get-GesherText 'cp_dialog_ok'
             $dialog.Resources['PanelBadgeBackground'] = Get-PanelBrush $dialog 'Brand'
             $dialog.Resources['PanelBadgeForeground'] = Get-PanelBrush $dialog 'OnBrand'

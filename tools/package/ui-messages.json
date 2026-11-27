@@ -810,7 +810,7 @@
     },
     "cp_about_body": {
       "en": "Meitar {0}\nBased on Gesher\n\nGesher was created by palmoni5, with other contributors. On 25 November 2026 it moved to a proprietary license and its repository was closed. Meitar continues from its last version released under the Apache License 2.0.\n\nThank you to palmoni5 and everyone who contributed.\n\nPersonal use only. The licenses are in the licenses folder of the installation.",
-      "he": "מיתר {0}\nמבוסס על Gesher\n\nGesher נוצר על ידי palmoni5, עם תורמים נוספים. ב-25.11.2026 הוא עבר לרישיון קנייני והמאגר שלו נסגר. מיתר ממשיך מהגרסה האחרונה שלו שפורסמה תחת Apache 2.0.\n\nתודה ל-palmoni5 ולכל מי שתרם.\n\nשימוש אישי בלבד. הרישיונות נמצאים בתיקייה licenses שבתיקיית ההתקנה."
+      "he": "מיתר {0}\nמבוסס על Gesher\n\nGesher נוצר על ידי palmoni5, עם תורמים נוספים. ביום 25.11.2026 הוא עבר לרישיון קנייני והמאגר שלו נסגר. מיתר ממשיך מהגרסה האחרונה שלו שפורסמה תחת Apache 2.0.\n\nתודה ל-palmoni5 ולכל מי שתרם.\n\nשימוש אישי בלבד. הרישיונות נמצאים בתיקייה licenses שבתיקיית ההתקנה."
     },
     "cp_open_logs_failed": {
       "en": "Could not open the logs folder: ⁨{0}⁩",
