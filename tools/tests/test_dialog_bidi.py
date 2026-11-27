@@ -43,11 +43,15 @@ class DialogBidi(unittest.TestCase):
                                  "%s: %s is not isolated" % (key, match.group()))
 
 
-    def test_latin_snippets_in_hebrew_hints_are_isolated(self):
-        # A Latin run with punctuation inside a Hebrew sentence ("(intent://)") is shown scrambled
-        # unless it is isolated; seen in the Control Center preview (control-center-preview.ps1).
+    def test_hebrew_hint_has_no_scrambled_latin_runs(self):
+        # Seen in the Control Center preview (control-center-preview.ps1): "(intent://)" inside a
+        # Hebrew sentence was shown scrambled, and a Latin word followed by a full stop at the end
+        # of a sentence is shown with the stop on the wrong side. The text for non-technical readers
+        # leaves the scheme name out and ends its sentences in Hebrew.
         hint = CATALOG["cp_web_intent_fallback_hint"]["he"]
-        self.assertIn("(\u2068intent://\u2069)", hint)
+        self.assertNotIn("intent", hint)
+        self.assertNotRegex(hint, r"[A-Za-z][.,:;)]")
+        self.assertNotRegex(hint, r"[(][A-Za-z]")
 
 
 if __name__ == "__main__":
