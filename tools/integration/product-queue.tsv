@@ -97,7 +97,7 @@ pr-405	origin:refs/heads/topic/pr-405	74db474b527e7eacccf11c7371dbd497ba14f79d	4
 # EOF שהגיע אחרי כותרת HTTP 2xx. הבדיקה של #435 (test_http_framing_prevents_the_unframed_eof_exception) דורשת את ההפך, ושתי
 # הבדיקות לא יכולות לעבור יחד. נשארים עם הגרסה של main, שכבר יצאה ב-1.1.0. העבודה נשמרת בענף topic/pr-435.
 # pr-435	origin:refs/heads/topic/pr-435	71718637027e58888d8d3c2ce3c7b464c31822a9	435	4	CI: התאוששות מקריאה של GitHub שנחתכה (גל 4)
-pr-429	origin:refs/heads/topic/pr-429	eb39a36fc51b5fd3a4c62730761cccd76ae2e2ff	429	4	רשת: NETLINK_ROUTE על Windows, מוגבל להרשאה (גל 4)
+pr-429	origin:refs/heads/topic/pr-429	f60583ebbccba2d46451a09e1740ad0f8f558e64	429	4	רשת: NETLINK_ROUTE על Windows, מוגבל להרשאה (גל 4)
 pr-362	origin:refs/heads/topic/pr-362	a2ade510e8129adf3a564898d03e011e7b97048d	362	4	ממשק: תיקון הצגת דו-כיווניות בדיאלוגי אישור ההתקנה וההסרה (גל 4)
 pr-226	origin:refs/heads/topic/pr-226	f26cd1d8c93ff599d6ac2b41ae773460f18c1bfa	226	4	בדיקה: החלון הקדמי הזר בבדיקת הלוח ב-Windows (גל 4)
 pr-260	origin:refs/heads/topic/pr-260	50001cf4400031c25c62b1aa4ce6c6f3bc6ddf25	260	4	שירותים: אכיפת הרשאות המניפסט בקידום שירות קדמי (גל 4)
