@@ -173,7 +173,7 @@ function Test-PreparedDialogText([string] $FunctionName, [bool] $OptionalText) {
     $Detail = if ($OptionalText) { $literalMessage } else { $null }
     $SubTitle = if ($OptionalText) { $literalMessage } else { $null }
     $ConfirmText = $literalMessage; $CancelText = $literalMessage
-    $IsDanger = $true; $IsWarning = $false; $IsError = $OptionalText
+    $IsDanger = $true; $IsWarning = $false; $IsError = $OptionalText; $About = $false
     $flowDirection = if ($script:GesherUiLanguage -eq 'he') { 'RightToLeft' } else { 'LeftToRight' }
     . ([scriptblock]::Create(($statements[0..($loadAt - 1)] | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine))
     $viewName = if ($FunctionName -eq 'Show-ModernConfirmDialog') { 'confirm' } else { 'message' }
@@ -227,6 +227,24 @@ Write-Host 'WPF PHASE: loading assemblies'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, UIAutomationProvider, UIAutomationTypes
 . (Join-Path (Split-Path -Parent $PanelPath) 'gesher-panel-view.ps1')
 . ([scriptblock]::Create($script:DialogFunctions['Show-ModernConfirmDialog']))
+
+# "אודות": השם והגרסה בשורה אחת, השורה הקבועה של המותג והקרדיט בשורות נפרדות, והטקסט הוא בדיוק מה שבקטלוג
+foreach ($language in 'en', 'he') {
+    $script:GesherUiLanguage = $language
+    $aboutView = New-PanelView 'message' @{ PanelFlowDirection = [System.Windows.FlowDirection]::LeftToRight; PanelMessageSymbol = 'i' }
+    try {
+        $aboutText = Get-GesherText 'cp_about_body' @('9.8.7')
+        Set-PanelAboutText $aboutView $aboutText
+        $aboutInlines = @($aboutView.FindName('DialogMessage').Inlines)
+        $aboutRuns = @($aboutInlines | Where-Object { $_ -is [System.Windows.Documents.Run] })
+        $aboutLines = @($aboutText -split "`n")
+        Assert-Dialog ($aboutRuns[0].Text -ceq ($aboutLines[0] -replace ' 9\.8\.7$', '') -and $aboutRuns[1].Text -ceq ' 9.8.7') "About shows the product name and version first ($language)"
+        Assert-Dialog (@($aboutInlines | Where-Object { $_ -is [System.Windows.Documents.LineBreak] }).Count -eq ($aboutLines.Count - 1)) "About keeps every line break ($language)"
+        $aboutPlain = (($aboutInlines | ForEach-Object { if ($_ -is [System.Windows.Documents.Run]) { $_.Text } else { "`n" } }) -join '')
+        Assert-Dialog ($aboutPlain -ceq $aboutText) "About text is the catalog text exactly ($language)"
+        Assert-Dialog ($aboutRuns[0].FontSize -gt $aboutRuns[2].FontSize) "About name is larger than the brand line ($language)"
+    } finally { $aboutView.Close() }
+}
 
 # Keep the real visit-reporting boundary. Only the background device query is a
 # stand-in: it stays pending so every close path must retain it for live cleanup.
