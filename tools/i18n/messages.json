@@ -1028,6 +1028,10 @@
       "en": "The update is installed. Close and reopen the control center from the Start menu.",
       "he": "העדכון מותקן. סגור את לוח הבקרה ופתח אותו מחדש מתפריט התחל."
     },
+    "cp_panel_resize": {
+      "en": "Resize the settings column",
+      "he": "שינוי הרוחב של עמודת ההגדרות"
+    },
     "cp_camera_title": {
       "en": "Camera",
       "he": "מצלמה"

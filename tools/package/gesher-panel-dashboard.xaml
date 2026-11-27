@@ -116,10 +116,17 @@
 
         <Grid Grid.Row="1" Margin="24,24,24,8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*" MinWidth="320"/>
                 <ColumnDefinition Width="28"/>
-                <ColumnDefinition Width="272"/>
+                <ColumnDefinition Width="272" MinWidth="240" MaxWidth="460"/>
             </Grid.ColumnDefinitions>
+
+            <!-- הרוחב של עמודת ההגדרות: גוררים את הרווח שבין שני האזורים, או מקשי החצים כשהוא ממוקד.
+                 הרווח עצמו נשאר שקוף, ולכן העיצוב לא משתנה כשלא משתמשים בו. -->
+            <GridSplitter Grid.Column="1" Width="28" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" ShowsPreview="False"
+                          Background="Transparent" Cursor="SizeWE" KeyboardIncrement="24"
+                          AutomationProperties.Name="{DynamicResource Text_cp_panel_resize}"/>
 
             <!-- האפליקציות שלי: הלוח היחיד עם מסגרת, כי הוא גם אזור הגרירה -->
             <Border Name="ApplicationsSection" Grid.Column="0" Background="{StaticResource GesherSurfaceRaisedBrush}"
