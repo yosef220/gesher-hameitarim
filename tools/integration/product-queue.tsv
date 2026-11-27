@@ -101,4 +101,5 @@ pr-429	origin:refs/heads/topic/pr-429	eb39a36fc51b5fd3a4c62730761cccd76ae2e2ff	4
 pr-362	origin:refs/heads/topic/pr-362	a2ade510e8129adf3a564898d03e011e7b97048d	362	4	ממשק: תיקון הצגת דו-כיווניות בדיאלוגי אישור ההתקנה וההסרה (גל 4)
 pr-226	origin:refs/heads/topic/pr-226	f26cd1d8c93ff599d6ac2b41ae773460f18c1bfa	226	4	בדיקה: החלון הקדמי הזר בבדיקת הלוח ב-Windows (גל 4)
 pr-260	origin:refs/heads/topic/pr-260	50001cf4400031c25c62b1aa4ce6c6f3bc6ddf25	260	4	שירותים: אכיפת הרשאות המניפסט בקידום שירות קדמי (גל 4)
-pr-363	origin:refs/heads/topic/pr-363	cccf791a6904bc7a742edd0513ea967b01e55d99	363	4	בדיקה: חלון נפרד בבעלות הבדיקה בבדיקת הלוח, ומועד הכנה קבוע (גל 4)
+pr-363	origin:refs/heads/topic/pr-363	299cdcfec9a252cb1586e214b08892a7e7faa1e4	363	4	בדיקה: חלון נפרד בבעלות הבדיקה בבדיקת הלוח, ומועד הכנה קבוע (גל 4)
+pr-271	origin:refs/heads/topic/pr-271	c4abfb1fc07241aa06173d6057fa64029df61d04	271	4	רשת: ConnectivityService מחזיק צפייה לפי מאזינים ועבודה נוכחיים (גל 4)
