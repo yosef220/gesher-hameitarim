@@ -1,4 +1,4 @@
-Gesher HaMeitarim (גשר המיתרים)
+Meitar (מיתר), formerly Gesher HaMeitarim (גשר המיתרים)
 Copyright 2026 The Gesher HaMeitarim Authors
 https://github.com/yosef220/gesher-hameitarim
 
@@ -16,7 +16,7 @@ including commit 1f29fef7a (26 November 2026) was published under the Apache
 License 2.0 and stays available under it. Third-party components are under
 their own licenses (NOTICE.md).
 
-בעברית, בקצרה (הנוסח המחייב הוא האנגלי שלמטה): מותר להשתמש בגשר המיתרים
+בעברית, בקצרה (הנוסח המחייב הוא האנגלי שלמטה): מותר להשתמש במיתר (בעבר גשר המיתרים)
 למטרות לא מסחריות בלבד, ואסור להפיץ אותו, לשנות אותו או לבנות ממנו גרסאות.
 לכל שימוש אחר, כולל שימוש בעסק, צריך רישיון נפרד בכתב מבעל המאגר. החלקים
 שמקורם ב-Gesher נשארים תחת Apache 2.0 (‏LICENSE-APACHE), וכך גם כל מה שפורסם

@@ -27,10 +27,10 @@ AppVersion={#AppVersion}
 VersionInfoVersion={#AppVersion}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoProductTextVersion={#AppVersion}
-AppPublisher=Gesher HaMeitarim
+AppPublisher=Meitar
 ; AppName מכיל קבוע, ולכן פרטי הגרסה של קובץ ההתקנה נקבעים כאן במפורש.
-VersionInfoProductName=Gesher HaMeitarim
-VersionInfoDescription=Gesher HaMeitarim Setup
+VersionInfoProductName=Meitar
+VersionInfoDescription=Meitar Setup
 DefaultDirName={localappdata}\Programs\Gesher
 DisableDirPage=no
 DefaultGroupName=Gesher
@@ -221,6 +221,11 @@ Type: files; Name: "{autoprograms}\Gesher Control Center.lnk"; Check: not IsPort
 Type: files; Name: "{autoprograms}\לוח הבקרה של גשר.lnk"; Check: not IsPortableInstall
 Type: files; Name: "{autoprograms}\Gesher README.lnk"; Check: not IsPortableInstall
 Type: files; Name: "{autoprograms}\גשר — מידע והוראות.lnk"; Check: not IsPortableInstall
+; מיתר: הקיצורים של גשר המיתרים (גרסה 1.0.0 ו-1.1.0) בשמות הקודמים. השינוי של השם לא משאיר קיצור כפול.
+Type: files; Name: "{autoprograms}\Gesher HaMeitarim Control Center.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\Gesher HaMeitarim README.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\מרכז הבקרה של גשר המיתרים.lnk"; Check: not IsPortableInstall
+Type: files; Name: "{autoprograms}\גשר המיתרים — מידע והוראות.lnk"; Check: not IsPortableInstall
 
 [Registry]
 ; The `.apk` association, per user (HKCU\Software\Classes). Gesher.Apk opens
@@ -435,6 +440,9 @@ procedure InitializeWizard();
 var
   I: Integer;
 begin
+  // מיתר: השורה הקבועה "מבוסס על Gesher" בעמוד הפתיחה, לפני הטקסט של האשף.
+  WizardForm.WelcomeLabel2.Caption := CustomMessage('brand_tagline') + #13#10#13#10 + WizardForm.WelcomeLabel2.Caption;
+
   DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), SetupMessage(msgPreparingDesc), @OnDownloadProgress);
 
   InstallTypePage := CreateInputOptionPage(

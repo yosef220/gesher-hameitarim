@@ -1,19 +1,20 @@
-Gesher HaMeitarim: Android apps on Windows
+Meitar: Android apps on Windows
 ==========================================
+Based on Gesher
 
 Requirements: Windows 10 or 11, x64. Nothing else needs installing.
 
 
 The original Gesher
 -------------------
-Gesher HaMeitarim is based on Gesher, created by palmoni5, who started it in October 2026 and
+Meitar (until version 1.1.0: Gesher HaMeitarim) is based on Gesher, created by palmoni5, who started it in October 2026 and
 wrote the overwhelming majority of it, with other contributors. On 25 November 2026 Gesher moved
-to a proprietary license and its repository was closed. Gesher HaMeitarim continues from its last
+to a proprietary license and its repository was closed. Meitar continues from its last
 version released under the Apache License 2.0. Thank you to palmoni5 and every contributor.
 
 Security
 --------
-Android apps are not isolated from Windows. Gesher HaMeitarim runs each app
+Android apps are not isolated from Windows. Meitar runs each app
 as an ordinary Windows program, with the permissions of your Windows account.
 Android's permission prompts control what an app can do through Android's
 APIs; they do not stop its code, especially its native code, from reading and
@@ -23,7 +24,7 @@ Per-app isolation (Windows AppContainer) is under development and disabled.
 
 Updates
 -------
-Gesher HaMeitarim updates itself. Once a day, when you open an app or the
+Meitar updates itself. Once a day, when you open an app or the
 Control Center, it checks for a new release, downloads it and verifies that
 the file is complete and is the one that was published. It installs the
 update only when no app is open, so it never closes an app you are using:
@@ -31,7 +32,7 @@ the Gesher device stops by itself 10 minutes after the last app closes, and
 the update is then installed silently. Installed apps and their data are
 kept. You do not need to uninstall anything before updating.
 
-In the Gesher HaMeitarim Control Center (Start menu, or gesher-app
+In the Meitar Control Center (Start menu, or gesher-app
 control-panel), the Updates card can check now, turn off automatic
 installation (each update then waits for your approval) or turn off the
 automatic checks. What the automatic updater did is in
@@ -143,7 +144,7 @@ uninstalling removes them.
 
 License
 -------
-Gesher HaMeitarim is offered under the PolyForm Strict License 1.0.0: use for
+Meitar is offered under the PolyForm Strict License 1.0.0: use for
 noncommercial purposes only, with no right to distribute it (including this
 installer) or to make changes or new works based on it. Any other use, including
 use in a business, needs a separate written license from the repository owner,

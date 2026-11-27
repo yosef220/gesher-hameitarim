@@ -2325,6 +2325,14 @@ $btnOpenLogs.Add_Click({
     }
 })
 
+# מיתר: "אודות", עם השורה "מבוסס על Gesher" והקרדיט ליוצר של Gesher. דיאלוג הודעה רגיל, כמו שאר הדיאלוגים.
+$btnAbout = $window.FindName('BtnAbout')
+$btnAbout.Add_Click({
+    $aboutVersion = Get-GesherInstalledVersion -InstallDirectory $here
+    if (-not $aboutVersion) { $aboutVersion = Get-GesherText 'cp_update_unknown' }
+    Show-ModernMessageDialog -Title (Get-GesherText 'cp_about_title') -Message (Get-GesherText 'cp_about_body' @($aboutVersion))
+})
+
 # Attach click events through visual tree dispatcher
 $appsList.AddHandler([System.Windows.Controls.Button]::ClickEvent, [System.Windows.RoutedEventHandler]{
     param($sender, $e)

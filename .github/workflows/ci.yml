@@ -1683,7 +1683,7 @@ jobs:
           foreach ($s in 16, 32, 48, 256) { if ($sizes -notcontains $s) { throw "gesher.ico has no ${s}x$s image ($($sizes -join ', '))" } }
           if (Test-Path "$programs\Gesher Hello.lnk") { throw 'Gesher Hello shortcut should not be created' }
           # גשר המיתרים: הקיצור בשם החדש, והקיצור בשם של Gesher לא נשאר.
-          if ($wsh.CreateShortcut("$programs\Gesher HaMeitarim Control Center.lnk").IconLocation -ne "$app\gesher.ico,0") { throw 'The Gesher HaMeitarim Control Center shortcut lacks its icon' }
+          if ($wsh.CreateShortcut("$programs\Meitar Control Center.lnk").IconLocation -ne "$app\gesher.ico,0") { throw 'The Meitar Control Center shortcut lacks its icon' }
           if (Test-Path "$programs\Gesher Control Center.lnk") { throw 'The Control Center shortcut under the old Gesher name was left behind' }
           'PASS  installer: .apk files get their icons from Gesher''s icon handler (DefaultIcon %1, gesher_shellext.dll); the Start menu entries get gesher.ico' | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           # The installed lifecycle.apk, as the shell names its icon (IExtractIcon through
