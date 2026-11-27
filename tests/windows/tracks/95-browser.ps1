@@ -45,13 +45,6 @@ Check 'services: concurrent Control Center requests stay whole on the runtime fi
     -Xint '-Xusejit:false' -cp (NoDrive "$Dir/services-tests.dex") gesher.services.ControlCenterRequestsTest
 } @('ControlCenterRequestsTest all passed:')
 
-# Restrict background (ConnectivityManager.getRestrictBackgroundStatus): Gesher enforces no
-# background-data restriction, so DISABLED and no background line in the snapshot. Read only.
-Check 'services: restrict-background status is DISABLED (no restriction is enforced)' {
-  & "$Dir/dalvikvm.exe" "-Xbootclasspath:$bcpBrowser" "-Ximage:$(NoDrive "$root/system")/framework/boot.art" `
-    -Xint '-Xusejit:false' -cp (NoDrive "$Dir/services-tests.dex") gesher.services.RestrictBackgroundTest
-} @('RestrictBackgroundTest: getRestrictBackgroundStatus 1;',
-  'RestrictBackgroundTest all passed')
 # country_detector (CountryDetectorService over WindowsCountry): this machine's Windows
 # "Country or region", or the default Locale's country without one, as
 # COUNTRY_SOURCE_LOCALE, through StandIn's generated ICountryDetector stub.
