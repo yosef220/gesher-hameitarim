@@ -237,6 +237,7 @@ public final class Services {
                 android.os.IVibratorManagerService.class, new VibratorManagerService()).asBinder());
         // Devices (docs/devices.md): location over Windows' location service.
         LocationManagerService location = new LocationManagerService(pm, am);
+        SettingsProvider.sLocationEnabled = () -> location.isLocationEnabledForUser(0);
         services.put(Context.LOCATION_SERVICE, StandIn.of(android.location.ILocationManager.class,
                 location).asBinder());
         // CountryDetector: Windows' "Country or region" as the locale source
