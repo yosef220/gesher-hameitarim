@@ -18,6 +18,12 @@
       "en": "Install or update Android application \u2068{0}\u2069 (version \u2068{1}\u2069)?\nThis approval applies to this installation only.",
       "he": "להתקין או לעדכן את יישום Android \u2068{0}\u2069 (גרסה \u2068{1}\u2069)?\nהאישור חל על התקנה זו בלבד."
     },
+    "launch_install_confirm": {
+      "en": "Install the file {0} in Meitar and open it?\nThe file is installed only if you approve. If you do not know where it came from, it is safer not to install it.",
+      "he": "להתקין את הקובץ {0} במיתר ולפתוח אותו?\nהקובץ יותקן רק באישורך. אם אינך מכיר את המקור שלו, מוטב לא להתקין אותו."
+    },
+    "launch_install_yes": {"en": "Install", "he": "התקנה"},
+    "launch_install_no": {"en": "Cancel", "he": "ביטול"},
     "removal_request": {
       "en": "Remove Android application \u2068{0}\u2069 (version \u2068{1}\u2069)?\nIts app data will be deleted. This approval applies to this removal only.",
       "he": "להסיר את יישום Android \u2068{0}\u2069 (גרסה \u2068{1}\u2069)?\nגם נתוני היישום יימחקו. האישור חל על הסרה זו בלבד."
