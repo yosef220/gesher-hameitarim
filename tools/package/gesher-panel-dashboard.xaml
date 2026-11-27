@@ -1,0 +1,352 @@
+<!-- Copyright (C) 2026 The Gesher Authors; SPDX-License-Identifier: Apache-2.0 -->
+<!-- גשר המיתרים: מרכז הבקרה, בעיצוב מחדש לפי docs/he/design/01-design-plan.md.
+     הצבעים והסגנונות המשותפים מגיעים מ-gesher-tokens-<מצב>.xaml ומ-gesher-panel-styles.xaml
+     (New-PanelView ב-gesher-panel-view.ps1). השמות של הרכיבים הם החוזה עם gesher-control-panel.ps1. -->
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource Text_cp_title}"
+        Width="1000" Height="780" MinWidth="800" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        FlowDirection="{DynamicResource PanelFlowDirection}"
+        FontFamily="{DynamicResource PanelUiFont}"
+        FontSize="14"
+        Foreground="{DynamicResource GesherInkBrush}"
+        Background="{DynamicResource GesherSurfaceBrush}"
+        UseLayoutRounding="True"
+        AllowDrop="True">
+    <Window.Resources>
+        <!-- טבעת פוקוס בתוך השורה, כדי שלא תיחתך בקצוות הרשימה -->
+        <Style x:Key="RowFocusVisual">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="3" RadiusX="6" RadiusY="6" Stroke="{StaticResource GesherFocusBrush}" StrokeThickness="2"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- שורה ברשימה: קו מפריד בין אפליקציות, ורקע אבן לשורה הנבחרת -->
+        <Style x:Key="AppRow" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource GesherInkBrush}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource RowFocusVisual}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Row" Background="Transparent" BorderBrush="{StaticResource GesherLineBrush}" BorderThickness="0,0,0,1">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="{StaticResource GesherSelectionBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource GesherInkBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- כותרת של נושא בעמודת המערכת -->
+        <Style x:Key="RailTitle" TargetType="TextBlock" BasedOn="{StaticResource TextListTitle}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="RailDivider" TargetType="Border">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Background" Value="{StaticResource GesherLineBrush}"/>
+            <Setter Property="Margin" Value="0,14"/>
+        </Style>
+        <!-- נקודת מצב: זהב כשמחובר, אפור כשכבוי. הקוד מחליף את הצבע -->
+        <Style x:Key="StatusDot" TargetType="Border">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="CornerRadius" Value="4.5"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{StaticResource GesherInkDisabledBrush}"/>
+        </Style>
+    </Window.Resources>
+
+    <ScrollViewer Name="PanelScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+    <!-- Bound the first measure too, before SizeChanged adjusts the viewport. -->
+    <Grid Name="PanelLayout" MinHeight="520" Height="740">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- הכותרת היא הגשר: המסלול ממשיך לכל הרוחב והוא הקו שסוגר אותה -->
+        <Grid Grid.Row="0" Height="104" Background="{StaticResource GesherSurfaceRaisedBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Rectangle Grid.ColumnSpan="4" Height="3" VerticalAlignment="Bottom" Fill="{StaticResource GesherMastBrush}"/>
+            <StackPanel Grid.Column="0" Margin="28,14,0,0" VerticalAlignment="Top">
+                <TextBlock Text="{DynamicResource Text_brand}" FontFamily="{DynamicResource PanelDisplayFont}"
+                           FontSize="{StaticResource GesherTypeWordmarkSize}" FontWeight="Bold" LineHeight="44"
+                           LineStackingStrategy="BlockLineHeight" Foreground="{StaticResource GesherInkBrush}"/>
+                <TextBlock Text="{DynamicResource Text_cp_subtitle}" FontSize="14" Foreground="{StaticResource GesherInkMutedBrush}"/>
+                <!-- השורה הקבועה של המותג: חלק מהחתימה, מתחת לשם. בלי הדגשה של מילה אחת (docs/he/design/01-design-plan.md) -->
+                <TextBlock Text="{DynamicResource Text_brand_tagline}" FontSize="12" Foreground="{StaticResource GesherInkMutedBrush}" Margin="0,1,0,0"/>
+            </StackPanel>
+            <!-- הגשר, בלי היפוך בעברית: אותו גשר כמו באייקון ובמסך הפתיחה. קצה המסלול בגובה 91 (182 חלקי 2) -->
+            <Canvas Grid.Column="1" Width="148" Margin="20,0,0,0" FlowDirection="LeftToRight">
+                <Viewbox Canvas.Top="11.5" Width="148" Height="98" Stretch="Uniform">
+                    <Canvas Width="{StaticResource GesherBridgeWidth}" Height="{StaticResource GesherBridgeHeight}">
+                        <Path Name="BridgeStrings" Data="{StaticResource GesherBridgeStringsGeometry}" Stroke="{StaticResource GesherStringBrush}"
+                              StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        <Path Data="{StaticResource GesherBridgeStaysGeometry}" Stroke="{StaticResource GesherStringBrush}" Opacity="0.38"
+                              StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        <Path Data="{StaticResource GesherBridgeDeckGeometry}" Stroke="{StaticResource GesherMastBrush}"
+                              StrokeThickness="6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        <Path Data="{StaticResource GesherBridgeMastGeometry}" Fill="{StaticResource GesherMastBrush}"
+                              Stroke="{StaticResource GesherMastBrush}" StrokeThickness="1.4" StrokeLineJoin="Round"/>
+                    </Canvas>
+                </Viewbox>
+            </Canvas>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,28,4">
+                <Border Name="DeviceIndicator" Style="{StaticResource StatusDot}" Margin="0,0,8,0"/>
+                <TextBlock Name="DeviceStatusText" Text="{DynamicResource Text_cp_device_stopped}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <Button Name="BtnToggleDevice" Content="{DynamicResource Text_cp_btn_start}"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="24,24,24,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="28"/>
+                <ColumnDefinition Width="272"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- האפליקציות שלי: הלוח היחיד עם מסגרת, כי הוא גם אזור הגרירה -->
+            <Border Name="ApplicationsSection" Grid.Column="0" Background="{StaticResource GesherSurfaceRaisedBrush}"
+                    BorderBrush="{StaticResource GesherLineBrush}" BorderThickness="1" CornerRadius="{StaticResource GesherRadiusPanel}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Padding="20,16,20,16" BorderBrush="{StaticResource GesherLineBrush}" BorderThickness="0,0,0,1">
+                        <StackPanel>
+                            <Grid>
+                                <!-- החיפוש ברוחב 220 כשיש מקום, ומתכווץ עד 120 בחלון צר; הכותרת תמיד בשורה אחת -->
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*" MinWidth="120" MaxWidth="220"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Text_cp_apps_title}" Style="{StaticResource TextScreenTitle}"
+                                           TextWrapping="NoWrap" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                <Grid Grid.Column="2">
+                                    <TextBox Name="AppsSearch" AutomationProperties.Name="{DynamicResource Text_cp_search_hint}"/>
+                                    <TextBlock Text="{DynamicResource Text_cp_search_hint}" IsHitTestVisible="False" Margin="9,0"
+                                               VerticalAlignment="Center" Foreground="{StaticResource GesherInkMutedBrush}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Text, ElementName=AppsSearch}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Grid>
+                            <WrapPanel Margin="0,14,0,0">
+                                <Button Name="BtnInstallApk" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Text_cp_btn_install_apk}" Margin="0,0,16,0"/>
+                                <TextBlock Text="{DynamicResource Text_cp_drag_drop_hint}" Style="{StaticResource TextMuted}" VerticalAlignment="Center"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <ListBox Name="AppsList" Grid.Row="1"
+                             Background="Transparent" BorderThickness="0" Foreground="{StaticResource GesherInkBrush}"
+                             ItemContainerStyle="{StaticResource AppRow}"
+                             AutomationProperties.Name="{DynamicResource Text_cp_apps_title}"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.Template>
+                            <ControlTemplate TargetType="ListBox">
+                                <ScrollViewer Name="AppsViewport" CanContentScroll="True" Focusable="False"
+                                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsPresenter Name="ItemsPresenter"/>
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ListBox.Template>
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="20,14,20,12" Background="Transparent">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="40"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Image Grid.Column="0" Grid.RowSpan="2" Source="{Binding IconImage}" Width="40" Height="40"
+                                               VerticalAlignment="Top" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        <StackPanel Grid.Column="1" Grid.Row="0" Margin="14,0,12,0">
+                                            <TextBlock Text="{Binding Label}" FontSize="{StaticResource GesherTypeListTitleSize}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Package}" Visibility="{Binding PackageVisibility}" Style="{StaticResource TextCaption}"
+                                                       FlowDirection="LeftToRight" HorizontalAlignment="Left" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding ProxyText}" Visibility="{Binding ProxyVisibility}" Style="{StaticResource TextCaption}"
+                                                       Foreground="{StaticResource GesherBrandBrush}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                        <WrapPanel Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="1" Margin="14,8,0,0">
+                                            <Button Style="{StaticResource LinkButton}" Content="{DynamicResource Text_cp_btn_app_info}" Tag="{Binding Package}" Margin="0,0,16,4"/>
+                                            <Button Style="{StaticResource LinkButton}" Content="{DynamicResource Text_cp_btn_proxy}" ToolTip="{DynamicResource Text_cp_btn_proxy_tip}" Tag="{Binding Package}" Margin="0,0,16,4"/>
+                                            <CheckBox Content="{DynamicResource Text_cp_separate_windows}" ToolTip="{DynamicResource Text_cp_separate_windows_tip}"
+                                                      IsChecked="{Binding SeparateWindows, Mode=OneWay}" Tag="{Binding Package}"
+                                                      Foreground="{StaticResource GesherInkMutedBrush}" Margin="0,2,16,4"/>
+                                            <Button Style="{StaticResource LinkDangerButton}" Content="{DynamicResource Text_cp_btn_uninstall}" Tag="{Binding Package}" Margin="0,0,0,4"/>
+                                        </WrapPanel>
+                                        <Button Grid.Column="2" Grid.Row="0" Content="{DynamicResource Text_cp_btn_launch}" Tag="{Binding Package}"
+                                                Visibility="{Binding LaunchVisibility}" VerticalAlignment="Top" MinWidth="76"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- רשימה ריקה מזמינה להתקין; חיפוש בלי תוצאה אומר את זה -->
+                    <TextBlock Grid.Row="1" Margin="32" MaxWidth="360" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextAlignment="Center" FontSize="14" IsHitTestVisible="False">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextMuted}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Setter Property="Text" Value="{DynamicResource Text_cp_apps_no_match}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasItems, ElementName=AppsList}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding HasItems, ElementName=AppsList}" Value="False"/>
+                                            <Condition Binding="{Binding Text, ElementName=AppsSearch}" Value=""/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Text" Value="{DynamicResource Text_cp_apps_empty}"/>
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- גרירה של קובץ מעל החלון: מסגרת מקווקוות ומה יקרה כשמשחררים -->
+                    <Grid Name="DropOverlay" Grid.RowSpan="2" Visibility="Collapsed" IsHitTestVisible="False">
+                        <Border Background="{StaticResource GesherSurfaceRaisedBrush}" Opacity="0.94" CornerRadius="{StaticResource GesherRadiusPanel}"/>
+                        <Rectangle Margin="8" RadiusX="6" RadiusY="6" Stroke="{StaticResource GesherBrandBrush}" StrokeThickness="2" StrokeDashArray="4 3"/>
+                        <TextBlock Text="{DynamicResource Text_cp_drop_release}" Style="{StaticResource TextScreenTitle}" Foreground="{StaticResource GesherBrandBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Margin="32"/>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- המערכת: עמודה שקטה על המשטח, בלי מסגרת. קו דק מפריד בין נושאים -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="0,0,0,8">
+                <!-- מרווח בקצה, כדי שפס הגלילה לא ייגע בטקסט -->
+                <StackPanel Margin="0,0,10,0">
+                    <StackPanel Name="ServicesCards">
+                        <!-- שירותי Google (microG) -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{DynamicResource Text_cp_microg_title}" Style="{StaticResource RailTitle}" TextWrapping="Wrap"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                <Border Name="MicrogBadge" Style="{StaticResource StatusDot}" Margin="0,0,7,0"/>
+                                <TextBlock Name="MicrogBadgeText" Text="{DynamicResource Text_cp_microg_disabled}" FontSize="13" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{DynamicResource Text_cp_microg_desc}" Style="{StaticResource TextMuted}" Margin="0,4,0,10"/>
+                        <WrapPanel>
+                            <Button Name="BtnEnableMicrog" Content="{DynamicResource Text_cp_btn_enable_microg}" Margin="0,0,8,8"/>
+                            <Button Name="BtnGoogleLogin" Content="{DynamicResource Text_cp_btn_google_login}" Margin="0,0,8,8"/>
+                        </WrapPanel>
+                        <WrapPanel>
+                            <Button Name="BtnMicrogSettings" Style="{StaticResource LinkButton}" Content="{DynamicResource Text_cp_btn_microg_settings}" Margin="0,0,20,0"/>
+                            <Button Name="BtnDisableMicrog" Style="{StaticResource LinkDangerButton}" Content="{DynamicResource Text_cp_btn_disable_microg}"/>
+                        </WrapPanel>
+
+                        <Border Style="{StaticResource RailDivider}"/>
+
+                        <!-- חנות אפליקציות (Aurora Store) -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{DynamicResource Text_cp_store_title}" Style="{StaticResource RailTitle}" TextWrapping="Wrap"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                <Border Name="StoreBadge" Style="{StaticResource StatusDot}" Margin="0,0,7,0"/>
+                                <TextBlock Name="StoreBadgeText" Text="{DynamicResource Text_cp_store_not_installed}" FontSize="13" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{DynamicResource Text_cp_store_desc}" Style="{StaticResource TextMuted}" Margin="0,4,0,10"/>
+                        <WrapPanel>
+                            <Button Name="BtnInstallStore" Content="{DynamicResource Text_cp_btn_install_store}" Margin="0,0,8,0"/>
+                            <Button Name="BtnOpenStore" Content="{DynamicResource Text_cp_btn_open_store}" Margin="0,0,8,0"/>
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <Border Style="{StaticResource RailDivider}"/>
+
+                    <!-- עדכונים. Runtime updates: network work never runs on the WPF dispatcher. -->
+                    <TextBlock Text="{DynamicResource Text_cp_update_title}" Style="{StaticResource RailTitle}"/>
+                    <TextBlock Name="UpdateVersionText" Style="{StaticResource TextCaption}" Margin="0,4,0,0"/>
+                    <TextBlock Name="UpdateStatusText" Style="{StaticResource TextMuted}" Foreground="{StaticResource GesherInkBrush}" Margin="0,4,0,10"/>
+                    <WrapPanel>
+                        <Button Name="BtnCheckUpdate" Content="{DynamicResource Text_cp_update_check}" Margin="0,0,8,8"/>
+                        <Button Name="BtnInstallUpdate" Content="{DynamicResource Text_cp_update_download_install}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8" Visibility="Collapsed"/>
+                        <Button Name="BtnCancelUpdate" Content="{DynamicResource Text_cp_update_cancel}" Margin="0,0,8,8" Visibility="Collapsed"/>
+                        <Button Name="BtnReopenPanel" Content="{DynamicResource Text_cp_update_reopen}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8" Visibility="Collapsed"/>
+                    </WrapPanel>
+                    <ProgressBar Name="UpdateProgress" IsIndeterminate="True" Margin="0,0,0,10" Visibility="Collapsed"/>
+                    <Button Name="BtnUpdateNotes" Style="{StaticResource LinkButton}" Content="{DynamicResource Text_cp_update_notes}" HorizontalAlignment="Left" Margin="0,0,0,8" Visibility="Collapsed"/>
+                    <CheckBox Name="AutomaticUpdateChecks" Content="{DynamicResource Text_cp_update_automatic}" ToolTip="{DynamicResource Text_cp_update_automatic_hint}" Margin="0,2,0,0"/>
+                    <CheckBox Name="AutomaticUpdateInstall" Content="{DynamicResource Text_cp_update_auto_install}" ToolTip="{DynamicResource Text_cp_update_auto_install_hint}" Margin="0,8,0,0"/>
+
+                    <Border Style="{StaticResource RailDivider}"/>
+
+                    <!-- מצלמה -->
+                    <TextBlock Text="{DynamicResource Text_cp_camera_title}" Style="{StaticResource RailTitle}"/>
+                    <CheckBox Name="CameraImagePickerFallback" Content="{DynamicResource Text_cp_camera_image_picker}" ToolTip="{DynamicResource Text_cp_camera_image_picker_hint}" Margin="0,10,0,0"/>
+
+                    <Border Style="{StaticResource RailDivider}"/>
+
+                    <!-- רשת -->
+                    <TextBlock Text="{DynamicResource Text_cp_network_title}" Style="{StaticResource RailTitle}"/>
+                    <Button Name="BtnProxyAll" Content="{DynamicResource Text_cp_btn_proxy_all}" ToolTip="{DynamicResource Text_cp_proxy_desc}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Status & Progress Footer -->
+        <Grid Grid.Row="2" Margin="26,0,26,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Name="StatusMessage" Grid.Column="0" Text="{DynamicResource Text_cp_status_ready}" Style="{StaticResource TextCaption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+            <ProgressBar Name="ActivityBar" Grid.Column="1" Width="140" IsIndeterminate="False" Visibility="Hidden" VerticalAlignment="Center" Margin="16,0"/>
+            <Button Name="BtnOpenLogs" Grid.Column="2" Style="{StaticResource LinkButton}" FontSize="12" Content="{DynamicResource Text_cp_btn_open_logs}" VerticalAlignment="Center"/>
+            <Button Name="BtnAbout" Grid.Column="3" Style="{StaticResource LinkButton}" FontSize="12" Margin="16,0,0,0" Content="{DynamicResource Text_cp_btn_about}" VerticalAlignment="Center"/>
+        </Grid>
+    </Grid>
+    </ScrollViewer>
+</Window>

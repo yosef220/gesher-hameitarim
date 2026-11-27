@@ -15,7 +15,10 @@ public final class NativeWindow implements AutoCloseable {
     mPtr = ptr;
   }
 
-  /** A hidden window whose client area is width x height pixels. */
+  /**
+   * A hidden window whose client area is width x height pixels. When Windows refuses, the
+   * native side throws the IllegalStateException with the failing Windows call and its error.
+   */
   public static NativeWindow create(String title, int width, int height) {
     long ptr = nCreate(title, width, height);
     if (ptr == 0) {
@@ -275,6 +278,16 @@ public final class NativeWindow implements AutoCloseable {
     return mPtr;
   }
 
+  static boolean keepHostedDrop(String path) {
+    return path != null && nKeepHostedDrop(path);
+  }
+
+  static void releaseHostedDrop(String path) {
+    if (path != null) nReleaseHostedDrop(path);
+  }
+
+  private static native boolean nKeepHostedDrop(String path);
+  private static native void nReleaseHostedDrop(String path);
   private static native long nCreate(String title, int width, int height);
   private static native void nDestroy(long ptr);
   private static native void nShow(long ptr);

@@ -39,7 +39,8 @@ def rejected(label, replacement, repin=False, target=source_path, pin_name='SYST
                 # A mutation inside the pinned transition may be rejected by
                 # reverse application before the baseline hash comparison. This
                 # counts only when that exact check rejects the mutated path.
-                assert error.cmd == ['git', 'apply', '--reverse', '--unidiff-zero', '--check', '-'], error
+                assert error.cmd == ['git', '-c', 'core.autocrlf=false',
+                                     'apply', '--reverse', '--unidiff-zero', '--check', '-'], error
                 assert error.returncode == 1, error
                 assert target.relative_to(ROOT).as_posix().encode() in error.stderr, error.stderr
                 print_result = label
@@ -201,3 +202,7 @@ for label, replacement in receipt_controls:
     rejected(label + ' even with a new full-file hash', replacement, True,
              target=receipt_path, pin_name='RECEIPT_DIAGNOSTICS_SHA256')
 print('receipt diagnostic source policy: four negative controls passed')
+
+# The ordinary CI entry point also exercises the exact property/OFD transition,
+# including mutations that refresh only the new property-file hash.
+policy.transition_negative_controls()

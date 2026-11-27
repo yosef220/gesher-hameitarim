@@ -17,8 +17,8 @@ $here = $PSScriptRoot
 if ($Dex -eq '') { $Dex = Join-Path $here 'hello.dex' }  # PowerShell 5: no $PSScriptRoot in param defaults
 
 $dexFull = (Resolve-Path $Dex).Path
-$root = Join-Path $env:LOCALAPPDATA 'Gesher'
 . (Join-Path $here 'gesher-runtime-files.ps1')
+$root = Set-GesherProfileEnvironment $here
 # Drive-less paths resolve on the current drive.
 Set-Location -LiteralPath $here
 # A Windows path as gesher-base's path model reads it (docs/posix.md): no drive
@@ -60,7 +60,16 @@ $bcp = (('core-oj', 'core-libart', 'core-icu4j') | ForEach-Object { NoDrive "$he
 # started sets no exit code.
 $ErrorActionPreference = 'Continue'
 $global:LASTEXITCODE = $null
-& (Join-Path $here 'dalvikvm.exe') "-Xbootclasspath:$bcp" "-Ximage:$(NoDrive "$here/framework/boot.art")" `
-  -Xint '-Xusejit:false' -cp (UserPath $dexFull) $Class @ProgramArgs
+$vm = Join-Path $here 'dalvikvm.exe'
+$image = "-Ximage:$(NoDrive "$here/framework/boot.art")"
+if ($env:GESHER_SANDBOX -ceq 'appcontainer-trusted') {
+  # בידוד AppContainer (הצטרפות מפורשת): התוכנית רצה תחת המפקח של הריצה המוגנת.
+  $hostBcp = $bcp + ':' + (NoDrive "$here/framework.jar") + ':' + (NoDrive "$here/gesher-app.jar")
+  $supervisor = @("-Xbootclasspath:$hostBcp", $image, '-Xint', '-Xusejit:false',
+    'com.gesher.server.ContainedDex', "-Xbootclasspath:$bcp", $image, (UserPath $dexFull), $Class)
+  & $vm @supervisor @ProgramArgs
+} else {
+  & $vm "-Xbootclasspath:$bcp" $image '-Xint' '-Xusejit:false' -cp (UserPath $dexFull) $Class @ProgramArgs
+}
 if ($null -eq $global:LASTEXITCODE) { throw "gesher: could not start $(Join-Path $here 'dalvikvm.exe')" }
 exit $LASTEXITCODE

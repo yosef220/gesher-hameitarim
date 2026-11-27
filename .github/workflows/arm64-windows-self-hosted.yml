@@ -2,6 +2,7 @@ name: arm64-windows-self-hosted-trial
 
 # Always uses policy from main, never a PR's workflow YAML. The hosted baseline
 # remains a required-check candidate while this optional pilot is measured.
+# גשר המיתרים: הפעולות נעוצות לאותם קומיטים, שנשמרו בריפו שלנו בענף pinned/upstream-actions.
 on:
   workflow_run:
     workflows: [arm64-windows]
@@ -28,8 +29,9 @@ jobs:
   authorize:
     if: github.event_name == 'workflow_dispatch' || vars.GESHER_SELF_HOSTED_TRIAL == 'true'
     runs-on: ubuntu-24.04
-    # +15 minutes: a quota-exhausted GitHub read may wait up to 15 minutes for reset.
-    timeout-minutes: 20
+    # +61 minutes: a quota-exhausted GitHub read may wait up to 61 minutes for the
+    # published hourly reset instead of failing the job.
+    timeout-minutes: 66
     permissions:
       contents: read
       actions: read
@@ -83,7 +85,7 @@ jobs:
           }
           for tool in git curl python3 cmake ninja ccache javac; do command -v "$tool"; done
       - name: Initialize persistent local inputs
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
         id: local
         with:
           phase: initialize
@@ -95,7 +97,7 @@ jobs:
           curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/$LLVM_MINGW_NAME.tar.xz" \
             | tar -xJ -C ~/toolchain
       - name: Restore local AOSP inputs
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
         with:
           phase: restore
           namespace: refs/pull/${{ needs.authorize.outputs.pr }}/merge
@@ -105,14 +107,14 @@ jobs:
       - name: Fetch pinned AOSP sources
         run: bash tools/fetch-aosp.sh
       - name: Save local AOSP inputs immediately
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
         with:
           phase: save
           namespace: refs/pull/${{ needs.authorize.outputs.pr }}/merge
           path: third_party/aosp
           key: aosp-${{ hashFiles('aosp.lock', 'patches/**') }}
       - name: Restore local Android build tools
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
         with:
           phase: restore
           namespace: refs/pull/${{ needs.authorize.outputs.pr }}/merge
@@ -121,7 +123,7 @@ jobs:
       - name: Build and verify ARM64 Windows targets
         run: bash tools/ci/build-arm64-windows.sh
       - name: Save local Android build tools
-        uses: gesher-runtime/gesher/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
+        uses: yosef220/gesher-hameitarim/.github/actions/local-build-cache@b9510513a538d80669895521d1061b54fbe11aff
         with:
           phase: save
           namespace: refs/pull/${{ needs.authorize.outputs.pr }}/merge

@@ -19,8 +19,11 @@
 #include <mutex>
 #include <atomic>
 #include <new>
+#include <vector>
 
 #include "internal.h"
+#include "netlink_internal.h"
+#include "ipv4_broadcast.h"
 #include "socket_internal.h"
 #include "socket_user_copy.h"
 
@@ -447,6 +450,19 @@ int BindInterface(Socket s, uint32_t ifindex) {
 }
 
 int Close(Socket s, const std::shared_ptr<SocketDescription>& description, bool retain_failure) {
+  if (description && description->netlink) {
+    {
+      std::lock_guard<std::mutex> lock(description->error_mutex);
+      description->native_closing = true;
+    }
+    gesher::NetlinkClose(*description->netlink);
+    {
+      std::lock_guard<std::mutex> lock(description->error_mutex);
+      description->native_closed = true;
+      description->native_closing = false;
+    }
+    return 0;
+  }
   if (!description) return closesocket(static_cast<SOCKET>(s)) == 0 ? 0 : Fail();
   {
     std::lock_guard<std::mutex> lock(description->error_mutex);
@@ -926,6 +942,173 @@ ptrdiff_t Send(Socket s, const Buffer* buffers, size_t count, int flags, const A
   return static_cast<ptrdiff_t>(sent);
 }
 
+namespace {
+thread_local PacketInfo* t_packet_info = nullptr;
+
+LPFN_WSARECVMSG RecvMsgFunction(SOCKET s) {
+  static std::atomic<LPFN_WSARECVMSG> function{nullptr};
+  LPFN_WSARECVMSG f = function.load(std::memory_order_acquire);
+  if (f != nullptr) return f;
+  GUID id = WSAID_WSARECVMSG;
+  DWORD bytes = 0;
+  if (WSAIoctl(s, SIO_GET_EXTENSION_FUNCTION_POINTER, &id, sizeof(id), &f, sizeof(f), &bytes,
+               nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  function.store(f, std::memory_order_release);
+  return f;
+}
+
+// The host's IPv4 unicast addresses (host byte order), and the local address
+// recently chosen toward a few senders, kept for a second: a broadcast or
+// multicast receive asks for them per datagram (a unicast one never does).
+// `broadcasts` republishes the subnets' broadcast addresses for the unicast
+// check, which reads them without the mutex.
+struct LocalIpv4 {
+  uint32_t address, mask, ifindex;
+};
+struct SpecificDestinationCache {
+  std::mutex mutex;
+  ULONGLONG loaded = 0;
+  bool valid = false;
+  std::vector<LocalIpv4> addresses;
+  struct Route {
+    uint32_t source = 0, local = 0;
+  } routes[8];
+  size_t next_route = 0;
+  gesher::net::DirectedBroadcastSet broadcasts;
+  std::atomic<ULONGLONG> published{0};  // GetTickCount64 of the last refresh attempt
+};
+constexpr ULONGLONG kLocalAddressLifetimeMs = 1000;
+
+SpecificDestinationCache& LocalAddressCache() {
+  static SpecificDestinationCache* cache = new SpecificDestinationCache;
+  return *cache;
+}
+
+// Refreshes the cache (its mutex held) once it is older than its lifetime.
+void RefreshLocalAddresses(SpecificDestinationCache& cache) {
+  const ULONGLONG now = GetTickCount64();
+  if (cache.valid && now - cache.loaded < kLocalAddressLifetimeMs) return;
+  cache.valid = false;
+  cache.addresses.clear();
+  for (auto& route : cache.routes) route = {};
+  cache.published.store(now, std::memory_order_relaxed);
+  MIB_UNICASTIPADDRESS_TABLE* table = nullptr;
+  if (GetUnicastIpAddressTable(AF_INET, &table) != NO_ERROR) {
+    cache.broadcasts.Invalidate();
+    return;
+  }
+  for (ULONG i = 0; i < table->NumEntries; ++i) {
+    const MIB_UNICASTIPADDRESS_ROW& row = table->Table[i];
+    // Linux selects among usable (not tentative or duplicate) addresses.
+    if (row.DadState != IpDadStatePreferred) continue;
+    const uint8_t prefix = row.OnLinkPrefixLength > 32 ? 32 : row.OnLinkPrefixLength;
+    LocalIpv4 entry;
+    entry.address = ntohl(row.Address.Ipv4.sin_addr.s_addr);
+    entry.mask = prefix == 0 ? 0 : 0xffffffffu << (32 - prefix);
+    entry.ifindex = row.InterfaceIndex;
+    cache.addresses.push_back(entry);
+  }
+  FreeMibTable(table);
+  cache.loaded = now;
+  cache.valid = true;
+  std::vector<gesher::net::Ipv4Interface> interfaces;
+  interfaces.reserve(cache.addresses.size());
+  for (const LocalIpv4& local : cache.addresses) interfaces.push_back({local.address, local.mask});
+  cache.broadcasts.Publish(interfaces.data(), interfaces.size());
+}
+
+// ipi_spec_dst of an IPv4 datagram (host byte order), as Linux's
+// fib_compute_spec_dst: the destination itself when it is one of this host's
+// addresses. For a broadcast (limited or a local subnet's directed broadcast)
+// or multicast destination, the preferred source address of the route back to
+// the sender, or with no sender address (0.0.0.0) an address of the interface
+// it arrived on. `received_flags` are WSARecvMsg's: Windows marks a datagram
+// received as a link-layer broadcast (MSG_BCAST) or multicast (MSG_MCAST),
+// but a subnet-directed broadcast this host sent to itself carries no
+// MSG_BCAST, so the destination is also compared with the local subnets'
+// broadcast addresses. That comparison reads a lock-free snapshot, refreshed
+// at most once a second by whichever receive finds the mutex free, so a
+// unicast datagram, the common case, never waits for the mutex.
+uint32_t SpecificDestination(uint32_t ifindex, uint32_t destination, uint32_t source, DWORD received_flags) {
+  auto& cache = LocalAddressCache();
+  if (GetTickCount64() - cache.published.load(std::memory_order_relaxed) >= kLocalAddressLifetimeMs) {
+    std::unique_lock<std::mutex> lock(cache.mutex, std::try_to_lock);
+    if (lock.owns_lock()) RefreshLocalAddresses(cache);
+  }
+  if (gesher::net::ClassifyIpv4Destination(destination, (received_flags & MSG_BCAST) != 0,
+                                           (received_flags & MSG_MCAST) != 0, cache.broadcasts) ==
+      gesher::net::Ipv4DestinationKind::kUnicast) {
+    return destination;
+  }
+  const bool multicast = (destination >> 28) == 0xe;
+  bool broadcast = destination == 0xffffffffu;
+  uint32_t on_interface = 0, on_sender_subnet = 0;
+  {
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    RefreshLocalAddresses(cache);
+    for (const LocalIpv4& local : cache.addresses) {
+      // A /31 or /32 has no broadcast address (RFC 3021).
+      if (!multicast && !broadcast && local.mask < 0xfffffffeu && destination == (local.address | ~local.mask))
+        broadcast = true;
+      if (local.ifindex != ifindex) continue;
+      if (on_interface == 0) on_interface = local.address;
+      // inet_select_addr prefers an address on the sender's subnet.
+      if (on_sender_subnet == 0 && source != 0 && (source & local.mask) == (local.address & local.mask))
+        on_sender_subnet = local.address;
+    }
+    if (on_sender_subnet != 0) on_interface = on_sender_subnet;
+    if (!multicast && !broadcast) return destination;
+    if (source != 0) {
+      for (const auto& route : cache.routes) {
+        if (route.source == source && route.local != 0) return route.local;
+      }
+    }
+  }
+  if (source != 0) {
+    SOCKADDR_INET to{};
+    to.Ipv4.sin_family = AF_INET;
+    to.Ipv4.sin_addr.s_addr = htonl(source);
+    MIB_IPFORWARD_ROW2 route{};
+    SOCKADDR_INET chosen{};
+    if (GetBestRoute2(nullptr, 0, nullptr, &to, 0, &route, &chosen) == NO_ERROR &&
+        chosen.si_family == AF_INET && chosen.Ipv4.sin_addr.s_addr != 0) {
+      const uint32_t local = ntohl(chosen.Ipv4.sin_addr.s_addr);
+      std::lock_guard<std::mutex> lock(cache.mutex);
+      auto& slot = cache.routes[cache.next_route++ % (sizeof(cache.routes) / sizeof(cache.routes[0]))];
+      slot.source = source;
+      slot.local = local;
+      return local;
+    }
+  }
+  return on_interface != 0 ? on_interface : destination;
+}
+
+// The IPv4 sender of a datagram, also from a dual-stack socket's v4-mapped
+// IPv6 address (host byte order); 0 if none.
+uint32_t Ipv4Source(const sockaddr_storage& peer) {
+  if (peer.ss_family == AF_INET) return ntohl(reinterpret_cast<const sockaddr_in&>(peer).sin_addr.s_addr);
+  if (peer.ss_family != AF_INET6) return 0;
+  const auto& v6 = reinterpret_cast<const sockaddr_in6&>(peer);
+  if (!IN6_IS_ADDR_V4MAPPED(&v6.sin6_addr)) return 0;
+  uint32_t address;
+  std::memcpy(&address, &v6.sin6_addr.s6_addr[12], sizeof(address));
+  return ntohl(address);
+}
+}  // namespace
+
+void SetReceivePacketInfo(PacketInfo* info) { t_packet_info = info; }
+
+int SetPacketInfo(Socket s, bool on) {
+  DWORD value = on ? 1 : 0;
+  if (Api().setsockopt(static_cast<SOCKET>(s), IPPROTO_IP, IP_PKTINFO,
+                       reinterpret_cast<const char*>(&value), sizeof(value)) != 0) {
+    return FailIo();
+  }
+  return 0;
+}
+
 ptrdiff_t Recv(Socket s, Buffer* buffers, size_t count, int flags, Address* from,
                int* result_flags) {
   int type = 0;
@@ -957,9 +1140,42 @@ ptrdiff_t Recv(Socket s, Buffer* buffers, size_t count, int flags, Address* from
     DWORD received = 0;
     // Actual Linux UDP receives ignore OOB and WAITALL; Winsock may reject them.
     DWORD win_flags = ToWinMsgFlags(flags & ~(kMsgWaitAll | kMsgOob));
-    if (WSARecvFrom(static_cast<SOCKET>(s), &whole, 1, &received, &win_flags,
-                    from != nullptr ? reinterpret_cast<sockaddr*>(&peer) : nullptr,
-                    from != nullptr ? &peer_len : nullptr, nullptr, nullptr) != 0) return FailIo();
+    PacketInfo* packet_info = t_packet_info;
+    if (packet_info != nullptr) *packet_info = {};
+    if (packet_info != nullptr) {
+      // IP_PKTINFO: WSARecvMsg returns the datagram's IN_PKTINFO (enabled on
+      // the socket by SetPacketInfo) with it, in the same single operation.
+      // A dual-stack IPv6 socket reports it for its IPv4 (v4-mapped) datagrams.
+      LPFN_WSARECVMSG recv_msg = RecvMsgFunction(static_cast<SOCKET>(s));
+      if (recv_msg == nullptr) return FailIo();
+      alignas(WSACMSGHDR) char control[256] = {};
+      WSAMSG message = {};
+      // The sender is needed for ipi_spec_dst even if the caller does not ask.
+      message.name = reinterpret_cast<sockaddr*>(&peer);
+      message.namelen = peer_len;
+      message.lpBuffers = &whole;
+      message.dwBufferCount = 1;
+      message.Control.buf = control;
+      message.Control.len = sizeof(control);
+      message.dwFlags = win_flags;
+      if (recv_msg(static_cast<SOCKET>(s), &message, &received, nullptr, nullptr) != 0) return FailIo();
+      peer_len = message.namelen;
+      for (WSACMSGHDR* c = WSA_CMSG_FIRSTHDR(&message); c != nullptr; c = WSA_CMSG_NXTHDR(&message, c)) {
+        if (c->cmsg_level != IPPROTO_IP || c->cmsg_type != IP_PKTINFO) continue;
+        IN_PKTINFO info;
+        std::memcpy(&info, WSA_CMSG_DATA(c), sizeof(info));
+        packet_info->valid = true;
+        packet_info->ifindex = info.ipi_ifindex;
+        std::memcpy(packet_info->address, &info.ipi_addr, sizeof(packet_info->address));
+        const uint32_t local = htonl(SpecificDestination(info.ipi_ifindex, ntohl(info.ipi_addr.s_addr),
+                                                         Ipv4Source(peer), message.dwFlags));
+        std::memcpy(packet_info->local, &local, sizeof(packet_info->local));
+      }
+    } else if (WSARecvFrom(static_cast<SOCKET>(s), &whole, 1, &received, &win_flags,
+                           from != nullptr ? reinterpret_cast<sockaddr*>(&peer) : nullptr,
+                           from != nullptr ? &peer_len : nullptr, nullptr, nullptr) != 0) {
+      return FailIo();
+    }
     size_t copied = 0;
     for (size_t i = 0; i < count; ++i) {
       size_t n = buffers[i].len < received - copied ? buffers[i].len : received - copied;
@@ -1206,6 +1422,10 @@ bool StreamPorts(Socket s, SocketDescription& description, uint16_t* local, uint
 ptrdiff_t SendOwned(Socket s, const Buffer* buffers, size_t count, int flags, const Address* to,
                     std::shared_ptr<SocketDescription>& description, bool dont_wait,
                     const RightsToken* rights) {
+  if (description && description->netlink) {
+    if (rights != nullptr && rights->count != 0) return errno = EOPNOTSUPP, -1;
+    return gesher::NetlinkSend(*description->netlink, buffers, count, 0, nullptr, 0);
+  }
   if (description->unix_datagram_pair.load()) {
     return SendUnixDatagram(s, buffers, count, flags, to, description, dont_wait, rights);
   }
@@ -1225,6 +1445,12 @@ ptrdiff_t RecvOwned(Socket s, Buffer* buffers, size_t count, int flags, Address*
                     std::shared_ptr<SocketDescription>& description, bool dont_wait,
                     int* result_flags, UnixCredentials* credentials, RightsToken* rights,
                     std::vector<int>* stream_rights) {
+  if (description && description->netlink) {
+    if (rights != nullptr) *rights = {};
+    if (credentials != nullptr) *credentials = {};
+    return gesher::NetlinkRecv(*description->netlink, buffers, count, 0, nullptr, nullptr,
+                               description->nonblocking.load() || dont_wait, result_flags);
+  }
   if (description->unix_datagram_pair.load()) {
     return RecvUnixDatagram(s, buffers, count, flags, from, description, dont_wait, result_flags,
                             credentials, rights);
@@ -1479,6 +1705,8 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
   closed.assign(count, false);
   bool has_lifecycle_hup = false;
   bool has_owned_pending = false;
+  bool has_netlink = false;
+  bool has_netlink_ready = false;
   for (size_t i = 0; i < count; ++i) {
     if (entries[i].description) {
       RefreshConnect(entries[i].description);
@@ -1486,6 +1714,13 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
       owned_pending[i] = entries[i].description->connect_operation != nullptr;
       closed[i] = entries[i].description->native_closed || entries[i].description->native_closing;
       has_owned_pending |= owned_pending[i];
+    }
+    if (entries[i].description && entries[i].description->netlink) {
+      has_netlink = true;
+      fds[i].fd = INVALID_SOCKET;
+      has_netlink_ready |= closed[i] ||
+          gesher::NetlinkPoll(*entries[i].description->netlink, entries[i].events) != 0;
+      continue;
     }
     fds[i].fd = static_cast<SOCKET>(entries[i].socket);
     // Winsock rejects its POLLPRI, but supports POLLRDBAND for TCP OOB.
@@ -1533,7 +1768,12 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
   }
   // Band-only WSAPoll never wakes for failed ConnectEx. Sample its owned
   // completion on the same bounded slices already used for mixed poll sources.
-  const int wait = has_lifecycle_hup ? 0 : has_owned_pending && (timeout_ms < 0 || timeout_ms > 10) ? 10 : timeout_ms;
+  const int wait = (has_lifecycle_hup || has_netlink_ready)
+                       ? 0
+                       : (has_owned_pending || (has_netlink && wake == kInvalidSocket)) &&
+                                 (timeout_ms < 0 || timeout_ms > 10)
+                             ? 10
+                             : timeout_ms;
   // An owned pending connection has no usable connected context yet. Its
   // completion is the readiness source; a native write wake could precede
   // context publication and otherwise spin or expose a premature success.
@@ -1544,7 +1784,11 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
   active.reserve(count + (wake != kInvalidSocket ? 1 : 0));
   active_index.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    if (!owned_pending[i] && !closed[i]) { active.push_back(fds[i]); active_index.push_back(i); }
+    if (!owned_pending[i] && !closed[i] &&
+        !(entries[i].description && entries[i].description->netlink)) {
+      active.push_back(fds[i]);
+      active_index.push_back(i);
+    }
   }
   if (!active.empty() || wake != kInvalidSocket) {
     if (observer) observer(true, 0, 0, context);  // finalized real native inputs; no locks
@@ -1600,7 +1844,17 @@ int Poll(PollEntry* entries, size_t count, int timeout_ms, NativePollObserver ob
   bool suppressed_datagram_read = false;
   for (size_t i = 0; i < count; ++i) {
     SHORT r = fds[i].revents;
-    if (entries[i].description) {
+    if (entries[i].description && entries[i].description->netlink) {
+      auto& description = *entries[i].description;
+      std::lock_guard<std::mutex> lock(description.error_mutex);
+      const int change = description.native_closed || description.native_closing
+          ? kPollNval : gesher::NetlinkPoll(*description.netlink, entries[i].events);
+      r = 0;
+      if (change & kPollIn) r |= POLLRDNORM;
+      if (change & kPollOut) r |= POLLWRNORM;
+      if (change & kPollErr) r |= POLLERR;
+      if (change & kPollNval) r |= POLLNVAL;
+    } else if (entries[i].description) {
       RefreshConnect(entries[i].description);
       auto& description = *entries[i].description;
       std::lock_guard<std::mutex> lock(description.error_mutex);
@@ -2012,11 +2266,16 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
     iface.index = a->IfIndex != 0 ? a->IfIndex : a->Ipv6IfIndex;
     iface.mtu = a->Mtu;
     if (a->OperStatus == IfOperStatusUp) iface.flags |= kIfUp | kIfRunning;
-    if (a->IfType == IF_TYPE_SOFTWARE_LOOPBACK) iface.flags |= kIfLoopback;
+    if (a->IfType == IF_TYPE_SOFTWARE_LOOPBACK) {
+      iface.flags |= kIfLoopback;
+      iface.kind = Interface::LinkKind::kLoopback;
+    }
     if ((a->Flags & IP_ADAPTER_NO_MULTICAST) == 0) iface.flags |= kIfMulticast;
     if (a->IfType == IF_TYPE_ETHERNET_CSMACD || a->IfType == IF_TYPE_IEEE80211) {
       iface.flags |= kIfBroadcast;
+      iface.kind = Interface::LinkKind::kEthernet;
     }
+    if (a->IfType == IF_TYPE_PPP) iface.kind = Interface::LinkKind::kPpp;
     if (a->IfType == IF_TYPE_PPP || a->IfType == IF_TYPE_TUNNEL) iface.flags |= kIfPointToPoint;
     iface.hardware_len = a->PhysicalAddressLength <= sizeof(iface.hardware)
                              ? a->PhysicalAddressLength : 0;
@@ -2025,6 +2284,15 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
       InterfaceAddress address;
       FromWin(u->Address.lpSockaddr, u->Address.iSockaddrLength, &address.address);
       address.prefix_len = u->OnLinkPrefixLength;
+      using State = InterfaceAddress::State;
+      switch (u->DadState) {
+        case IpDadStateDeprecated: address.state = State::kDeprecated; break;
+        case IpDadStateTentative: address.state = State::kTentative; break;
+        case IpDadStateDuplicate: address.state = State::kDuplicate; break;
+        default: break;
+      }
+      address.permanent = u->ValidLifetime == 0xffffffffu;
+      address.temporary = (u->Flags & IP_ADAPTER_ADDRESS_TRANSIENT) != 0;
       if (address.address.family != Family::kOther) iface.addresses.push_back(address);
     }
     interfaces->push_back(std::move(iface));
@@ -2032,4 +2300,61 @@ bool ListInterfaces(std::vector<Interface>* interfaces) {
   return true;
 }
 
+struct InterfaceChangeWatch {
+  std::mutex callback_mutex;
+  void (*changed)(void*);
+  void* context;
+  HANDLE handle = nullptr;
+
+  void OnChange(MIB_NOTIFICATION_TYPE event) {
+    if (event == MibInitialNotification) return;
+    std::lock_guard<std::mutex> lock(callback_mutex);
+    if (changed != nullptr) changed(context);
+  }
+};
+
+namespace {
+void CALLBACK OnLinkChange(void* context, MIB_IPINTERFACE_ROW*, MIB_NOTIFICATION_TYPE event) {
+  static_cast<InterfaceChangeWatch*>(context)->OnChange(event);
+}
+void CALLBACK OnAddressChange(void* context, MIB_UNICASTIPADDRESS_ROW*, MIB_NOTIFICATION_TYPE event) {
+  static_cast<InterfaceChangeWatch*>(context)->OnChange(event);
+}
+}  // namespace
+
+InterfaceChangeWatch* WatchInterfaceChanges(InterfaceChangeKind kind, void (*changed)(void*),
+                                             void* context) {
+  auto watch = std::unique_ptr<InterfaceChangeWatch>(
+      new (std::nothrow) InterfaceChangeWatch{{}, changed, context});
+  if (!watch) return errno = ENOMEM, nullptr;
+  const DWORD error = kind == InterfaceChangeKind::kLink
+      ? NotifyIpInterfaceChange(AF_UNSPEC, OnLinkChange, watch.get(), FALSE, &watch->handle)
+      : NotifyUnicastIpAddressChange(AF_UNSPEC, OnAddressChange, watch.get(), FALSE, &watch->handle);
+  if (error != NO_ERROR) {
+    errno = error == ERROR_NOT_SUPPORTED ? EOPNOTSUPP : error == ERROR_ACCESS_DENIED ? EACCES : EIO;
+    return nullptr;
+  }
+  return watch.release();
+}
+
+void StopInterfaceChanges(InterfaceChangeWatch* watch) {
+  if (watch == nullptr) return;
+  {
+    std::lock_guard<std::mutex> lock(watch->callback_mutex);
+    watch->changed = nullptr;
+    watch->context = nullptr;
+  }
+  // A failed cancellation leaves a disabled callback context for the OS.
+  if (CancelMibChangeNotify2(watch->handle) == NO_ERROR) delete watch;
+}
+
 }  // namespace gesher::ws
+
+// The fork set (gesher/fork.h); absent where a host test compiles this file alone.
+#if __has_include(<gesher/fork.h>)
+#include <gesher/fork.h>
+#endif
+#ifdef GESHER_FORK_LOCK
+// fork (gesher/fork.h): the local IPv4 address cache recvmsg's IP_PKTINFO reads.
+GESHER_FORK_LOCK(gesher::kForkOrderLeaf, std::mutex, gesher::ws::LocalAddressCache().mutex);
+#endif
