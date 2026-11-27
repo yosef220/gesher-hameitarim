@@ -327,6 +327,13 @@
 
                     <Border Style="{StaticResource RailDivider}"/>
 
+                    <!-- קישורים בתוך אתרים. Off by default; the explanation is always visible. -->
+                    <TextBlock Text="{DynamicResource Text_cp_web_title}" Style="{StaticResource RailTitle}"/>
+                    <CheckBox Name="WebIntentFallback" Content="{DynamicResource Text_cp_web_intent_fallback}" Margin="0,10,0,0"/>
+                    <TextBlock Text="{DynamicResource Text_cp_web_intent_fallback_hint}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+                    <Border Style="{StaticResource RailDivider}"/>
+
                     <!-- רשת -->
                     <TextBlock Text="{DynamicResource Text_cp_network_title}" Style="{StaticResource RailTitle}"/>
                     <Button Name="BtnProxyAll" Content="{DynamicResource Text_cp_btn_proxy_all}" ToolTip="{DynamicResource Text_cp_proxy_desc}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
