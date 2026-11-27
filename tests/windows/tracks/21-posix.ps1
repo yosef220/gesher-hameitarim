@@ -112,7 +112,8 @@ if ($LASTEXITCODE -ne 0) { $failed++ }
 # /etc/timezone, inotify and the process model (probes/posix/posix_probe.cc).
 # It works in a directory of its own under the current one (the workspace's
 # drive), and on TEMP's drive as /mnt/<drive> when that is another one.
-Check 'posix probe: paths, /proc, /etc/timezone, inotify, processes' { & "$Dir/posix_probe.exe" } @('inotify local-write routing: complete', 'all passed')
+# מיתר: גם tmpfile כש-TMP בתיקייה בשם עברי (#355-א). הסמן מוודא שהקטע הזה רץ עד הסוף.
+Check 'posix probe: paths, /proc, /etc/timezone, inotify, processes' { & "$Dir/posix_probe.exe" } @('inotify local-write routing: complete', 'tmpfile in a Hebrew TMP: complete', 'all passed')
 Check 'native dlopen paths, safe search and module references' {
   & "$Dir/dlopen_windows_test.exe" (Resolve-Path -LiteralPath (Join-Path $Dir 'dlopen-fixtures')).Path
 } @('dlopen Windows:', '0 failures')

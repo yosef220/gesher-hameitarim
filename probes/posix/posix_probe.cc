@@ -377,6 +377,93 @@ static void OtherDrive() {
   printf("INFO /mnt/%c: checked\n", drive);
 }
 
+// --- tmpfile ---------------------------------------------------------------------------
+
+// מיתר: tmpfile בתיקייה זמנית בשם עברי (#355-א). ה-tmpfile של ucrtbase.dll בונה את הנתיב בדף
+// הקוד של המערכת, ונכשל כשהאותיות לא בדף הקוד. ‏ashmem של AOSP יוצר דרכו כל אזור זיכרון משותף,
+// ולכן הבדיקה עושה עם הקובץ מה ש-libcutils/ashmem-host.cpp עושה: fileno, ‏dup, ‏ftruncate של
+// העותק, סגירת הזרם ו-mmap. הקובץ צריך להימחק עם ה-fd האחרון. הפלט באנגלית כמו בשאר הבדיקה,
+// כי run-tests.ps1 קורא אותו בדף הקוד של הקונסולה.
+static void TempFile() {
+  wchar_t base[MAX_PATH + 2];
+  DWORD length = GetTempPathW(MAX_PATH + 2, base);
+  CHECK(length > 0 && length < MAX_PATH + 2);
+  if (length == 0 || length >= MAX_PATH + 2) return;
+  const wchar_t* shalom = L"שלום";
+  std::wstring directory = std::wstring(base, length) + L"posix-probe-" +
+                           std::to_wstring(GetCurrentProcessId()) + L"-" + shalom;
+  CHECK(CreateDirectoryW(directory.c_str(), nullptr));
+  static wchar_t saved[32768];
+  DWORD saved_length = GetEnvironmentVariableW(L"TMP", saved, 32768);
+  bool had_tmp = saved_length > 0 && saved_length < 32768;
+  CHECK(SetEnvironmentVariableW(L"TMP", directory.c_str()));
+  wchar_t now[MAX_PATH + 2];
+  CHECK(GetTempPathW(MAX_PATH + 2, now) == directory.size() + 1 &&
+        std::wstring(now, directory.size()) == directory);
+
+  // אבחון בלבד: ה-tmpfile של ucrtbase.dll באותה תיקייה. בדף קוד בלי עברית (1252 במכונות של
+  // GitHub) הוא נכשל ב-errno 22, וזה המצב של #355-א. בדף קוד עברי (1255) הוא עובד.
+  HMODULE ucrt = GetModuleHandleW(L"ucrtbase.dll");
+  auto crt_tmpfile = reinterpret_cast<FILE* (*)()>(ucrt ? GetProcAddress(ucrt, "tmpfile") : nullptr);
+  auto crt_fclose = reinterpret_cast<int (*)(FILE*)>(ucrt ? GetProcAddress(ucrt, "fclose") : nullptr);
+  auto crt_errno = reinterpret_cast<int* (*)()>(ucrt ? GetProcAddress(ucrt, "_errno") : nullptr);
+  if (crt_tmpfile != nullptr && crt_fclose != nullptr && crt_errno != nullptr) {
+    *crt_errno() = 0;
+    FILE* crt = crt_tmpfile();
+    int crt_error = crt != nullptr ? 0 : *crt_errno();
+    printf("INFO tmpfile: ucrtbase.dll's own %s in the Hebrew TMP (errno %d, code page %u)\n",
+           crt != nullptr ? "works" : "fails", crt_error, GetACP());
+    if (crt != nullptr) crt_fclose(crt);
+  }
+
+  FILE* f = tmpfile();
+  CHECK(f != nullptr);
+  if (f != nullptr) {
+    char text[16] = {};
+    CHECK(fputs("shalom", f) >= 0 && fflush(f) == 0);
+    rewind(f);
+    CHECK(fgets(text, sizeof(text), f) != nullptr && strcmp(text, "shalom") == 0);
+    int fd = fileno(f);
+    CHECK(fd >= 0);
+    // כמו tmpfile של Linux: קריאה וכתיבה, בלי close-on-exec.
+    CHECK(fcntl(fd, F_GETFL) == (O_RDWR | O_LARGEFILE) && fcntl(fd, F_GETFD) == 0);
+    wchar_t final_path[32768];
+    DWORD final_length = GetFinalPathNameByHandleW(reinterpret_cast<HANDLE>(_get_osfhandle(fd)),
+                                                   final_path, 32768,
+                                                   FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    CHECK(final_length > 0 && final_length < 32768 &&
+          std::wstring(final_path, final_length).find(std::wstring(shalom) + L"\\gesher-tmpfile-") !=
+              std::wstring::npos);
+    // ashmem_create_region: ‏dup, ‏ftruncate של העותק, וסגירת הזרם. העותק הוא האזור.
+    int region = dup(fd);
+    CHECK(region >= 0);
+    CHECK(region < 0 || ftruncate(region, 65536) == 0);
+    CHECK(fclose(f) == 0);
+    if (region >= 0) {
+      struct stat st;
+      CHECK(fstat(region, &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 65536);
+      void* map = mmap(nullptr, 65536, PROT_READ | PROT_WRITE, MAP_SHARED, region, 0);
+      CHECK(map != MAP_FAILED);
+      if (map != MAP_FAILED) {
+        memcpy(static_cast<char*>(map) + 4096, "ashmem", 6);
+        char back[6] = {};
+        CHECK(pread(region, back, sizeof(back), 4096) == 6 && memcmp(back, "ashmem", 6) == 0);
+        CHECK(munmap(map, 65536) == 0);
+      }
+      CHECK(close(region) == 0);
+    }
+  }
+  // הקובץ נמחק עם ה-fd האחרון, ואז התיקייה ריקה. סורק יכול להחזיק אותו לרגע.
+  bool removed = false;
+  for (int attempt = 0; attempt < 100 && !removed; ++attempt) {
+    removed = RemoveDirectoryW(directory.c_str()) != 0;
+    if (!removed) Sleep(50);
+  }
+  CHECK(removed);
+  CHECK(SetEnvironmentVariableW(L"TMP", had_tmp ? saved : nullptr));
+  printf("tmpfile in a Hebrew TMP: complete\n");
+}
+
 // --- thread names ---------------------------------------------------------------------
 
 // The Windows thread description of the calling thread, as UTF-8.
@@ -1250,6 +1337,8 @@ int main(int argc, char** argv) {
   Paths(dir);
   fprintf(stderr, "-- %s\n", "OtherDrive");
   OtherDrive();
+  fprintf(stderr, "-- %s\n", "TempFile");
+  TempFile();
   fprintf(stderr, "-- %s\n", "Proc");
   Proc(dir);
   fprintf(stderr, "-- %s\n", "ThreadNames");

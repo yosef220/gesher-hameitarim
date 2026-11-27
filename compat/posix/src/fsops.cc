@@ -503,6 +503,53 @@ int MakeTemp(char* name, int suffix, int flags) {
   return fd;
 }
 
+// מיתר: הקובץ של tmpfile (#355-א). ה-tmpfile של ucrtbase.dll בונה את הנתיב מ-GetTempPathA,
+// כלומר בדף הקוד של המערכת. אותיות שאין בדף הקוד הופכות בנתיב ל-'?', והיצירה נכשלת ב-EINVAL.
+// כך קורה למשתמש בשם עברי כשלתיקייה שלו אין שם קצר (8.3). כאן הכל ב-UTF-16, בלי תלות בדף
+// הקוד: התיקייה של GetTempPathW (‏TMP, ‏TEMP, ‏USERPROFILE ואז תיקיית Windows, כמו ב-CRT),
+// שם אקראי שנוצר רק אם הוא עוד לא קיים, וקובץ שנמחק כשהידית האחרונה אליו נסגרת (‏_O_TEMPORARY
+// של ה-CRT, ו-memfd_create ב-system.cc). הידית עוברת בירושה, כמו ב-CRT וכמו ב-tmpfile של
+// Linux, שאין בו O_CLOEXEC.
+int TemporaryFile() {
+  // GetTempPathW מחזיר לכל היותר MAX_PATH+1 תווים, בלי ה-null.
+  wchar_t directory[MAX_PATH + 2];
+  DWORD length = GetTempPathW(MAX_PATH + 2, directory);
+  if (length == 0) return gesher::FailWithLastError();
+  if (length >= MAX_PATH + 2) return errno = ENAMETOOLONG, -1;
+  SECURITY_ATTRIBUTES inherit = {sizeof(inherit), nullptr, TRUE};
+  HANDLE h = INVALID_HANDLE_VALUE;
+  char name[] = "gesher-tmpfile-XXXXXX.tmp";
+  if (!FillTemplate(name, 4, [&](const char* candidate) {
+        std::wstring path = std::wstring(directory, length) + gesher::Widen(candidate);
+        // נתיב מ-MAX_PATH ומעלה צריך את הקידומת של נתיב ארוך, שמקבלת רק נתיב מלא, כמו זה
+        // ש-GetTempPathW מחזיר (Lengthen ב-path.cc).
+        if (path.size() >= MAX_PATH && path.rfind(L"\\\\?\\", 0) != 0) {
+          path = path.rfind(L"\\\\", 0) == 0 ? L"\\\\?\\UNC\\" + path.substr(2) : L"\\\\?\\" + path;
+        }
+        h = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &inherit, CREATE_NEW,
+                        FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+        if (h != INVALID_HANDLE_VALUE) return true;
+        gesher::FailWithLastError();
+        return false;
+      })) {
+    return -1;
+  }
+  // ה-fd נרשם כמו fd של open (‏FdFromHandle ב-path.cc).
+  gesher::record_locks::DescriptorGuard descriptors;
+  int fd = gesher::CrtResult(_open_osfhandle(reinterpret_cast<intptr_t>(h), _O_RDWR | _O_BINARY));
+  if (fd < 0) {
+    CloseHandle(h);
+    return -1;
+  }
+  if (gesher::RegisterOfd(fd, O_RDWR | O_LARGEFILE) < 0) {
+    int saved = errno;
+    _close(fd);
+    return errno = saved, -1;
+  }
+  return fd;
+}
+
 }  // namespace
 
 bool gesher::stdio::ParseMode(const char* mode, int* flags, char crt_mode[4]) {
@@ -827,5 +874,21 @@ int mkstemp(char* name) { return MakeTemp(name, 0, 0); }
 int mkostemp(char* name, int flags) { return MakeTemp(name, 0, flags); }
 int mkstemps(char* name, int suffix) { return MakeTemp(name, suffix, 0); }
 int mkostemps(char* name, int suffix, int flags) { return MakeTemp(name, suffix, flags); }
+
+// מיתר: tmpfile בשם של ה-CRT, כמו fopen ו-freopen למעלה (#355-א): זרם "w+" מעל הקובץ של
+// TemporaryFile, דרך fdopen של gesher-base, כמו tmpfile של bionic. ‏ashmem של AOSP
+// (libcutils/ashmem-host.cpp) יוצר דרכו כל אזור זיכרון משותף, ו-Tmpfile של bionic
+// (stdio_bionic.cc) מגיע אליו דרך std::tmpfile.
+FILE* tmpfile(void) {
+  int fd = TemporaryFile();
+  if (fd < 0) return nullptr;
+  FILE* stream = fdopen(fd, "w+");
+  if (stream == nullptr) {
+    int saved = errno;
+    close(fd);
+    errno = saved;
+  }
+  return stream;
+}
 
 }  // extern "C"
