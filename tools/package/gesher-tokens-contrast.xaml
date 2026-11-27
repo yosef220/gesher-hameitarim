@@ -1,0 +1,46 @@
+<!-- נוצר על ידי tools/ui/generate.py מתוך ui/tokens.json. לא לערוך ביד. ניגודיות גבוהה: צבעי המערכת בלבד, בלי Color. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <SolidColorBrush x:Key="GesherSurfaceBrush" Color="{x:Static SystemColors.WindowColor}"/>
+  <SolidColorBrush x:Key="GesherSurfaceRaisedBrush" Color="{x:Static SystemColors.WindowColor}"/>
+  <SolidColorBrush x:Key="GesherSurfaceHoverBrush" Color="{x:Static SystemColors.WindowColor}"/>
+  <SolidColorBrush x:Key="GesherSelectionBrush" Color="{x:Static SystemColors.WindowColor}"/>
+  <SolidColorBrush x:Key="GesherInkBrush" Color="{x:Static SystemColors.WindowTextColor}"/>
+  <SolidColorBrush x:Key="GesherInkMutedBrush" Color="{x:Static SystemColors.WindowTextColor}"/>
+  <SolidColorBrush x:Key="GesherInkDisabledBrush" Color="{x:Static SystemColors.GrayTextColor}"/>
+  <SolidColorBrush x:Key="GesherFillDisabledBrush" Color="{x:Static SystemColors.WindowColor}"/>
+  <SolidColorBrush x:Key="GesherBrandBrush" Color="{x:Static SystemColors.HighlightColor}"/>
+  <SolidColorBrush x:Key="GesherBrandHoverBrush" Color="{x:Static SystemColors.HighlightColor}"/>
+  <SolidColorBrush x:Key="GesherBrandPressedBrush" Color="{x:Static SystemColors.HighlightColor}"/>
+  <SolidColorBrush x:Key="GesherOnBrandBrush" Color="{x:Static SystemColors.HighlightTextColor}"/>
+  <SolidColorBrush x:Key="GesherLineBrush" Color="{x:Static SystemColors.WindowTextColor}"/>
+  <SolidColorBrush x:Key="GesherLineStrongBrush" Color="{x:Static SystemColors.WindowTextColor}"/>
+  <SolidColorBrush x:Key="GesherFocusBrush" Color="{x:Static SystemColors.HighlightColor}"/>
+  <SolidColorBrush x:Key="GesherStringBrush" Color="{x:Static SystemColors.HighlightColor}"/>
+  <SolidColorBrush x:Key="GesherStringGlowBrush" Color="{x:Static SystemColors.HighlightColor}"/>
+  <SolidColorBrush x:Key="GesherMastBrush" Color="{x:Static SystemColors.WindowTextColor}"/>
+  <SolidColorBrush x:Key="GesherDangerBrush" Color="{x:Static SystemColors.WindowTextColor}"/>
+  <SolidColorBrush x:Key="GesherOnDangerBrush" Color="{x:Static SystemColors.WindowColor}"/>
+  <sys:String x:Key="GesherDisplayFontFamily">David Libre</sys:String>
+  <sys:String x:Key="GesherUiFontFamily">IBM Plex Sans Hebrew</sys:String>
+  <sys:String x:Key="GesherFallbackFontFamily">Segoe UI</sys:String>
+  <sys:Double x:Key="GesherTypeCaptionSize">12</sys:Double>
+  <sys:Double x:Key="GesherTypeBodySize">14</sys:Double>
+  <sys:Double x:Key="GesherTypeListTitleSize">16</sys:Double>
+  <sys:Double x:Key="GesherTypeSectionSize">21</sys:Double>
+  <sys:Double x:Key="GesherTypeScreenTitleSize">24</sys:Double>
+  <sys:Double x:Key="GesherTypeWordmarkSize">36</sys:Double>
+  <CornerRadius x:Key="GesherRadiusWindow">10</CornerRadius>
+  <CornerRadius x:Key="GesherRadiusPanel">8</CornerRadius>
+  <CornerRadius x:Key="GesherRadiusButton">6</CornerRadius>
+  <CornerRadius x:Key="GesherRadiusPill">999</CornerRadius>
+  <!-- הגשר: מסגרת של 296x196, והקצוות של המסלול בגובה GesherBridgeDeckEndY -->
+  <sys:Double x:Key="GesherBridgeWidth">296</sys:Double>
+  <sys:Double x:Key="GesherBridgeHeight">196</sys:Double>
+  <sys:Double x:Key="GesherBridgeDeckEndY">182</sys:Double>
+  <Geometry x:Key="GesherBridgeMastGeometry">M 180.86,171.95 L 191.14,173.53 L 213.17,10.33 L 208.83,9.67 Z</Geometry>
+  <Geometry x:Key="GesherBridgeDeckGeometry">M 8.00,182.00 Q 148.00,162.00 288.00,182.00</Geometry>
+  <Geometry x:Key="GesherBridgeStringsGeometry">M 209.50,19.76 L 54.00,174.31 M 207.20,34.74 L 76.40,172.42 M 204.90,49.71 L 98.80,171.04 M 202.60,64.68 L 121.20,170.17 M 200.30,79.65 L 143.60,169.81 M 198.00,94.62 L 166.00,169.97</Geometry>
+  <Geometry x:Key="GesherBridgeStaysGeometry">M 207.50,32.78 L 246.00,174.70 M 202.50,65.33 L 246.00,174.70</Geometry>
+</ResourceDictionary>

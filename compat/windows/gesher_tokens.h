@@ -9,6 +9,9 @@
 /* לוח, דיאלוג ושדה קלט */
 #define GESHER_SURFACE_RAISED_LIGHT RGB(0xFF, 0xFF, 0xFF)
 #define GESHER_SURFACE_RAISED_DARK RGB(0x16, 0x24, 0x3A)
+/* משטח בריחוף: כפתור משני ושורה */
+#define GESHER_SURFACE_HOVER_LIGHT RGB(0xEE, 0xF1, 0xF5)
+#define GESHER_SURFACE_HOVER_DARK RGB(0x1E, 0x2D, 0x45)
 /* שורה נבחרת ברשימה */
 #define GESHER_SELECTION_LIGHT RGB(0xED, 0xE4, 0xD3)
 #define GESHER_SELECTION_DARK RGB(0x42, 0x39, 0x2A)
