@@ -326,7 +326,10 @@ int main(int argc, char** argv) {
   a4.s_addr = htonl(0x0A000102);
   CHECK(strcmp(inet_ntoa(a4), "10.0.1.2") == 0);
 
-  // Interfaces: loopback with an AF_PACKET entry; names round-trip.
+  // Interfaces: loopback with its IPv4 entry; names round-trip. An ordinary caller sees
+  // IP rows only (as on Android 11 and later): AF_PACKET link-layer rows come from the
+  // authenticated system-only inspection (NETLINK_ROUTE, #429), and this probe runs
+  // without a trusted host.
   ifaddrs* ifs = nullptr;
   CHECK(getifaddrs(&ifs) == 0 && ifs != nullptr);
   bool loopback_packet = false, loopback_v4 = false;
@@ -346,7 +349,7 @@ int main(int argc, char** argv) {
       }
     }
   }
-  CHECK(loopback_packet && loopback_v4);
+  CHECK(!loopback_packet && loopback_v4);
   freeifaddrs(ifs);
   CHECK(if_nametoindex("no-such-if") == 0);
   struct if_nameindex* ni = if_nameindex();
