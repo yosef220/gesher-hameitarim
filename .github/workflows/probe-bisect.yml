@@ -1,7 +1,7 @@
 name: probe-bisect
 
 # Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
-# איתור רגרסיה: בונה את posix_probe רק, מענף או קומיט שמצוינים, ומריץ אותו על Windows שלוש פעמים.
+# איתור רגרסיה: בונה את posix_probe רק, מענף או קומיט שמצוינים, ומריץ אותו על Windows שמונה פעמים.
 # במקום ריצה מלאה של ci.yml (שעה וחצי), זה לוקח כרבע שעה, ואפשר להריץ כמה ענפים במקביל:
 #   gh workflow run probe-bisect.yml --ref bisect/workflow -f ref=topic/pr-256
 # זה כלי אבחון בלבד. הוא לא קובע אם גרסה מוכנה, ולא מחליף את ci.yml.
@@ -54,16 +54,16 @@ jobs:
         with:
           name: posix-probe
           path: probe
-      - name: Run posix_probe three times
+      - name: Run posix_probe eight times
         shell: pwsh
         run: |
           $failed = 0
-          for ($i = 1; $i -le 3; $i++) {
+          for ($i = 1; $i -le 8; $i++) {
             $out = & "$PWD/probe/posix_probe.exe" 2>&1 | Out-String
             $code = $LASTEXITCODE
             "PROBE_RUN os=${{ matrix.os }} run=$i exit=$code"
             $out -split "`r?`n" | Where-Object { $_ -match '^FAIL|all passed|inotify routing|local-write routing' } | ForEach-Object { "  $_" }
             if ($code -ne 0) { $failed++ }
           }
-          "PROBE_SUMMARY os=${{ matrix.os }} failed_runs=$failed of 3"
+          "PROBE_SUMMARY os=${{ matrix.os }} failed_runs=$failed of 8"
           if ($failed -ne 0) { exit 1 }
