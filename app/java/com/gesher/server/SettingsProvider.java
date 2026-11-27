@@ -148,8 +148,28 @@ final class SettingsProvider extends ContentProvider {
                 && mTextStore.id(SECURE, CHECKER_SUBTYPE) < mTextStore.id(SECURE, SELECTED_CHECKER);
     }
 
+    /**
+     * Whether the location service is on (Windows' location setting), for the secure setting
+     * location_mode; set by Services once the location service exists. Null: the stored value.
+     */
+    static volatile java.util.function.BooleanSupplier sLocationEnabled;
+
     private String visible(String table, String name, String value) {
         if (value == null || !SECURE.equals(table)) return value;
+        if (Settings.Secure.LOCATION_MODE.equals(name)) {
+            // Apps (react-native-wifi-reborn, Wi-Fi scanners) read location_mode to learn whether
+            // location is on: it follows the location service, not a fixed "off".
+            java.util.function.BooleanSupplier enabled = sLocationEnabled;
+            if (enabled != null) {
+                try {
+                    return String.valueOf(enabled.getAsBoolean()
+                            ? Settings.Secure.LOCATION_MODE_HIGH_ACCURACY
+                            : Settings.Secure.LOCATION_MODE_OFF);
+                } catch (RuntimeException e) {
+                    return value;
+                }
+            }
+        }
         if (SELECTED_CHECKER.equals(name)) {
             int delimiter = value.indexOf('\n');
             return delimiter < 0 ? value : value.substring(0, delimiter);
