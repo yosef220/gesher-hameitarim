@@ -24,6 +24,7 @@ DIALOG_KEYS = [
     "cp_proxy_app_title", "cp_proxy_app_value", "cp_open_logs_failed",
     "cp_camera_image_picker_failed", "cp_proxy_save_failed", "cp_about_body",
     "cp_downloading", "cp_installing", "cp_update_exit_code", "cp_action_failed",
+    "cp_accounts_remove_confirm", "cp_web_intent_fallback_failed",
 ]
 
 
