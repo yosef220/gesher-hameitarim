@@ -85,6 +85,16 @@ final class AppDataStorage {
         this.metadata = metadata;
     }
 
+    /** The credential-encrypted data directory, as an absolute path string. */
+    String credentialDirectory() {
+        return credential.toString();
+    }
+
+    /** The device-encrypted data directory, as an absolute path string. */
+    String deviceDirectory() {
+        return device.toString();
+    }
+
     private static void requirePackageName(String packageName) {
         if (packageName == null
                 || !packageName.matches("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")) {

@@ -1,25 +1,44 @@
-Gesher: ART (Android's runtime) on Windows - a trial build
-==========================================================
+Gesher HaMeitarim: Android apps on Windows
+==========================================
 
 Requirements: Windows 10 or 11, x64. Nothing else needs installing.
 
+
+The original Gesher
+-------------------
+Gesher HaMeitarim is based on Gesher, created by palmoni5, who started it in October 2026 and
+wrote the overwhelming majority of it, with other contributors. On 25 November 2026 Gesher moved
+to a proprietary license and its repository was closed. Gesher HaMeitarim continues from its last
+version released under the Apache License 2.0. Thank you to palmoni5 and every contributor.
+
 Security
 --------
-The packaged Gesher launchers run Android app processes in Windows AppContainers.
-Gesher's Windows brokers provide access to authorized devices and desktop operations.
-Android permissions continue to govern Android APIs. Install only apps you trust.
+Android apps are not isolated from Windows. Gesher HaMeitarim runs each app
+as an ordinary Windows program, with the permissions of your Windows account.
+Android's permission prompts control what an app can do through Android's
+APIs; they do not stop its code, especially its native code, from reading and
+changing your files, using the network or starting programs. Treat an .apk
+like a downloaded .exe: install only apps you trust, from sources you trust.
+Per-app isolation (Windows AppContainer) is under development and disabled.
 
-Updating Gesher
----------------
-Open Gesher Control Center from the Start menu, or run:
+Updates
+-------
+Gesher HaMeitarim updates itself. Once a day, when you open an app or the
+Control Center, it checks for a new release, downloads it and verifies that
+the file is complete and is the one that was published. It installs the
+update only when no app is open, so it never closes an app you are using:
+the Gesher device stops by itself 10 minutes after the last app closes, and
+the update is then installed silently. Installed apps and their data are
+kept. You do not need to uninstall anything before updating.
 
-    gesher-app control-panel
+In the Gesher HaMeitarim Control Center (Start menu, or gesher-app
+control-panel), the Updates card can check now, turn off automatic
+installation (each update then waits for your approval) or turn off the
+automatic checks. What the automatic updater did is in
+%LOCALAPPDATA%\Gesher\logs\update-agent.log.
 
-The Updates card checks for stable GitHub releases. Automatic checks happen
-while the panel is open and can be disabled. You can also check manually.
-Save work in open Android apps before confirming an update: Setup stops the
-running Gesher device and upgrades the installation. Installed apps and their
-data are retained. You do not need to uninstall Gesher before updating.
+On a filtered network, updates need api.github.com, github.com,
+release-assets.githubusercontent.com and objects.githubusercontent.com.
 
 Running Hello
 -------------
@@ -85,7 +104,9 @@ Other options: --activity .Other (another Activity), --ez KEY true|false
 the launcher closes it; with --keep-task the app runs until it finishes;
 GESHER_APP_WINDOW=headless makes it the default), --hidden-window (the
 window is drawn off the desktop).
-The logs are in %LOCALAPPDATA%\Gesher\logs (<package>.log for an app).
+The logs are in %LOCALAPPDATA%\Gesher\logs (<package>.log for an app);
+the Control Center's "Open logs location" opens that folder (Data\logs in
+the installation folder of a portable install).
 
 Without the device, the app alone in one process with stand-in services:
 
@@ -119,3 +140,13 @@ What works, and what doesn't yet
 
 The runtime keeps the directories Android expects in %LOCALAPPDATA%\Gesher;
 uninstalling removes them.
+
+License
+-------
+Gesher HaMeitarim is offered under the PolyForm Strict License 1.0.0: use for
+noncommercial purposes only, with no right to distribute it (including this
+installer) or to make changes or new works based on it. Any other use, including
+use in a business, needs a separate written license from the repository owner,
+https://github.com/yosef220. The parts that come from Gesher remain under the
+Apache License 2.0. The licenses are in the licenses folder:
+GESHER-HAMEITARIM-LICENSE.txt and GESHER-APACHE-LICENSE-2.0.txt.

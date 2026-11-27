@@ -26,7 +26,15 @@ struct OpenFileDescription {
     // Immutable after a fresh descriptor is attached, before publication.
     // Empty for ordinary descriptors; otherwise a shared revocation group ID.
     char revocation[33];
+    // POSIX FIFO identity and initial mode/epoch (all zero for non-FIFO fds).
+    uint32_t fifo_vol;
+    uint32_t fifo_idx_hi;
+    uint32_t fifo_idx_lo;
+    uint32_t fifo_mode;
+    uint64_t fifo_writer_gen;
   };
+  using FifoCleanupFn = void (*)(uint32_t vol, uint32_t idx_hi, uint32_t idx_lo,
+                                 HANDLE read_holder, HANDLE write_holder);
   std::atomic<DescriptorKind> kind{DescriptorKind::kFile};
   std::atomic<int> local_flags{0};
   // Native handles discovered through the CRT are initialized only after the
@@ -39,6 +47,9 @@ struct OpenFileDescription {
   std::atomic<Shared*> shared{nullptr};
   HANDLE mapping = nullptr;
   HANDLE pipe_mutex = nullptr;
+  HANDLE fifo_read_holder = nullptr;
+  HANDLE fifo_write_handle = nullptr;
+  FifoCleanupFn fifo_cleanup = nullptr;
   std::mutex mutex;
   std::shared_ptr<RevocableFileGroup> revocation;
   // Immutable once the new descriptor is published. Aliases share it via this OFD.
@@ -50,9 +61,13 @@ struct OpenFileDescription {
   bool Adopt(HANDLE inherited);  // takes ownership only on success
   bool OwnedPipe() const;
   bool KnownPipeStatus() const;
+  bool IsFifo() const;
   void ExposePipe(bool exposed);
   void PipeTransition(bool changing);
 };
+
+using FifoAdoptHookFn = void (*)(OpenFileDescription* description, HANDLE file_handle);
+void RegisterFifoAdoptHook(FifoAdoptHookFn adopt_hook, OpenFileDescription::FifoCleanupFn cleanup_hook);
 
 // Flags retained by Linux F_GETFL, excluding creation-only options.
 inline constexpr int kFileStatusFlagsMask =

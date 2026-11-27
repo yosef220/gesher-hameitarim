@@ -1,0 +1,71 @@
+# תור ענף המוצר: PRs שעוד לא אושרו ב-upstream, לפי סדר המיזוג.
+# נבנה עם tools/integration/build_product.py, והשיטה מתועדת ב-docs/he/07-upstream-sync.md.
+# עמודות מופרדות בטאב: מזהה, מקור (remote:ref), ‏SHA נעוץ, ‏PRs ב-upstream, גל, תיאור
+pr-464	origin:refs/heads/topic/pr-464	2938007b47dd7a5d52a222bf285832834d63aa23	464	1	לא לדווח על Play services, חשבון Google או טוקן דחיפה שלא קיימים (issue #335)
+pr-491	upstream:refs/pull/491/head	d38b9ee9e8a6443800ed7ac2d7eb9ec2670aff06	491	1	דיאלוג מידע על האפליקציה במקום בקשת הסרה (issue #472)
+lev-app-compat	origin:refs/heads/topic/lev-app-compat	2c0f496ceef606e222172a546fca25e4fe0df95d	454,455,493	1	הענף fix/app-compat של Lev-Good ‏(v0.2.0-lev3): ‏SOCKS5, נתיבי profman, ספקי תוכן מתנגשים, mkfifo ורישום התקנה
+# ‏pr-403 הוצא (26.11): כבר ב-main. ‏upstream מיזג את #402 ו-#403 כחלק מ-#421 (a0291539a), כולל הקומיט
+# "network specifier requests and suggestions through user-approved Windows profiles" ותיקונים שאחריו:
+# ‏WlanProfiles.java, ‏WindowsWifiTransportTest ו-ADR 0093. ההתנגשויות היו אותו קוד בשתי גרסאות.
+# pr-403	upstream:refs/pull/403/head	e9f4035c39f7f36b974bc72397c55905666169e7	402,403	1	Wi-Fi: בדיקות WifiManager כמו באנדרואיד (‏#402), ובקשות רשת והצעות רשת דרך אישור המשתמש (‏#403, מכיל את #402)
+# ‏pr-427 ממתין (26.11): ‏91 קומיטים ו-176 קבצים (כ-17,000 שורות) מבסיס ישן (#262), מעל ה-PoC של #323
+# שכבר ב-main, ומתנגש ב-23 קבצים. כבוי כברירת מחדל, ולכן נדחה לסוף, לענף נושא ייעודי.
+pr-427	upstream:refs/pull/427/head	950dc2dbee2454d35e0f7265d50d146f41638264	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל
+# הוצא ב-25.11: ‏main כבר מממש את הייצוא של libstdc++.so ב-compat/bionic/cxx_bionic.cc (מ-#432, התיקון של Dreame),
+# כולל SIGABRT למטפל של האפליקציה (tests/native2/libstdcxx_fatal_test.cpp). ‏#484 מוסיף מימוש שני של אותן
+# פונקציות ב-shim.cc, ושני מימושים יחד היו מתנגשים.
+# pr-484	upstream:refs/pull/484/head	4b0eae2fa38cbf7aa1ad2d55b741ede900b953cf	484	1	abort דרך ה-abort של bionic, וכיסוי libstdc++.so
+# מוזגו ב-upstream אחרי המעבר לרישיון קנייני (25.11). נכנסים מהגרסה של התורם מלפני השינוי
+# (refs/apache-snapshot/pr/*), שנשמרה כענף נושא topic/pr-<מספר>.
+pr-416	origin:refs/heads/topic/pr-416	10e75d8bdbe46fdea1c3e3ec591d61a9c8384367	416	2	DownloadManager: ‏content://downloads והורדות שהשרת של המערכת מריץ (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-451	origin:refs/heads/topic/pr-451	d9e2ad871a485a7758529543e7b3d78d5ddd5a42	451	2	הקראת טקסט (Text-to-speech) בקולות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-473	origin:refs/heads/topic/pr-473	59c46d223b32cda7c8cc6435738eb2135dae768e	473	3	Passkeys דרך ה-WebAuthn של Windows (Credential Manager) (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-450	origin:refs/heads/topic/pr-450	0ff8f9bde10e7972e8c1236626852b121171664f	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-468	origin:refs/heads/topic/pr-468	0944c1433c779b29a8a3392ef18ceb5d7f6f3342	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-475	origin:refs/heads/topic/pr-475	1d8346ff1440c970e38912d785d172c3b980f03e	340,470,471,475	1	סדרת Windows Hello: הרשאות AuthService ‏(‏#340), ‏Windows Hello עסוק (‏#470), המתנה תחומה אחרי ביטול (‏#471) ותיעוד (‏#475, מכיל את כולם)
+pr-256	origin:refs/heads/topic/pr-256	52a72360d938f5c9e21006c2f5c2694b84a49dec	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
+# ‏pr-475 ממתין: ‏main קיבל את השלב הקודם של סדרת Windows Hello בגרסה אחרת (#366, ‏e074b67b2), וה-PR המשיך
+# מאותה נקודה בכיוון אחר. מול main יש 75 מקטעים בהתנגשות (כ-1,800 שורות), רובם בלוגיקה של AuthService,
+# ‏WindowsHello ו-PackageManagerService. צריך ענף נושא ייעודי שעובר על כל מקטע ומבין את שני הצדדים.
+# ‏pr-256 (26.11): ‏topic/pr-256 ממזג את main. ההפניה ל-FIFO ב-pipe_io.cc נמצאת לפני הלולאה של ptrace, הגיבובים
+# של הכשרת OFD חושבו מחדש לפי preceding_ofd_sources, ונוספו חלקים חלופיים של FIFO לשלוש רתמות מארח שלא
+# התקמפלו כבר בגרסה של #256. ‏test-selected-policy.py ובדיקות הרתמות עוברים מקומית.
+# מושבת ב-25.11: הגרסה של #500 מלפני המעבר של upstream לרישיון קנייני משנה שישה קבצים נעוצים בהכשרת
+# המקורות (internal.h, ‏socket.cc, ‏system.cc, ‏unistd.cc, ‏fsops.cc, ‏posix.cmake) בלי לעדכן את הנעיצות, והעדכון
+# שלהן ב-PR הגיע רק אחרי השינוי. כדי להחזיר: ענף נושא שמפיק מחדש את הנעיצות. ‏#312 מטופל חלקית ע"י #332.
+# pr-500	upstream:refs/pull/500/head	f608bcfeb0ffe303e46ef34b85a9c1884e3d8377	500	1	אכיפת MANAGE_EXTERNAL_STORAGE ואחסון מוגבל, כמו באנדרואיד (issue #312, משלים את #332)
+# גל 2 (26.11.2026): ‏21 PRs שנכנסים ברצף מעל product בלי התנגשות, מהעותקים מלפני השינוי ברישיון
+# (הענף archive/apache-snapshots). הוצאו: #81 (מדווח על סנכרון SMTC שלא קורה), ‏#374 (רק האוטומציה של
+# upstream למיזוג, שכבויה אצלנו), ‏#479 (חלון לא גדול מהמסך הווירטואלי: מחכה להחלטה של בעל המאגר).
+# גל 2 (26.11), אחרי ניתוח הכשלים בריצה 45847382858. ארבעה פריטים הוצאו, וכל השאר חזרו:
+# - ‏#389 חזר דרך topic/pr-389: החוזה שלו קרא את Image::data, שאחרי #453 ריק בתמונות RGBA, והניח
+#   שקורא PRIVATE מקבל I420. החוזה קורא עכשיו את החוצץ המשותף, והקוד של #389 לא השתנה.
+# - ‏#393 חזר דרך topic/pr-393: הבקר TsfJobSupervisor.cs בודק את גודל הפלט דרך ידית נפרדת. שתי מפות
+#   הנעיצה של עבודת ה-TCP עודכנו לגיבובים שלו אחרי קריאת השינוי, והגיבובים הקודמים נדחים.
+# - ‏#441 חזר דרך topic/pr-441: החוזים שלו ל-ASCII נכשלו על Windows כי p.Check של native2 מאפס את
+#   errno אחרי כל בדיקה. המתאם שומר אותו עכשיו. החוזים והקבצים שהראיות מקפיאות לא השתנו.
+# - ‏#434: ראו למטה.
+pr-266	origin:refs/heads/archive/apache-snapshots	6c43bd3b5c2f5348c5fcd5b129ff58ab3118ee8b	266	2	ביצועים: זמן חיים מוגבל לבקשות ל-authenticator של חשבונות (NATIVE-10 A)
+pr-290	origin:refs/heads/archive/apache-snapshots	4ecfd19b7629a975cf03c2a51ed30bbe0a89560f	290	2	ממשק: האייקונים והצלילים של MessageBox בהודעות של המארח
+pr-336	origin:refs/heads/archive/apache-snapshots	67c55c5193258ab8572a951d2ed9a354da7ae949	336	2	ביצועים: שימוש חוזר בחוצצי הקלט והפלט של AVC
+pr-338	origin:refs/heads/archive/apache-snapshots	77c305a7d393fc73bd7baad437b296d09a7183be	338	2	ביצועים: אינדקס לשליחה ל-observers של content, בלי לשנות את סדר המסירה של Android
+pr-341	origin:refs/heads/archive/apache-snapshots	2f9ce398e84d57f1278cddbd8277a3c83b96c0a0	341	2	HTTP: הזרמה של תשובות Brotli, עם בעלות מוגבלת בצד ה-native
+pr-353	origin:refs/heads/archive/apache-snapshots	d725b66d8518cc7d90c7475d0c00aa1eb6e7571a	353,390	2	ביצועים: משפחות הרכיבים נבנות פעם אחת לכל שאילתת intent ב-PackageManager (מכיל את #390: אודיו, קלט חוסם שהוכן נשמר בזמן מיקס של השלמה)
+pr-380	origin:refs/heads/archive/apache-snapshots	261a7ee6bcc34fd75c9cef94ef3cdaf75c77c2d7	380	2	אפקטים של עוצמת קול של Android לנגנים של OpenSL ES
+pr-389	origin:refs/heads/topic/pr-389	54a9129b88be94d2fe53bc6174eab946fd68b77c	389	2	ביצועים: מקדמי הכרומה של NV12 ל-RGBA נשמרים בין פריימים במצלמה
+pr-393	origin:refs/heads/topic/pr-393	9e2c9a1b0cf94e4d21e23e0902649338a56e81f5	393	2	CI: בידוד של observers של המטא-דאטה של TSF מכותבים שממתינים
+pr-394	origin:refs/heads/archive/apache-snapshots	d664ac2a90507b26b6b8a281ea6874063b94618a	394	2	בדיקה: DNS מחכה לקריאה האמיתית של ה-timeout ולסיום של ה-executor
+pr-404	origin:refs/heads/archive/apache-snapshots	14fd8fcb01887d7883d4a209dd0762f90ef6bf0b	404	2	מדיה: מקדמי ה-resampler נשמרים בתוך כל מיקס
+pr-411	origin:refs/heads/archive/apache-snapshots	9f10e0845739ecbe1496fd5f0173ed000bb320da	411	2	בדיקה: UsbManager זמין בזמן ההפעלה של אפליקציה מותקנת (#407)
+pr-412	origin:refs/heads/topic/pr-412	60d1c1a739f205e123b7882959c6cefa9405b881	412	2	ביצועים: המרת שורות לחיתוך אי-זוגי של I420 בלי חישוב חוזר
+pr-415	origin:refs/heads/topic/pr-415	eca036b879e6ae83a2654a9ce6d9724d45a2a75c	415	2	ביצועים: בלי הקצאות של Formatter בתמציות הזהות של שירותים
+pr-420	origin:refs/heads/archive/apache-snapshots	7cd662bd2f2ed1995a5d88f0f0f7e138d6b6fc17	420	2	CI: הקריאה של רשימת הגרסאות הציבורית דרך אותה קריאה מאומתת ומוגבלת
+pr-424	origin:refs/heads/archive/apache-snapshots	9b5e595bdd93a664a04363fcf4e45b9d6f36d78a	424	2	ביצועים: bionic חוזר למסלול שהצליח במחיקה של עץ תיקיות
+pr-428	origin:refs/heads/archive/apache-snapshots	57f9310913419ab529387c6f59e2c7a43d3f8361	428	2	ביצועים: דילוג על מילים בלי אפסים בכתיבה של Annex-B לקובץ MP4
+# pr-434 הוצא מגל 2 (26.11): הראיות שלו (docs/research/uri-grant-retirement-2026-11-23.json) מוצמדות
+# לגרסאות של ApkPackage.java, ‏ContentProviders.java ו-PackageManagerService.java מלפני #353 ושאר הפריטים,
+# ו-test_uri_retirement_report.py נכשל בכוונה על ראיות מקוד שהשתנה. עדכון של טביעות האצבע בלי מדידה
+# חדשה היה מציג מדידה שלא נעשתה. נכנס אחרי קמפיין מדידה חדש על הקוד המשולב.
+#pr-434	origin:refs/heads/archive/apache-snapshots	1462b55fc0bf72f2a2e1a385ad2990f0bdcf6a6e	434	2	ביצועים: הרשאות ה-URI של חבילה מותקנת מבוטלות פעם אחת בכל פרסום
+pr-436	origin:refs/heads/archive/apache-snapshots	477d23da682c909639e625ee9f16c1192b8e60b0	436	2	בדיקה: שמירה של fixtures וקבלה מחדש של ספקים בבדיקות השירותים
+pr-441	origin:refs/heads/topic/pr-441	6d595403fd556b539bb5bf4401968cbad8384f92	441	2	ביצועים: המרה של ASCII למחרוזת רחבה בלי שלב ביניים של multibyte
