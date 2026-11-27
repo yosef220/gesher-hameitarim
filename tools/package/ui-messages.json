@@ -650,7 +650,7 @@
     },
     "cp_proxy_save_failed": {
       "en": "Failed to save the proxy: {0}",
-      "he": "שמירת הפרוקסי נכשלה: {0}"
+      "he": "שמירת הפרוקסי נכשלה: ⁨{0}⁩"
     },
     "cp_btn_proxy": {
       "en": "Proxy",
@@ -782,7 +782,7 @@
     },
     "cp_action_failed": {
       "en": "The operation failed (exit code {0}).",
-      "he": "הפעולה נכשלה (קוד יציאה {0})."
+      "he": "הפעולה נכשלה (קוד יציאה ⁨{0}⁩)."
     },
     "cp_action_finish": {
       "en": "Wait for the current operation to finish before closing.",
@@ -810,7 +810,7 @@
     },
     "cp_about_body": {
       "en": "Meitar {0}\nBased on Gesher\n\nGesher was created by palmoni5, with other contributors. On 25 November 2026 it moved to a proprietary license and its repository was closed. Meitar continues from its last version released under the Apache License 2.0.\n\nThank you to palmoni5 and everyone who contributed.\n\nPersonal use only. The licenses are in the licenses folder of the installation.",
-      "he": "מיתר {0}\nמבוסס על Gesher\n\nGesher נוצר על ידי palmoni5, עם תורמים נוספים. ביום 25.11.2026 הוא עבר לרישיון קנייני והמאגר שלו נסגר. מיתר ממשיך מהגרסה האחרונה שלו שפורסמה תחת Apache 2.0.\n\nתודה ל-palmoni5 ולכל מי שתרם.\n\nשימוש אישי בלבד. הרישיונות נמצאים בתיקייה licenses שבתיקיית ההתקנה."
+      "he": "מיתר ⁨{0}⁩\nמבוסס על Gesher\n\nGesher נוצר על ידי palmoni5, עם תורמים נוספים. ביום 25.11.2026 הוא עבר לרישיון קנייני והמאגר שלו נסגר. מיתר ממשיך מהגרסה האחרונה שלו שפורסמה תחת Apache 2.0.\n\nתודה ל-palmoni5 ולכל מי שתרם.\n\nשימוש אישי בלבד. הרישיונות נמצאים בתיקייה licenses שבתיקיית ההתקנה."
     },
     "cp_open_logs_failed": {
       "en": "Could not open the logs folder: ⁨{0}⁩",
@@ -826,11 +826,11 @@
     },
     "cp_downloading": {
       "en": "Downloading {0}…",
-      "he": "מוריד את {0}…"
+      "he": "מוריד את ⁨{0}⁩…"
     },
     "cp_installing": {
       "en": "Installing {0}…",
-      "he": "מתקין את {0}…"
+      "he": "מתקין את ⁨{0}⁩…"
     },
     "files_all": {
       "en": "All files",
@@ -1094,7 +1094,7 @@
     },
     "cp_update_exit_code": {
       "en": "Setup exit code: {0}",
-      "he": "קוד היציאה של תוכנית ההתקנה: {0}"
+      "he": "קוד היציאה של תוכנית ההתקנה: ⁨{0}⁩"
     },
     "cp_update_finish_setup": {
       "en": "Finish or cancel setup before closing the control center.",
@@ -1130,7 +1130,7 @@
     },
     "cp_camera_image_picker_failed": {
       "en": "Could not save the camera setting: {0}",
-      "he": "שמירת הגדרת המצלמה נכשלה: {0}"
+      "he": "שמירת הגדרת המצלמה נכשלה: ⁨{0}⁩"
     },
     "cp_search_hint": {
       "en": "Search apps",
