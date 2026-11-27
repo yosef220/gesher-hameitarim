@@ -32,11 +32,16 @@
 #   gesher-app windows com.example separate  each task of the app in a window of its own
 #                                      (`shared`: one window for the app, the default;
 #                                      from its next start; ADR 0088)
+#   gesher-app special-access com.example  (the Control Center runs it) the app's special
+#                                      access switches; `special-access com.example OP
+#                                      allow|deny`: the user's choice for one
+#   gesher-app settings-closed TOKEN...  (the Control Center runs it) the app details it
+#                                      showed for these Settings requests closed
 #   gesher-app list                    the installed packages
 #   gesher-app status                  the device's processes
 #   gesher-app cameras                 list Windows cameras and their frame sizes
 #   gesher-app cameras rear CAMERA_ID  record a physically rear-mounted Windows camera
-#   gesher-app cameras reset           clear the mounting choice (external cameras)
+#   gesher-app cameras reset           clear the mounting choice (front cameras)
 #   gesher-app shutdown                stop the device
 #   gesher-app toast-activated         (COM runs it: Gesher's toast activator) a click
 #                                      on an app's toast, given to the device (ADR 0051)
@@ -61,10 +66,12 @@ param(
   [Parameter(ValueFromRemainingArguments)] [string[]] $Arguments = @()
 )
 $ErrorActionPreference = 'Stop'
-# AppContainer M1 is a developer probe. Installed app launches use the ordinary runtime.
-Remove-Item Env:GESHER_SANDBOX -ErrorAction SilentlyContinue
+# גשר המיתרים: בידוד ה-AppContainer כבוי כברירת מחדל, עד בדיקות "אפליקציה עוינת" (docs/he/02-work-plan.md).
+# רק הערך המפורש GESHER_SANDBOX=appcontainer-trusted מפעיל אותו. כל ערך אחר, כולל ה-PoC (appcontainer), נמחק.
+if ($env:GESHER_SANDBOX -cne 'appcontainer-trusted') { Remove-Item Env:GESHER_SANDBOX -ErrorAction SilentlyContinue }
 $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
 . (Join-Path $scriptRoot 'gesher-ui.ps1')
+. (Join-Path $scriptRoot 'gesher-runtime-files.ps1')
 $here = $scriptRoot
 
 # When started interactively from Explorer (.apk double-click or Start menu shortcut),
@@ -91,16 +98,17 @@ try {
   }
 } catch { }
 
-$root = Join-Path $env:LOCALAPPDATA 'Gesher'
+$root = Set-GesherProfileEnvironment $here
 # The optional addon installer records an explicit per-profile choice. An explicit
 # environment value (including 0) takes precedence for a single invocation.
 $enableMicrogForProfile = -not $env:GESHER_MICROG_SPOOF -and (Test-Path (Join-Path $root 'microg.enabled'))
-$commands = 'install', 'uninstall', 'view', 'list', 'status', 'start', 'shutdown', 'launch', 'toast-activated', 'apk-icon', 'proxy', 'windows', 'sync-shortcuts', 'cameras', 'spell-checker'
+$commands = 'install', 'uninstall', 'view', 'list', 'status', 'start', 'shutdown', 'launch', 'toast-activated', 'apk-icon', 'proxy', 'windows', 'special-access', 'settings-closed', 'settings-shown', 'sync-shortcuts', 'cameras', 'spell-checker', 'mobile-data'
 if ($Arguments.Count -eq 0) {
   Write-Host ((Get-GesherText 'usage') + 'gesher-app APK [--window | --hidden-window | --headless [--keep-task]] [--activity CLASS] [--ez KEY true|false]... [--proxy host:port|direct|windows] [--detach | --wait | --single-process | --system-server]')
   Write-Host '       gesher-app launch PACKAGE|APK [options] | install APK | uninstall PACKAGE | view PACKAGE URL | list | status | start | shutdown | proxy [[PACKAGE] host:port|direct|windows] | windows PACKAGE separate|shared'
   Write-Host '       gesher-app spell-checker list|use COMPONENT|automatic|enable|disable|language ID'
   Write-Host '       gesher-app cameras [rear CAMERA_ID | reset]'
+  Write-Host '       gesher-app mobile-data [on|off] | mobile-data roaming [on|off]'
   exit 2
 }
 $command = $Arguments[0]
@@ -109,6 +117,16 @@ $rest = @($Arguments | Select-Object -Skip 1)
 if ($command -in 'control-panel', 'settings', 'dashboard', 'gui') {
   & (Join-Path $here 'gesher-control-panel.ps1') @rest
   exit $LASTEXITCODE
+}
+
+# גשר המיתרים: העדכון האוטומטי בזמן פתיחה של אפליקציה (gesher-runtime-files.ps1).
+if (($command -in 'launch', 'view', 'toast-activated') -or ($commands -notcontains $command)) {
+  if (Wait-GesherUpdateInstall -ProfileDirectory $root -InstallDirectory $here) {
+    # עדכון הותקן בזמן ההמתנה: הגרסה החדשה של gesher-app מריצה את אותה פקודה.
+    & ([Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'gesher-app.ps1') @Arguments
+    exit $LASTEXITCODE
+  }
+  $null = Start-GesherUpdateAgentIfDue -ProfileDirectory $root -InstallDirectory $here
 }
 
 # Reads the device's state file (Java properties: key=value, '\' escapes).
@@ -138,8 +156,8 @@ function DeviceProcess($state, [string] $name) {
 
 # `gesher-app shutdown`, without starting a runtime: the system server's
 # shutdown event, then whatever is left is ended.
-if ($command -eq 'shutdown') {
-  $state = DeviceState
+if ($command -eq 'shutdown') { $state = DeviceState }
+if ($command -eq 'shutdown' -and (-not $state -or $state['protected_binder'] -ne 'true')) {
   if (-not $state) { Write-Host ('gesher-app: ' + (Get-GesherText 'no_device')); exit 0 }
   $server = DeviceProcess $state 'system_server'
   if ($server) {
@@ -170,7 +188,6 @@ if ($commands -notcontains $command) {
   $apkFull = (Resolve-Path -LiteralPath $rest[0]).Path
   $rest = @($rest | Select-Object -Skip 1)
 }
-. (Join-Path $here 'gesher-runtime-files.ps1')
 Set-Location -LiteralPath $here
 # A Windows path as gesher-base's path model reads it (docs/posix.md): no drive
 # on the current drive, /mnt/<drive>/... on another, so ':'-separated lists
@@ -208,6 +225,13 @@ if (Test-Path (Join-Path $here 'com.android.location.provider.jar')) {
   New-Item -ItemType Directory -Force (Join-Path $root 'system/etc/permissions') | Out-Null
   Install (Join-Path $here 'com.android.location.provider.jar') (Join-Path $root 'system/framework/com.android.location.provider.jar')
   Install (Join-Path $here 'etc/permissions/com.android.location.provider.xml') (Join-Path $root 'system/etc/permissions/com.android.location.provider.xml')
+}
+foreach ($library in 'android.test.base', 'android.test.mock', 'android.test.runner') {
+  if (Test-Path (Join-Path $here "$library.jar")) {
+    New-Item -ItemType Directory -Force (Join-Path $root 'system/etc/permissions') | Out-Null
+    Install (Join-Path $here "$library.jar") (Join-Path $root "system/framework/$library.jar")
+    Install (Join-Path $here "etc/permissions/$library.xml") (Join-Path $root "system/etc/permissions/$library.xml")
+  }
 }
 if (Test-Path (Join-Path $here 'etc/permissions/privapp-permissions-microg.xml')) {
   New-Item -ItemType Directory -Force (Join-Path $root 'system/etc/permissions') | Out-Null
@@ -313,10 +337,19 @@ try {
   # Single process: the app alone, with stand-in services in its own process.
   $DriverArgs = @($rest | Where-Object { $_ -ne '--single-process' })
   if ($DriverArgs -notcontains '--system-server') {
-    Invoke-Dalvikvm @dvm com.gesher.app.Main @DriverArgs (UserPath $apkFull)
+    if ($env:GESHER_SANDBOX -ceq 'appcontainer-trusted') {
+      Invoke-Dalvikvm @dvm com.gesher.app.Launcher @launchErrorArguments launch-cohost (UserPath $apkFull) @DriverArgs
+    } else {
+      Invoke-Dalvikvm @dvm com.gesher.app.Main @DriverArgs (UserPath $apkFull)
+    }
     exit $LASTEXITCODE
   }
 
+  if ($env:GESHER_SANDBOX -ceq 'appcontainer-trusted') {
+    $ScopedArgs = @($DriverArgs | Where-Object { $_ -ne '--system-server' })
+    Invoke-Dalvikvm @dvm com.gesher.app.Launcher @launchErrorArguments launch-scoped @ScopedArgs (UserPath $apkFull)
+    exit $LASTEXITCODE
+  }
   # A device of this run only: binderd, servicemanager and the system server with
   # the APK, then the app in this console's process; the three are stopped when it exits.
   $logs = Join-Path $root 'logs'

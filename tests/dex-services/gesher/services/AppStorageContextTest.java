@@ -165,6 +165,56 @@ public final class AppStorageContextTest {
                 "new LoadedApk/Context lost independently persisted areas");
     }
 
+    /**
+     * A package Gesher describes without an APK (the Windows browser; since #335 Play
+     * services are described only when microG is installed) has its data areas where an
+     * installed package of that name has them, under $ANDROID_DATA, and they are never
+     * created. Another app opening its context (createPackageContext(...).getSharedPreferences)
+     * cannot write there, as it cannot on Android, and nothing is created outside the
+     * device's data root ("/data/data/..." is the root of the current Windows drive).
+     */
+    private static void describedPackages(Context client, File data) throws Exception {
+        // גשר המיתרים: אחרי #464 שירותי Play מתוארים רק כש-microG מותקן, ולכן הבדיקה
+        // בודקת את אותה התנהגות על החבילה המתוארת שנשארת, הדפדפן של Windows
+        String described = "com.gesher.browser";  // BrowserPackageSupport.PACKAGE
+        File rootLegacy = new File("/data/data/" + described);
+        boolean legacyExisted = rootLegacy.exists();
+        ApplicationInfo info = client.getPackageManager().getApplicationInfo(described, 0);
+        File credential = new File(new File(data, "data"), described);
+        File device = new File(new File(data, "user_de/0"), described);
+        check(new File(info.dataDir).getCanonicalFile().equals(credential.getCanonicalFile())
+                        && info.dataDir.equals(info.credentialProtectedDataDir)
+                        && new File(info.deviceProtectedDataDir).getCanonicalFile()
+                                .equals(device.getCanonicalFile())
+                        && info.nativeLibraryDir != null
+                        && info.nativeLibraryDir.startsWith(info.dataDir),
+                "stand-in package data areas are not an installed package's under $ANDROID_DATA: "
+                        + info.dataDir + ", " + info.deviceProtectedDataDir + ", " + info.nativeLibraryDir);
+        check(!credential.exists() && !device.exists(),
+                "describing the stand-in package created its data areas");
+
+        // גשר המיתרים: החלק הזה בדק שאפליקציה שפותחת את ההקשר של שירותי Play
+        // (AdvertisingIdClient) לא יכולה לכתוב להעדפות שלהם. אחרי #464, בלי microG, שירותי Play
+        // לא מתוארים בכלל, וההתנהגות הכנה היא של אנדרואיד בלי Play: הבקשה להקשר נכשלת.
+        // ההקשר של הדפדפן דורש את GesherBrowser.apk, שלא קיים בסביבת הבדיקה.
+        boolean absent = false;
+        try {
+            client.createPackageContext("com.google.android.gms", 0);
+        } catch (android.content.pm.PackageManager.NameNotFoundException expected) {
+            absent = true;
+        }
+        check(absent, "Play services' context was created although Play services are not installed");
+        check(!credential.exists() && !device.exists(),
+                "describing a package created its private data area");
+        check(legacyExisted || !rootLegacy.exists(),
+                "describing a package created " + rootLegacy + " at the root of the drive");
+
+        ApplicationInfo browser = client.getPackageManager().getApplicationInfo("com.gesher.browser", 0);
+        check(new File(browser.dataDir).getCanonicalFile().equals(
+                        new File(new File(data, "data"), "com.gesher.browser").getCanonicalFile()),
+                "the browser package's data area is outside $ANDROID_DATA: " + browser.dataDir);
+    }
+
     private static int databaseValue(Context context, String name) {
         try (SQLiteDatabase db = context.openOrCreateDatabase(name, 0, null);
                 Cursor cursor = db.rawQuery("SELECT value FROM values_table", null)) {
@@ -193,6 +243,7 @@ public final class AppStorageContextTest {
         exercise(MediaRouterContractTest.context(ordinary.packageName), ordinary, false);
         exercise(MediaRouterContractTest.context(requested.packageName), requested, false);
         exercise(MediaRouterContractTest.context(device.packageName), device, true);
+        describedPackages(MediaRouterContractTest.context(ordinary.packageName), data);
         System.out.println("AppStorageContextTest all passed: " + checks + " checks");
         System.exit(0);
     }
