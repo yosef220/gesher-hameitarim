@@ -94,6 +94,18 @@ public final class Services {
 
     /** Trusted standalone startup: admit the actual APK before selecting the VM identity. */
     public static InProcessApplication createInProcess(ApkPackage pkg) {
+        if (Zygote.nativeHasCohostPermissionScope()) {
+            int uid = android.os.Process.myUid();
+            if (uid < android.os.Process.FIRST_APPLICATION_UID
+                    || !Zygote.nativeCohostOwnsApk(Zygote.windowsPath(pkg.apkPath))) {
+                throw new SecurityException("The contained APK does not match the host admission");
+            }
+            pkg.assignUid(uid);
+            android.permission.PermissionManager.disablePermissionCache();
+            android.permission.PermissionManager.disablePackageNamePermissionCache();
+            return new InProcessApplication(pkg,
+                    new PackageManagerService(java.util.List.of(pkg), false, true));
+        }
         return new InProcessApplication(pkg,
                 new PackageManagerService(java.util.List.of(pkg), false));
     }
@@ -103,14 +115,29 @@ public final class Services {
     }
 
     static Created create(PackageManagerService pm, boolean persistentAccounts) {
+        return create(pm, persistentAccounts, new PermissionRequests(pm));
+    }
+
+    static Created create(PackageManagerService pm, boolean persistentAccounts,
+            PermissionRequests permissionRequests) {
         Map<String, IBinder> services = new LinkedHashMap<>();
-        ActivityTaskManagerService atm = new ActivityTaskManagerService(pm);
+        ActivityTaskManagerService atm = new ActivityTaskManagerService(pm, permissionRequests);
         pm.attachInstallSourceCallers(atm);
         NotificationManagerService notifications = new NotificationManagerService();
         ActivityManagerService am = new ActivityManagerService(atm, pm, notifications);
         ClipboardService clipboard = new ClipboardService(atm, pm);
         Created created = new Created(pm, atm, am, clipboard, services);
         sLast = created;
+        if (SystemServer.isProtectedDevice()) {
+            ProtectedCameraPolicy camera = new ProtectedCameraPolicy(pm);
+            if (!Zygote.nativeAttachCapturePermissionPolicy((uid, kind, high, low, session, tag) ->
+                    kind == Zygote.CapturePolicy.MICROPHONE
+                        ? pm.checkUidPermission(android.Manifest.permission.RECORD_AUDIO, uid)
+                            == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        : camera.installed(uid, kind, high, low, session, tag, am))) {
+                SystemServer.log("The protected capture permission channel is unavailable");
+            }
+        }
         services.put("uri_grants", StandIn.of(android.app.IUriGrantsManager.class,
                 new UriGrantsManagerService(pm, atm, am)).asBinder());
         services.put("package", StandIn.of(IPackageManager.class, pm).asBinder());
@@ -216,9 +243,27 @@ public final class Services {
             services.put(Context.PRINT_SERVICE, StandIn.of(android.print.IPrintManager.class,
                     print).asBinder());
         }
+        // content://media: MediaStore over the shared volume (docs/media-provider.md).
+        try {
+            MediaStoreProvider.create(am, pm, persistentAccounts
+                    ? new java.io.File(android.os.Environment.getDataDirectory(), "system/media")
+                    : null);
+        } catch (RuntimeException | LinkageError e) {
+            // Without it the authority stays unknown, as before; nothing pretends to index.
+            SystemServer.log("media: provider unavailable: " + e);
+        }
         // Construct the network provider before jobs subscribe to its changes.
         ConnectivityService connectivity = new ConnectivityService(pm, atm);
         services.put(Context.CONNECTIVITY_SERVICE, connectivity);  // docs/network.md
+        // content://downloads: DownloadManager's provider and downloader (docs/downloads.md).
+        try {
+            DownloadProvider.create(am, pm, connectivity, persistentAccounts
+                    ? new java.io.File(android.os.Environment.getDataDirectory(), "system/downloads")
+                    : null);
+        } catch (RuntimeException | LinkageError e) {
+            // Without it the authority stays unknown, as before; nothing pretends to download.
+            SystemServer.log("downloads: provider unavailable: " + e);
+        }
         // Device state from Windows (devsvc track, ADR 0038): jobs, the battery.
         services.put(Context.JOB_SCHEDULER_SERVICE, StandIn.of(android.app.job.IJobScheduler.class,
                 new JobSchedulerService(am, atm, pm, connectivity)).asBinder());
@@ -328,17 +373,46 @@ public final class Services {
         // that name registerTelephonyCallback / listen threw NullPointerException (Waze).
         services.put("telephony.registry", StandIn.of(
                 com.android.internal.telephony.ITelephonyRegistry.class, telephony.registry).asBinder());
+        // credential: CredentialManager for passkeys (docs/passkeys.md, ADR 0093). The system
+        // server is the one credential provider, over Windows' WebAuthn API (WindowsWebAuthn,
+        // null without its natives). Without that API, and for other credential types, the
+        // answers are AOSP's for a device without a provider.
+        services.put(Context.CREDENTIAL_SERVICE, StandIn.of(
+                android.credentials.ICredentialManager.class,
+                new CredentialManagerService(new CredentialManagerHost(am, pm),
+                        WindowsWebAuthn.create(), new AssetLinks.Https())).asBinder());
+        // The device credential (ADR 0094): Windows Hello, where Gesher can confirm it.
+        // trust, the window manager's isKeyguardSecure, auth, the confirm-credential
+        // activity and FEATURE_SECURE_LOCK_SCREEN all read this one decision.
+        DeviceCredential credential = DeviceCredential.system();
         StandIn<android.app.trust.ITrustManager> trust = StandIn.of(
-                android.app.trust.ITrustManager.class, new DeviceServices.TrustService());
+                android.app.trust.ITrustManager.class, new DeviceServices.TrustService(credential,
+                        (permission, pid, uid) -> am.checkPermission(permission, pid, uid)
+                                == android.content.pm.PackageManager.PERMISSION_GRANTED));
         services.put(Context.TRUST_SERVICE, trust.asBinder());
-        // auth: BiometricManager and BiometricPrompt (ADR 0091). AOSP registers it on every
-        // device; no biometric sensor, the device credential as trust reports it. A
-        // credential is confirmed by Windows Hello (WindowsHello, null without its natives);
-        // while trust reports no secure device, no prompt reaches it.
+        // gesher.keystore: AndroidKeyStore keys that require user authentication are sealed
+        // to a Windows Hello key and released under Android's rules (ADR 0095). Without the
+        // natives there is no such service, and making such a key fails in the app as on a
+        // device without a secure lock screen; so does it while the device credential that
+        // trust reports is not there.
+        WindowsHelloKey helloKey = WindowsHelloKey.create();
+        KeystoreAuthorization keystore = helloKey == null ? null : new KeystoreAuthorization(
+                helloKey, new java.io.File(Device.dataDir(), "system/gesher-keystore-binding"),
+                android.os.SystemClock::elapsedRealtime, credential::available);
+        if (keystore != null) {
+            services.put(KeystoreAuthorizationService.NAME,
+                    new KeystoreAuthorizationService(keystore));
+        }
+        // auth: BiometricManager and BiometricPrompt. AOSP registers it on every device; no
+        // biometric sensor, the device credential as trust reports it, confirmed by
+        // Windows Hello. The activity manager answers ACTION_CONFIRM_DEVICE_CREDENTIAL
+        // with the same confirmation. A confirmation also releases keystore keys with a
+        // timeout, and a CryptoObject's operation is authorized by the keystore's key.
+        AuthService auth = new AuthService(
+                new AuthServiceHost(am, atm, pm, trust.asInterface()), credential, keystore);
         services.put(Context.AUTH_SERVICE, StandIn.of(
-                android.hardware.biometrics.IAuthService.class,
-                new AuthService(new AuthServiceHost(am, atm, pm, trust.asInterface()),
-                        WindowsHello.create())).asBinder());
+                android.hardware.biometrics.IAuthService.class, auth).asBinder());
+        atm.setAuthService(auth);
         services.put(Context.SHORTCUT_SERVICE, StandIn.of(
                 android.content.pm.IShortcutService.class,
                 new DeviceServices.ShortcutService(pm, am.callers())).asBinder());

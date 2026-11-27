@@ -1,6 +1,6 @@
 // Gesher (devices track): Windows Hello user-consent verification through its
 // ABI (Windows.Security.Credentials.UI.UserConsentVerifier and
-// IUserConsentVerifierInterop), for com.gesher.server.WindowsHello (ADR 0091,
+// IUserConsentVerifierInterop), for com.gesher.server.WindowsHello (ADR 0094,
 // docs/research/windows-hello-native-spec.md). Nothing here reports success
 // without Windows' own Verified.
 #pragma once
@@ -16,6 +16,15 @@ namespace gesher::devices::hello {
 // NotConfiguredForUser 2, DisabledByPolicy 3, DeviceBusy 4; -1 when the
 // query failed (*hr says why).
 int Availability(HRESULT* hr);
+
+// The foreground top-level window when process `pid` owns it, else null: the
+// owner of a prompt shown for that process (also used by hello_key_win.cc).
+HWND ForegroundWindowOf(DWORD pid);
+
+// The window Start would make the prompt's owner for process `pid` right now:
+// the root owner of the foreground window when that window is `pid`'s, else
+// null. WindowsHello watches it while the prompt shows (hello_owner.h).
+HWND OwnerWindow(DWORD pid);
 
 // Why Start returned no verification.
 enum class StartFailure { kNone, kNotForeground, kWindows };

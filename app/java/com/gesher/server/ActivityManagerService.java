@@ -143,6 +143,12 @@ public final class ActivityManagerService extends IActivityManager.Default {
         return states;
     }
 
+    int cameraForegroundState(int uid) {
+        AppOpsService.UidState state = appOpsUidStates().get(uid);
+        return state != null && (state.capabilities()
+                & ActivityManager.PROCESS_CAPABILITY_FOREGROUND_CAMERA) != 0 ? state.state() : -1;
+    }
+
 
     void setAccountManager(AccountManagerService accounts) { mAtm.setAccountManager(accounts); }
 
@@ -534,6 +540,12 @@ public final class ActivityManagerService extends IActivityManager.Default {
     }
 
     UriGrants uriGrants() { return mProviders.uriGrants(); }
+    ContentProviders providers() { return mProviders; }
+
+    /** A system-server receiver of implicit broadcasts with {@code action} from any sender. */
+    void addSystemReceiver(String action, java.util.function.Consumer<Intent> receiver) {
+        mBroadcasts.addSystemReceiver(action, receiver);
+    }
     DocumentsStorageProvider documents() { return mProviders.documents(); }
 
     @Override
