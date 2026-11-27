@@ -16,6 +16,15 @@ $bcpFixes = (('core-oj', 'core-libart', 'core-icu4j', 'framework', 'gesher-app')
 $dvmFixes = @("-Xbootclasspath:$bcpFixes", "-Ximage:$(NoDrive "$root/system")/framework/boot.art", '-Xint', '-Xusejit:false',
   '-cp', (NoDrive "$Dir/services-tests.dex"))
 
+$cameraNv12Out = FixesRun ($dvmFixes + 'gesher.services.CameraNv12RgbaTest') 60
+$cameraNv12Code = $LASTEXITCODE
+Check 'camera: actual JNI NV12 pixels, scaling and independent RGBA image ownership' {
+  if ($cameraNv12Code -ne 0) { throw "Camera NV12/RGBA contract failed: $cameraNv12Out" }
+  $cameraNv12Out
+} @('CameraNv12RgbaTest: real JNI matching/scaled pixels and metadata passed',
+    'CameraNv12RgbaTest: held writable snapshots, bounded FIFO and maxImages passed',
+    'CameraNv12RgbaTest all passed:')
+
 $httpEngineOut = FixesRun ($dvmFixes + 'HttpEngineDeviceSmoke') 45
 $httpEngineCode = $LASTEXITCODE
 Check 'network: Android HttpEngine requests over real ART and HTTP sockets' {
@@ -31,6 +40,13 @@ foreach ($httpCacheTest in @('HttpEngineCacheTest', 'HttpEngineConnectionLifetim
     $httpCacheOut
   } @("$($httpCacheTest.Split('.')[-1]) passed:")
 }
+
+$httpAdmissionOut = FixesRun ($dvmFixes + 'HttpEngineAdmissionTest') 180
+$httpAdmissionCode = $LASTEXITCODE
+Check 'network: bounded unary HTTP ownership, cancellation and independent cleanup on ART' {
+  if ($httpAdmissionCode -ne 0) { throw "HTTP admission contract failed: $httpAdmissionOut" }
+  $httpAdmissionOut
+} @('HttpEngineAdmissionTest passed:')
 
 foreach ($httpPolicyMode in @('ordinary', 'global-enabled', 'global-disabled')) {
   $httpPolicyOut = FixesRun ($dvmFixes + 'HttpEngineProtocolPolicyTest' + $httpPolicyMode) 45
@@ -57,6 +73,13 @@ foreach ($http2ContractMode in $http2ContractModes) {
     $http2ContractOut
   } @('Http2DeviceSmoke passed:')
 }
+
+$http2BindingsOut = FixesRun ($dvmFixes + 'Http2BindingsTest') 60
+$http2BindingsCode = $LASTEXITCODE
+Check 'network: HTTP/2 preserves complete headers and bodies across owned streams' {
+  if ($http2BindingsCode -ne 0) { throw "HTTP/2 binding contracts failed: $http2BindingsOut" }
+  $http2BindingsOut
+} @('Http2BindingsTest passed:')
 
 $http2CreditOut = FixesRun ($dvmFixes + 'Http2CreditContracts') 45
 $http2CreditCode = $LASTEXITCODE
@@ -449,7 +472,7 @@ $appOpsCode = $LASTEXITCODE
 Check 'services: AppOps defaults, authority, attributed delivery, foreground lifecycle and signed persistence' {
   $global:LASTEXITCODE = $appOpsCode
   $appOpsOut
-} @('AppOpsContractTest all passed: 494 checks; binder=true')
+} @('AppOpsContractTest all passed: 498 checks; binder=true')
 
 $specialAccessOut = FixesRun ($dvmFixes + 'gesher.services.ServiceFixtureRunner' + 'SpecialAccessTest') 90
 $specialAccessCode = $LASTEXITCODE
@@ -486,6 +509,16 @@ Check 'services: runtime permission denial, rationale, fixed retry policy and ow
   $global:LASTEXITCODE = $permissionStateCode
   $permissionStateOut
 } @('RuntimePermissionStateTest all passed:', ' checks; binder=true')
+
+# Production foreground-service permission/type admission through generated AM parcels.
+# Parsed APK metadata and the notification display sink are isolated fixture boundaries.
+$foregroundAdmissionOut = FixesRun ($dvmFixes + 'gesher.services.ServiceFixtureRunner' +
+  'ForegroundServiceAdmissionTest') 90
+$foregroundAdmissionCode = $LASTEXITCODE
+Check 'services: foreground-service manifest permission and type admission' {
+  $global:LASTEXITCODE = $foregroundAdmissionCode
+  $foregroundAdmissionOut
+} @('ForegroundServiceAdmissionTest all passed:', 'checks; binder=true')
 
 # Real UID grant decisions and the production AudioRecord/MediaRecorder JNI errors.
 . "$PSScriptRoot/../helpers/FixturePermissions.ps1"

@@ -96,7 +96,7 @@ jobs:
             echo "התג $tag כבר קיים על $COMMIT, ולא נוצר מחדש."
             state="כבר היה קיים"
           else
-            object=$(gh api -X POST "repos/$REPO/git/tags" -f tag="$tag" -f message="גשר המיתרים $VERSION" \
+            object=$(gh api -X POST "repos/$REPO/git/tags" -f tag="$tag" -f message="מיתר $VERSION" \
               -f object="$COMMIT" -f type=commit --jq '.sha') ||
               fail "יצירת אובייקט התג נכשלה. התג לא נוצר"
             gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$object" --silent ||

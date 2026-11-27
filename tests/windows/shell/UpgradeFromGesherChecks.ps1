@@ -11,9 +11,9 @@
     [string] $LevTag = 'v0.2.0-lev3'
 )
 
-# גשר המיתרים: התקנה במקום Gesher. מתקינים את Gesher 0.2.0, הגרסה שפורסמה תחת
+# מיתר: התקנה במקום Gesher. מתקינים את Gesher 0.2.0, הגרסה שפורסמה תחת
 # Apache 2.0, מתקינים בו אפליקציה ושומרים נתונים והגדרה, ואז מתקינים מעליו את
-# גשר המיתרים ובודקים שהכל נשמר, ושהשם, הקיצורים ומקור העדכונים התחלפו.
+# מיתר ובודקים שהכל נשמר, ושהשם, הקיצורים ומקור העדכונים התחלפו.
 # רץ ב-CI אחרי הבדיקה של המתקין, על אותה מכונה, אחרי שההתקנה שלה הוסרה. צריך את gh ו-GH_TOKEN.
 
 $ErrorActionPreference = 'Stop'
@@ -125,9 +125,9 @@ Copy-Item -LiteralPath $oldPanel -Destination $oldHebrewPanel
 $null = Invoke-GesherApp @('shutdown')
 Pass "Gesher $oldVersion מותקן ('$oldName'), עם $package, נתונים שלה והגדרת עדכונים"
 
-# 3. גשר המיתרים מעל Gesher.
+# 3. מיתר מעל Gesher.
 $p = Start-Process $InstallerPath -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
-if ($p.ExitCode -ne 0) { throw "ההתקנה של גשר המיתרים מעל Gesher נכשלה (קוד $($p.ExitCode))" }
+if ($p.ExitCode -ne 0) { throw "ההתקנה של מיתר מעל Gesher נכשלה (קוד $($p.ExitCode))" }
 $problems = @()
 $newVersion = Get-GesherInstalledVersion -InstallDirectory $app
 if ($newVersion -cne $Version) { $problems += "הגרסה המותקנת היא '$newVersion' ולא $Version" }
@@ -138,25 +138,25 @@ $preferences = Get-GesherUpdatePreferences -StateDirectory $updateState
 if ($preferences.AutomaticChecks) { $problems += 'השדרוג החזיר לפעולה את בדיקת העדכונים שהמשתמש כיבה' }
 if ($preferences.LastCheckUtc -cne '2026-11-20T08:00:00.0000000Z') { $problems += "זמן הבדיקה האחרונה השתנה: $($preferences.LastCheckUtc)" }
 if ($problems) { throw ($problems -join '; ') }
-Pass "גשר המיתרים $newVersion הותקן במקום Gesher: האפליקציה, הנתונים שלה והגדרת העדכונים נשמרו"
+Pass "מיתר $newVersion הותקן במקום Gesher: האפליקציה, הנתונים שלה והגדרת העדכונים נשמרו"
 
-$newPanel = Join-Path $programs 'Gesher HaMeitarim Control Center.lnk'
+$newPanel = Join-Path $programs 'Meitar Control Center.lnk'
 if (-not (Test-Path $newPanel)) { $problems += "אין קיצור $newPanel" }
 foreach ($legacy in $oldPanel, $oldHebrewPanel) { if (Test-Path -LiteralPath $legacy) { $problems += "נשאר הקיצור הישן $legacy" } }
 if ($hadAppLink -and -not (Test-Path $appLink)) { $problems += "הקיצור של האפליקציה נמחק: $appLink" }
 $entries = @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
-    Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -match 'Gesher' })
+    Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -match 'Gesher|Meitar' })
 if ($entries.Count -ne 1 -or $entries[0].PSChildName -cne $appId) { $problems += "צריכה להיות רשומת הסרה אחת, ונמצאו: $($entries.PSChildName -join ', ')" }
 $entry = Get-ItemProperty $uninstallKey
-if ($entry.DisplayName -cne "Gesher HaMeitarim $Version") { $problems += "השם בהוספה/הסרה של תוכניות הוא '$($entry.DisplayName)'" }
-if ($entry.Publisher -cne 'Gesher HaMeitarim') { $problems += "המפרסם הוא '$($entry.Publisher)'" }
+if ($entry.DisplayName -cne "Meitar $Version") { $problems += "השם בהוספה/הסרה של תוכניות הוא '$($entry.DisplayName)'" }
+if ($entry.Publisher -cne 'Meitar') { $problems += "המפרסם הוא '$($entry.Publisher)'" }
 if ($problems) { throw ($problems -join '; ') }
 $linkNote = if ($hadAppLink) { 'והקיצור של האפליקציה נשאר' } else { 'ל-Gesher 0.2.0 לא היה קיצור לאפליקציה, ולכן השמירה שלו לא נבדקה' }
 Pass "השם התחלף (הוספה/הסרה של תוכניות: '$($entry.DisplayName)'), הקיצורים הישנים בעברית ובאנגלית נמחקו, $linkNote"
 
 $updater = [IO.File]::ReadAllText((Join-Path $app 'gesher-update.ps1'))
 if (-not $updater.Contains('https://api.github.com/repos/yosef220/gesher-hameitarim/releases/latest') -or $updater.Contains('gesher-runtime/gesher')) {
-    throw 'מקור העדכונים אחרי השדרוג הוא לא הריפו של גשר המיתרים'
+    throw 'מקור העדכונים אחרי השדרוג הוא לא הריפו של מיתר'
 }
 if (-not (Test-Path (Join-Path $app 'gesher-update-agent.ps1'))) { throw 'סוכן העדכונים לא הותקן' }
 Pass 'מקור העדכונים הוא yosef220/gesher-hameitarim, וסוכן העדכונים מותקן'
@@ -165,7 +165,7 @@ $run = Invoke-GesherApp @('launch', $package)
 Write-Host $run.Output
 if ($run.Code -ne 0 -or $run.Output -notmatch 'LifecycleActivity onResume') { throw "האפליקציה ש-Gesher התקין לא נפתחה אחרי השדרוג (קוד $($run.Code))" }
 $null = Invoke-GesherApp @('shutdown')
-Pass "האפליקציה ש-Gesher התקין נפתחת בגשר המיתרים"
+Pass "האפליקציה ש-Gesher התקין נפתחת במיתר"
 
 # 4. ניקוי: הסרה, כדי שהשלבים הבאים יתחילו ממכונה נקייה.
 Start-Process (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait

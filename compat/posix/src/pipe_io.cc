@@ -1,6 +1,7 @@
 // Message-type kernel pipes with byte-stream reads preserve PIPE_BUF admission.
 // Windows owns capacity, peer lifetime and waiter completion across processes.
 #include "pipe_io.h"
+#include "fifo_internal.h"
 #include "internal.h"
 #include "record_lock_descriptors.h"
 #include "ofd_internal.h"
@@ -17,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
+#include <cwchar>
 
 namespace gesher {
 namespace {
@@ -358,12 +360,19 @@ int SetPipeNonBlocking(HANDLE file, bool nonblocking) {
 
 int CreatePipeDescriptors(int descriptors[2], int flags) {
   if (!descriptors) return errno = EFAULT, -1;
+  DWORD contained = 0, token_bytes = 0;
+  if (!GetTokenInformation(GetCurrentProcessToken(), TokenIsAppContainer,
+                           &contained, sizeof(contained), &token_bytes)) return FailWithLastError();
   unsigned char nonce[16];
   if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, nonce, sizeof(nonce), BCRYPT_USE_SYSTEM_PREFERRED_RNG)))
     return errno = EIO, -1;
-  wchar_t name[100] = L"\\\\.\\pipe\\gesher-";
+  // Windows lets an AppContainer create NPFS instances in its own LOCAL
+  // namespace. Descriptor inheritance and transfer use the opened handles.
+  const wchar_t* pipe_directory = contained ? L"\\\\.\\pipe\\LOCAL\\gesher-" : L"\\\\.\\pipe\\gesher-";
+  const size_t prefix = std::wcslen(pipe_directory);
+  wchar_t name[100];
+  std::copy_n(pipe_directory, prefix, name);
   constexpr wchar_t hex[] = L"0123456789abcdef";
-  const size_t prefix = 16;
   for (size_t i = 0; i != sizeof(nonce); ++i) {
     name[prefix + 2 * i] = hex[nonce[i] >> 4];
     name[prefix + 2 * i + 1] = hex[nonce[i] & 15];
@@ -417,6 +426,12 @@ int CreatePipeDescriptors(int descriptors[2], int flags) {
 namespace {
 int TransferPipeBody(const DescriptorSnapshotPtr& snapshot, void* bytes, unsigned count,
                      bool writing, HANDLE canceled, HANDLE interrupted) {
+  // FIFO (#256): העברה דרך named pipe עם OVERLAPPED, במסלול נפרד (fifo.cc). היא לא עוברת
+  // בלולאה למטה, ולכן עצירה של ptrace לא מתחילה אותה מחדש.
+  if (snapshot->description->IsFifo()) {
+    if (Signaled(canceled) || Signaled(interrupted)) return errno = EINTR, -1;
+    return TransferFifo(snapshot, bytes, count, writing, canceled, interrupted);
+  }
   unsigned written = 0;  // a blocking write's bytes already in the pipe
   for (;;) {
     if (Signaled(canceled) || Signaled(interrupted)) {
@@ -495,6 +510,9 @@ int ReadPipeDescriptionInterruptible(const DescriptorSnapshotPtr& snapshot, void
 
 int PollPipeHandle(const DescriptorSnapshotPtr& snapshot, short events, short* ready) {
   *ready = 0;
+  if (snapshot->description->IsFifo()) {
+    return PollFifoHandle(snapshot, events, ready);
+  }
   PipeAdmission admission;
   if (admission.Acquire(snapshot, false) < 0) return -1;
   const int flags = snapshot->description->Flags();
@@ -516,6 +534,9 @@ int PollPipeHandle(const DescriptorSnapshotPtr& snapshot, short events, short* r
 
 int PipeBytesAvailable(const DescriptorSnapshotPtr& snapshot, int* bytes) {
   if (!bytes) return errno = EFAULT, -1;
+  if (snapshot->description->IsFifo()) {
+    return FifoBytesAvailable(snapshot, bytes);
+  }
   PipeAdmission admission;
   if (admission.Acquire(snapshot, false) < 0) return -1;
   // The writer's quota is not the queue length, especially while a reader

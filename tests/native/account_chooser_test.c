@@ -118,11 +118,11 @@ int wmain(int argc, WCHAR** argv) {
     GetEnvironmentVariableW(L"GESHER_LOCALES", locale, 32);
     BOOL hebrew = wcscmp(locale, L"he-IL") == 0;
     CHECK(GetWindowTextW(dialog, text, 128) > 0);
-    if (intent) CHECK(wcscmp(text, hebrew ? L"\u05d2\u05e9\u05e8 \u05d4\u05de\u05d9\u05ea\u05e8\u05d9\u05dd \u2014 \u05d1\u05d7\u05d9\u05e8\u05ea \u05d9\u05d9\u05e9\u05d5\u05dd" : L"Gesher HaMeitarim \u2014 choose an app") == 0);
-    else CHECK(wcscmp(text, hebrew ? L"\u05d2\u05e9\u05e8 \u05d4\u05de\u05d9\u05ea\u05e8\u05d9\u05dd \u2014 \u05d1\u05d7\u05d9\u05e8\u05ea \u05d7\u05e9\u05d1\u05d5\u05df" : L"Gesher HaMeitarim accounts") == 0);
+    if (intent) CHECK(wcscmp(text, hebrew ? L"\u05de\u05d9\u05ea\u05e8 \u2014 \u05d1\u05d7\u05d9\u05e8\u05ea \u05d9\u05d9\u05e9\u05d5\u05dd" : L"Meitar \u2014 choose an app") == 0);
+    else CHECK(wcscmp(text, hebrew ? L"\u05de\u05d9\u05ea\u05e8 \u2014 \u05d1\u05d7\u05d9\u05e8\u05ea \u05d7\u05e9\u05d1\u05d5\u05df" : L"Meitar accounts") == 0);
     CHECK(((GetWindowLongW(dialog, GWL_EXSTYLE) & WS_EX_RTLREADING) != 0) == hebrew);
     CHECK(GetWindowTextW(brand, text, 128) > 0);
-    CHECK(wcscmp(text, hebrew ? L"\u05d2\u05e9\u05e8 \u05d4\u05de\u05d9\u05ea\u05e8\u05d9\u05dd" : L"Gesher HaMeitarim") == 0);
+    CHECK(wcscmp(text, hebrew ? L"\u05de\u05d9\u05ea\u05e8" : L"Meitar") == 0);
     CHECK(GetWindowTextW(select_button, text, 128) > 0);
     CHECK(wcscmp(text, hebrew ? L"\u05d1\u05d7\u05d9\u05e8\u05d4" : L"Select") == 0);
     CHECK(GetWindowTextW(cancel_button, text, 128) > 0);

@@ -677,8 +677,27 @@ $panelLayout = $window.FindName('PanelLayout')
 function Update-PanelWindowLayout {
     # A short or scaled display can scroll the complete dashboard. Its app list
     # keeps a useful viewport rather than being squeezed behind the update and camera cards.
-    $panelLayout.Height = [Math]::Max(740, $panelScroll.ActualHeight - 48)
+    # גשר המיתרים: הכותרת (הגשר) נוגעת בקצוות של החלון, ולכן הפריסה ממלאת את כל השטח.
+    # עמודת המערכת נגללת בעצמה, והחלון כולו נגלל רק מתחת לגובה המינימלי של הפריסה.
+    $panelLayout.Height = [Math]::Max($panelLayout.MinHeight, $panelScroll.ActualHeight)
 }
+
+# גשר המיתרים: חיפוש באפליקציות, לפי השם או לפי שם החבילה. רק מסנן את מה שמוצג.
+$appsSearch = $window.FindName('AppsSearch')
+function Update-AppsFilter {
+    if ($null -eq $appsSearch) { return }
+    $query = $appsSearch.Text.Trim()
+    if ($query.Length -eq 0) {
+        if ($null -ne $appsList.Items.Filter) { $appsList.Items.Filter = $null }
+        return
+    }
+    $appsList.Items.Filter = [Predicate[object]]{
+        param($item)
+        return ([string]$item.Label).IndexOf($query, [StringComparison]::CurrentCultureIgnoreCase) -ge 0 -or
+            ([string]$item.Package).IndexOf($query, [StringComparison]::OrdinalIgnoreCase) -ge 0
+    }.GetNewClosure()
+}
+if ($appsSearch) { $appsSearch.Add_TextChanged({ Update-AppsFilter }) }
 
 function Set-Busy([bool] $busy, [string] $msg = '') {
     # While an action runs (including its nested MessageBox loops) live refresh stays out of the way;
@@ -702,15 +721,16 @@ function Set-Busy([bool] $busy, [string] $msg = '') {
 }
 
 # Each Update-* part redraws its controls only when the state it shows actually changed.
+# גשר המיתרים: נקודה זהובה (המיתר) כשמשהו מחובר ופועל, ואפורה כשהוא כבוי. הצבעים מהמצב של החלון.
 function Update-DeviceView([bool] $deviceRunning) {
     if ($script:ViewState.Device -eq $deviceRunning) { return }
     $script:ViewState.Device = $deviceRunning
     if ($deviceRunning) {
-        $deviceIndicator.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#12B76A')
+        $deviceIndicator.Background = Get-PanelBrush $window 'String'
         $deviceStatusText.Text = Get-GesherText 'cp_device_running'
         $btnToggleDevice.Content = Get-GesherText 'cp_btn_stop'
     } else {
-        $deviceIndicator.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#98A2B3')
+        $deviceIndicator.Background = Get-PanelBrush $window 'InkDisabled'
         $deviceStatusText.Text = Get-GesherText 'cp_device_stopped'
         $btnToggleDevice.Content = Get-GesherText 'cp_btn_start'
     }
@@ -720,16 +740,14 @@ function Update-MicrogView([bool] $microgEnabled) {
     if ($script:ViewState.Microg -eq $microgEnabled) { return }
     $script:ViewState.Microg = $microgEnabled
     if ($microgEnabled) {
-        $microgBadge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#ECFDF3')
-        $microgBadgeText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#027A48')
+        $microgBadge.Background = Get-PanelBrush $window 'String'
         $microgBadgeText.Text = Get-GesherText 'cp_microg_enabled'
         $btnEnableMicrog.Visibility = [System.Windows.Visibility]::Collapsed
         $btnGoogleLogin.Visibility = [System.Windows.Visibility]::Visible
         $btnMicrogSettings.Visibility = [System.Windows.Visibility]::Visible
         $btnDisableMicrog.Visibility = [System.Windows.Visibility]::Visible
     } else {
-        $microgBadge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F2F4F7')
-        $microgBadgeText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#475467')
+        $microgBadge.Background = Get-PanelBrush $window 'InkDisabled'
         $microgBadgeText.Text = Get-GesherText 'cp_microg_disabled'
         $btnEnableMicrog.Visibility = [System.Windows.Visibility]::Visible
         $btnGoogleLogin.Visibility = [System.Windows.Visibility]::Collapsed
@@ -743,14 +761,12 @@ function Update-StoreView($installed) {
     if ($script:ViewState.Store -eq $hasStore) { return }
     $script:ViewState.Store = $hasStore
     if ($hasStore) {
-        $storeBadge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#ECFDF3')
-        $storeBadgeText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#027A48')
+        $storeBadge.Background = Get-PanelBrush $window 'String'
         $storeBadgeText.Text = Get-GesherText 'cp_store_installed'
         $btnInstallStore.Visibility = [System.Windows.Visibility]::Collapsed
         $btnOpenStore.Visibility = [System.Windows.Visibility]::Visible
     } else {
-        $storeBadge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F2F4F7')
-        $storeBadgeText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#475467')
+        $storeBadge.Background = Get-PanelBrush $window 'InkDisabled'
         $storeBadgeText.Text = Get-GesherText 'cp_store_not_installed'
         $btnInstallStore.Visibility = [System.Windows.Visibility]::Visible
         $btnOpenStore.Visibility = [System.Windows.Visibility]::Collapsed
@@ -824,6 +840,8 @@ function Update-AppsView($installed, [hashtable] $ReadStamps = $null) {
         $items.Add([PSCustomObject]@{
             Package = $app.Package
             Label = $app.Label
+            # גשר המיתרים: שם החבילה מופיע מתחת לשם רק כשהוא מוסיף מידע
+            PackageVisibility = if ([string]$app.Label -ceq [string]$app.Package) { [System.Windows.Visibility]::Collapsed } else { [System.Windows.Visibility]::Visible }
             IconImage = $imgSource
             SeparateWindows = $separateApps.Contains([string]$app.Package)
             LaunchVisibility = if ($app.Launchable) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
@@ -832,6 +850,7 @@ function Update-AppsView($installed, [hashtable] $ReadStamps = $null) {
         })
     }
     $appsList.ItemsSource = $items
+    if (Get-Command Update-AppsFilter -ErrorAction SilentlyContinue) { Update-AppsFilter }
     # Retain only icons used by the current view; removed apps release their entries.
     $script:ViewState.Icons = $icons
     $script:ViewState.AppsSignature = $signature
@@ -1635,11 +1654,12 @@ function Show-ModernConfirmDialog {
         [switch] $CloseOnly
     )
 
-    $badgeBg = if ($IsDanger) { '#FEE4E2' } elseif ($IsWarning) { '#FEF0C7' } else { '#F2F4F7' }
-    $badgeFg = if ($IsDanger) { '#D92D20' } elseif ($IsWarning) { '#DC6803' } else { '#344054' }
+    # גשר המיתרים: התג בצבעים של המצב (בהיר, כהה או ניגודיות גבוהה). אדום רק לפעולה הרסנית.
+    $badgeRole = if ($IsDanger) { 'Danger' } else { 'Brand' }
+    $badgeGlyphRole = if ($IsDanger) { 'OnDanger' } else { 'OnBrand' }
     $btnStyle = if ($IsDanger) { 'DangerActionButton' } else { 'PrimaryButton' }
 
-    $dialog = New-PanelView 'confirm' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection; PanelBadgeBackground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($badgeBg) }
+    $dialog = New-PanelView 'confirm' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection }
     $dialog.Resources['PanelConfirmStyle'] = $dialog.Resources[$btnStyle]
     # Set literal strings after XAML loading: XML attributes normalize newlines
     # and tabs, and XAML can interpret a leading brace as a markup extension.
@@ -1786,13 +1806,15 @@ function Show-ModernConfirmDialog {
     if ($IconImage) {
         $appIconImage.Source = $IconImage
         $appIconImage.Visibility = [System.Windows.Visibility]::Visible
-        $iconContainer.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F2F4F7')
+        $iconContainer.Background = [System.Windows.Media.Brushes]::Transparent
+        $iconContainer.CornerRadius = [System.Windows.CornerRadius]::new(0)
     } else {
+        $iconContainer.Background = Get-PanelBrush $dialog $badgeRole
         $iconText = [System.Windows.Controls.TextBlock]::new()
-        $iconText.Text = if ($IsDanger) { [char]0x2716 } elseif ($IsWarning) { [char]0x26A0 } else { [char]0x2139 }
-        $iconText.FontSize = 18
+        $iconText.Text = if ($IsDanger -or $IsWarning) { '!' } else { 'i' }
+        $iconText.FontSize = 20
         $iconText.FontWeight = [System.Windows.FontWeights]::Bold
-        $iconText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($badgeFg)
+        $iconText.Foreground = Get-PanelBrush $dialog $badgeGlyphRole
         $iconText.HorizontalAlignment = [System.Windows.HorizontalAlignment]::Center
         $iconText.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
         $iconContainer.Child = $iconText
@@ -1835,17 +1857,21 @@ function Show-ModernMessageDialog {
     param(
         [Parameter(Mandatory)] [string] $Title,
         [Parameter(Mandatory)] [string] $Message,
-        [bool] $IsError = $false
+        [bool] $IsError = $false,
+        [switch] $About
     )
 
-    $badgeBg = if ($IsError) { '#FEE4E2' } else { '#E0F2FE' }
-    $badgeFg = if ($IsError) { '#D92D20' } else { '#0284C7' }
+    # גשר המיתרים: שגיאה באדום, מידע בצבע המותג, לפי המצב של החלון
+    $badgeRole = if ($IsError) { 'Danger' } else { 'Brand' }
+    $badgeGlyphRole = if ($IsError) { 'OnDanger' } else { 'OnBrand' }
 
-    $dialog = New-PanelView 'message' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection; PanelBadgeBackground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($badgeBg); PanelBadgeForeground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($badgeFg); PanelMessageSymbol = $(if ($IsError) { '!' } else { 'i' }) }
+    $dialog = New-PanelView 'message' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection; PanelMessageSymbol = $(if ($IsError) { '!' } else { 'i' }) }
     $dialog.Title = $Title
-    $dialog.FindName('DialogMessage').Text = $Message
+    if ($About) { Set-PanelAboutText $dialog $Message } else { $dialog.FindName('DialogMessage').Text = $Message }
     $dialog.FindName('BtnOk').Content = Get-GesherText 'cp_dialog_ok'
     $dialog.Owner = $window
+    $dialog.Resources['PanelBadgeBackground'] = Get-PanelBrush $dialog $badgeRole
+    $dialog.Resources['PanelBadgeForeground'] = Get-PanelBrush $dialog $badgeGlyphRole
     if ($window.Icon) { $dialog.Icon = $window.Icon }
     $btnOk = $dialog.FindName('BtnOk')
     $btnOk.Add_Click({ $dialog.Close() })
@@ -2159,15 +2185,39 @@ $btnInstallApk.Add_Click({
 })
 
 # Drag & Drop Handler
+# גשר המיתרים: בזמן גרירה של קובץ מעל החלון הלוח של האפליקציות מקבל מסגרת מקווקוות.
+# זה רק משוב; מה שמותקן נקבע ב-Drop, כמו קודם.
+$dropOverlay = $window.FindName('DropOverlay')
+function Set-PanelDropHint([bool] $visible) {
+    if ($null -eq $dropOverlay) { return }
+    $dropOverlay.Visibility = if ($visible -and -not $script:IsBusy) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+}
+# The files of a drop that the panel installs: Android packages only.
+function Get-PanelDroppedPackages($data) {
+    if (-not $data.GetDataPresent([System.Windows.DataFormats]::FileDrop)) { return @() }
+    $files = $data.GetData([System.Windows.DataFormats]::FileDrop)
+    return @($files | Where-Object { [IO.Path]::GetExtension($_).ToLowerInvariant() -in '.apk', '.apks', '.xapk', '.apkm', '.apk+' })
+}
+$window.Add_DragEnter({
+    param($sender, $e)
+    # ההבטחה "משחררים כאן כדי להתקין" רק כשיש בגרירה קובץ שאפשר להתקין
+    $hint = $false
+    try { $hint = (Get-PanelDroppedPackages $e.Data).Count -gt 0 } catch { }
+    Set-PanelDropHint $hint
+})
+$window.Add_DragLeave({
+    param($sender, $e)
+    # DragLeave מגיע גם במעבר בין רכיבים בתוך החלון; מסתירים רק כשהעכבר יצא מהחלון.
+    $point = $e.GetPosition($window)
+    if ($point.X -le 0 -or $point.Y -le 0 -or $point.X -ge $window.ActualWidth -or $point.Y -ge $window.ActualHeight) { Set-PanelDropHint $false }
+})
 $window.Add_Drop({
     param($sender, $e)
+    Set-PanelDropHint $false
     if ($script:IsBusy) { return }
-    if ($e.Data.GetDataPresent([System.Windows.DataFormats]::FileDrop)) {
-        $files = $e.Data.GetData([System.Windows.DataFormats]::FileDrop)
-        $packages = @($files | Where-Object { [IO.Path]::GetExtension($_).ToLowerInvariant() -in '.apk', '.apks', '.xapk', '.apkm', '.apk+' })
-        if ($packages.Count) {
-            [void](Start-PanelAction 'Install' @{ Files = $packages } (Get-GesherText 'cp_installing' @([IO.Path]::GetFileName($packages[0]))))
-        }
+    $packages = Get-PanelDroppedPackages $e.Data
+    if ($packages.Count) {
+        [void](Start-PanelAction 'Install' @{ Files = $packages } (Get-GesherText 'cp_installing' @([IO.Path]::GetFileName($packages[0]))))
     }
 })
 
@@ -2203,60 +2253,8 @@ $script:OnAppUninstall = {
 # The proxy of every app ($pkg empty) or of one app (proxy.<package>, over every app's
 # setting); app processes started from now on use it. True when it was saved.
 function Show-ProxyDialog([string] $pkg = '', [string] $label = $pkg) {
-    [xml]$dialogXaml = @"
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Width="460" SizeToContent="Height"
-        WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
-        ShowInTaskbar="False"
-        FlowDirection="$flowDirection"
-        FontFamily="Segoe UI, Tahoma, Arial"
-        Background="#FFFFFF">
-    <Window.Resources>
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#D0D5DD"/>
-            <Setter Property="Background" Value="#FFFFFF"/>
-            <Setter Property="Foreground" Value="#344054"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-    <Border Padding="22">
-        <StackPanel>
-            <TextBlock Name="DialogHeading" FontSize="15" FontWeight="Bold" Foreground="#101828" TextWrapping="Wrap"/>
-            <TextBlock Name="DialogPackage" FontSize="12" Foreground="#667085" Margin="0,2,0,0"/>
-            <TextBlock Name="DialogDetail" FontSize="12" Foreground="#475467" TextWrapping="Wrap" Margin="0,10,0,14"/>
-            <StackPanel Orientation="Horizontal">
-                <ComboBox Name="DialogProxyMode" Width="190" Padding="8,7" VerticalContentAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Name="DialogProxyAddress" Width="170" Padding="6,7" VerticalContentAlignment="Center" FlowDirection="LeftToRight"/>
-            </StackPanel>
-            <TextBlock Name="DialogError" FontSize="12" Foreground="#B42318" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
-                <Button Name="BtnCancel" IsCancel="True" MinWidth="85" Margin="0,0,8,0"/>
-                <Button Name="BtnSave" IsDefault="True" MinWidth="85" Background="#1570EF" BorderBrush="#1570EF" Foreground="#FFFFFF"/>
-            </StackPanel>
-        </StackPanel>
-    </Border>
-</Window>
-"@
-    $dialog = [System.Windows.Markup.XamlReader]::Load([System.Xml.XmlNodeReader]::new($dialogXaml))
+    # גשר המיתרים: הדיאלוג ב-gesher-panel-proxy.xaml, עם הצבעים והסגנונות של שאר מרכז הבקרה
+    $dialog = New-PanelView 'proxy' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection }
     $heading = if ($pkg) { Get-GesherText 'cp_proxy_app_title' @($label) } else { Get-GesherText 'cp_btn_proxy_all' }
     $dialog.Title = $heading
     $dialog.FindName('DialogHeading').Text = $heading
@@ -2326,6 +2324,14 @@ $btnOpenLogs.Add_Click({
     catch {
         Show-ModernMessageDialog -Title (Get-GesherText 'cp_title') -Message (Get-GesherText 'cp_open_logs_failed' @($_.Exception.Message)) -IsError $true
     }
+})
+
+# מיתר: "אודות", עם השורה "מבוסס על Gesher" והקרדיט ליוצר של Gesher. דיאלוג הודעה רגיל, כמו שאר הדיאלוגים.
+$btnAbout = $window.FindName('BtnAbout')
+$btnAbout.Add_Click({
+    $aboutVersion = Get-GesherInstalledVersion -InstallDirectory $here
+    if (-not $aboutVersion) { $aboutVersion = Get-GesherText 'cp_update_unknown' }
+    Show-ModernMessageDialog -Title (Get-GesherText 'cp_about_title') -Message (Get-GesherText 'cp_about_body' @($aboutVersion)) -About
 })
 
 # Attach click events through visual tree dispatcher

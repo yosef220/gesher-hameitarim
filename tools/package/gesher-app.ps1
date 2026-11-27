@@ -66,8 +66,9 @@ param(
   [Parameter(ValueFromRemainingArguments)] [string[]] $Arguments = @()
 )
 $ErrorActionPreference = 'Stop'
-# AppContainer M1 is a developer probe. Installed app launches use the ordinary runtime.
-Remove-Item Env:GESHER_SANDBOX -ErrorAction SilentlyContinue
+# גשר המיתרים: בידוד ה-AppContainer כבוי כברירת מחדל, עד בדיקות "אפליקציה עוינת" (docs/he/02-work-plan.md).
+# רק הערך המפורש GESHER_SANDBOX=appcontainer-trusted מפעיל אותו. כל ערך אחר, כולל ה-PoC (appcontainer), נמחק.
+if ($env:GESHER_SANDBOX -cne 'appcontainer-trusted') { Remove-Item Env:GESHER_SANDBOX -ErrorAction SilentlyContinue }
 $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
 . (Join-Path $scriptRoot 'gesher-ui.ps1')
 . (Join-Path $scriptRoot 'gesher-runtime-files.ps1')
@@ -155,8 +156,8 @@ function DeviceProcess($state, [string] $name) {
 
 # `gesher-app shutdown`, without starting a runtime: the system server's
 # shutdown event, then whatever is left is ended.
-if ($command -eq 'shutdown') {
-  $state = DeviceState
+if ($command -eq 'shutdown') { $state = DeviceState }
+if ($command -eq 'shutdown' -and (-not $state -or $state['protected_binder'] -ne 'true')) {
   if (-not $state) { Write-Host ('gesher-app: ' + (Get-GesherText 'no_device')); exit 0 }
   $server = DeviceProcess $state 'system_server'
   if ($server) {
@@ -336,10 +337,19 @@ try {
   # Single process: the app alone, with stand-in services in its own process.
   $DriverArgs = @($rest | Where-Object { $_ -ne '--single-process' })
   if ($DriverArgs -notcontains '--system-server') {
-    Invoke-Dalvikvm @dvm com.gesher.app.Main @DriverArgs (UserPath $apkFull)
+    if ($env:GESHER_SANDBOX -ceq 'appcontainer-trusted') {
+      Invoke-Dalvikvm @dvm com.gesher.app.Launcher @launchErrorArguments launch-cohost (UserPath $apkFull) @DriverArgs
+    } else {
+      Invoke-Dalvikvm @dvm com.gesher.app.Main @DriverArgs (UserPath $apkFull)
+    }
     exit $LASTEXITCODE
   }
 
+  if ($env:GESHER_SANDBOX -ceq 'appcontainer-trusted') {
+    $ScopedArgs = @($DriverArgs | Where-Object { $_ -ne '--system-server' })
+    Invoke-Dalvikvm @dvm com.gesher.app.Launcher @launchErrorArguments launch-scoped @ScopedArgs (UserPath $apkFull)
+    exit $LASTEXITCODE
+  }
   # A device of this run only: binderd, servicemanager and the system server with
   # the APK, then the app in this console's process; the three are stopped when it exits.
   $logs = Join-Path $root 'logs'

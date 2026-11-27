@@ -41,6 +41,11 @@ endif()
 # gesher-base: POSIX/Linux interfaces implemented on Win32.
 include(compat/posix/posix.cmake)
 
+add_executable(rooted_storage_probe tests/sandbox/rooted-storage-probe.cc)
+target_compile_options(rooted_storage_probe PRIVATE -Wall -Wextra -Werror)
+target_link_options(rooted_storage_probe PRIVATE -municode)
+target_link_libraries(rooted_storage_probe PRIVATE gesher_posix)
+
 # gesher: the ELF loader for x86-64 Android .so files (Phase 6).
 include(compat/elf/elf.cmake)
 # gesher: the bionic shim the loaded .so files link against (Phase 6).
@@ -200,6 +205,10 @@ target_link_libraries(udp_pktinfo_test PRIVATE gesher_posix)
 add_executable(pipe_kernel_test tests/native/pipe_kernel_test.cc)
 target_compile_options(pipe_kernel_test PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(pipe_kernel_test PRIVATE gesher_posix)
+
+add_executable(netlink_route_test tests/native/netlink_route_test.cc)
+target_compile_options(netlink_route_test PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(netlink_route_test PRIVATE gesher_posix)
 
 add_executable(revocable_file_test tests/native/revocable_file_test.cc)
 target_compile_options(revocable_file_test PRIVATE -Wall -Wextra -Werror)

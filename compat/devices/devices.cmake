@@ -10,6 +10,7 @@ target_sources(framework_runtime PRIVATE
   ${CMAKE_SOURCE_DIR}/compat/devices/bluetooth_test.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/bluetooth_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/camera_frames.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/brokered_camera.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/caption_jni.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/caption_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/camera_metadata_jni.cc
@@ -33,6 +34,12 @@ target_sources(framework_runtime PRIVATE
 target_include_directories(framework_runtime PRIVATE ${CMAKE_SOURCE_DIR}/compat/devices
   ${CMAKE_SOURCE_DIR}/compat/bionic/include)  # gesher/rgba_buffers.h
 target_link_libraries(framework_runtime PUBLIC ole32)
+target_sources(binderd PRIVATE
+  ${CMAKE_SOURCE_DIR}/compat/devices/brokered_camera.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/camera_mf.cc)
+target_include_directories(binderd PRIVATE ${CMAKE_SOURCE_DIR}/compat/devices)
+target_compile_definitions(binderd PRIVATE GESHER_CAMERA_BROKER_HOST=1)
+target_link_libraries(binderd PRIVATE mfuuid)
 # Location: the GNSS receiver's device interface (CM_Get_Device_Interface_List).
 target_link_libraries(framework_runtime PUBLIC cfgmgr32)
 # Bluetooth (docs/bluetooth.md): Winsock's AF_BTH sockets and WSASetService for

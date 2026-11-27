@@ -103,7 +103,7 @@ import java.util.function.Consumer;
  * no process starts one ({@link #startProcess}, ProcessList.startProcessLocked): a new
  * dalvikvm running {@code android.app.GesherAppProcess} for the package ({@link Zygote}: no
  * fork on Windows), which attaches with the start sequence number it was given
- * ({@code ActivityThread.attach} → {@link ActivityManagerService#attachApplication}) and is
+ * ({@code ActivityThread.attach} ג†’ {@link ActivityManagerService#attachApplication}) and is
  * bound to the package ({@code IApplicationThread.bindApplication}). A process may also
  * start by itself and offer itself (gesher-app {@code --system-server}): a start asked by
  * such a process goes to it. The activities start once the process reports
@@ -647,6 +647,8 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
     /** Processes started for a package and not attached yet, by start sequence number. */
     private final Map<Long, PendingProcess> mStarting = new HashMap<>();
     private long mNextStartSeq = 1;
+    private boolean mDeviceStopping;
+    private final Map<String, Integer> mProtectedStops = new HashMap<>();
     /** How app processes are started; null: they start by themselves and attach. */
     private volatile ProcessStarter mStarter;
     /** The OS exit code of the latest start, unknown until that process actually exits. */
@@ -737,11 +739,17 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
     }
 
     ActivityTaskManagerService(PackageManagerService pm) {
+        this(pm, new PermissionRequests(pm));
+    }
+
+    ActivityTaskManagerService(PackageManagerService pm, PermissionRequests permissionRequests) {
         mPm = pm;
-        mPermissionRequests = new PermissionRequests(pm);
+        mPermissionRequests = permissionRequests;
         mExactAlarmRequests = pm.exactAlarmAccessRequests();
         mBluetoothRequests = new BluetoothRequests(pm);
     }
+
+    PermissionRequests permissionRequests() { return mPermissionRequests; }
 
     void setActivityManager(ActivityManagerService am) {
         mAm = am;
@@ -3968,6 +3976,13 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
                 && !mPm.isRemovalPending(code.packageName) ? code : null;
     }
 
+    /** Windows process generation of the admitted Binder caller. */
+    synchronized long authenticatedStartTime(int pid, int uid) {
+        ApkPackage code = authenticatedPackageCodeForPid(pid, uid);
+        ProcessRecord process = code == null ? null : attachedProcessByPid(pid);
+        return process == null ? 0 : process.nativeStartTime;
+    }
+
     /** One-time enrollment in a mode that already permits real self-attachment. */
     private synchronized boolean legacyBootstrapProcess(ProcessRecord app,
             IApplicationThread thread, int pid, int uid) {
@@ -4032,7 +4047,7 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
     }
 
     private boolean pendingCurrent(PendingProcess pending) {
-        return !pending.cancelled && pending.owner != null
+        return !mDeviceStopping && !pending.cancelled && pending.owner != null
                 && mPm.get(pending.packageName) == pending.owner
                 && !mPm.isRemovalPending(pending.packageName)
                 && pending.enabledLifetime != null && pending.enabledLifetime.getAsBoolean();
@@ -4084,6 +4099,12 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
         com.gesher.app.window.AppWindows.retired(packageName);
     }
 
+    synchronized boolean protectedStartCurrent(ApkPackage pkg, long startSeq) {
+        PendingProcess pending = mStarting.get(startSeq);
+        return pending != null && pending.owner == pkg && pendingCurrent(pending)
+                && !mProtectedStops.containsKey(pkg.packageName);
+    }
+
     private void startProcess(String packageName, String processName, String reason, String sourceMode) {
         ProcessStarter starter = mStarter;
         if (starter == null) return;
@@ -4101,6 +4122,7 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
         synchronized (this) {
             if (mPm.get(packageName) != owner || !owner.matchesEnabledApplication(0)
                     || mPm.isRemovalPending(packageName) || !enabledLifetime.getAsBoolean()) return;
+            if (mDeviceStopping || mProtectedStops.containsKey(packageName)) return;
             if (processFor(packageName, processName) != null || starting(packageName, processName)) return;
             seq = mNextStartSeq++;
             mExitStatus.started(processKey(packageName, processName), seq);
@@ -4424,7 +4446,11 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
      */
     void forceStopPackage(String packageName) {
         List<ProcessRecord> stop = new ArrayList<>();
+        ApkPackage installation;
+        long stopThrough;
         synchronized (this) {
+            installation = SystemServer.isProtectedDevice() ? mPm.get(packageName) : null;
+            stopThrough = mNextStartSeq - 1;
             Set<Integer> affectedTasks = new HashSet<>();
             // Force stop removes transient grants both from and to the package,
             // including ownerless grants and packages with no live process.
@@ -4464,10 +4490,21 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
                 if (topOf(taskId) == null) discardAppTaskLocked(taskId);
             }
             if (!affectedTasks.isEmpty()) notifyTaskStackChangedLocked();
+            if (installation != null) mProtectedStops.merge(packageName, 1, Integer::sum);
             notifyAll();
         }
         // Also cancel sticky-service restarts when the old process has died.
-        if (mAm != null) mAm.stopServicesForPackage(packageName);
+        try {
+            if (mAm != null) mAm.stopServicesForPackage(packageName);
+            if (installation != null) Zygote.stopProtectedInstallation(installation, stopThrough);
+        } finally {
+            if (installation != null) {
+                synchronized (this) {
+                    mProtectedStops.computeIfPresent(packageName,
+                            (name, count) -> count > 1 ? count - 1 : null);
+                }
+            }
+        }
         if (stop.isEmpty()) return;
         SystemServer.log("force-stopping " + packageName);
         endProcesses(stop, 5000);
@@ -4712,6 +4749,24 @@ public final class ActivityTaskManagerService extends IActivityTaskManager.Defau
             }
         }
         endProcesses(all, waitMs);
+    }
+
+    void stopDeviceProcesses() {
+        long stopThrough;
+        synchronized (this) {
+            mDeviceStopping = true;
+            stopThrough = mNextStartSeq - 1;
+        }
+        // A live native descendant can outlast the Java parent. Retire the
+        // ordinary per-install jobs without touching standalone cohost jobs.
+        for (ApkPackage pkg : mPm.packages()) {
+            Zygote.stopProtectedInstallation(pkg, stopThrough);
+        }
+        endAllProcesses(5000);
+    }
+
+    synchronized void resumeDeviceProcesses() {
+        mDeviceStopping = false;
     }
 
     /** Retire one unresponsive broadcast generation, retaining normal service recovery. */

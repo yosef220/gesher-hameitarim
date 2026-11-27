@@ -9,6 +9,7 @@
 :root {
   --surface: #F7F8FA;
   --surface-raised: #FFFFFF;
+  --surface-hover: #EEF1F5;
   --selection: #EDE4D3;
   --ink: #142338;
   --ink-muted: #55657B;
@@ -42,6 +43,7 @@
 :root[data-theme='dark'] {
   --surface: #0F1A2B;
   --surface-raised: #16243A;
+  --surface-hover: #1E2D45;
   --selection: #42392A;
   --ink: #EAF0F7;
   --ink-muted: #9DAABD;
