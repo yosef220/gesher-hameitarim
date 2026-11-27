@@ -2085,7 +2085,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ${{ steps.apk-cache.outputs.path }}
-          key: e2e-apks-v1-${{ hashFiles('tests/e2e/apps.json') }}
+          key: e2e-apks-v1-${{ hashFiles('tests/e2e/apps.json', 'tests/e2e/apps-corpus-a.json') }}
 
       - name: Prepare Android SDK identity tools
         shell: pwsh
@@ -2127,6 +2127,41 @@ jobs:
         with:
           name: e2e-results-${{ matrix.os }}
           path: e2e-results/
+
+      # שכבה א של קורפוס האפליקציות (docs/he/11-app-corpus-plan.md): אותו runner על מניפסט נוסף,
+      # **במצב דיווח בלבד**. כשל כאן לא מכשיל את העבודה עד שנאסף קו בסיס, והוא נרשם בדוח.
+      # ההתקנה של Gesher כבר קיימת מהשלב הקודם, ולכן -SkipInstall.
+      - name: Run corpus tier A (report only)
+        id: corpus-a
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $invocation = [guid]::NewGuid().ToString('N')
+          $setup = (Get-ChildItem installer\gesher-setup-*.exe).FullName
+          pwsh -NoProfile -File tests/e2e/run-e2e.ps1 -Setup $setup -Manifest tests/e2e/apps-corpus-a.json -Out e2e-corpus-a -InvocationId $invocation -SkipInstall -RequireApkIdentity -BuildTools $env:GESHER_TEST_BUILD_TOOLS
+          exit $LASTEXITCODE
+
+      - name: Publish corpus tier A coverage (report only)
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          if (Test-Path e2e-corpus-a/observations.json) {
+            python tests/e2e/coverage.py --manifest tests/e2e/apps-corpus-a.json --observations e2e-corpus-a/observations.json --out-dir e2e-corpus-a --require-apk-identity
+            if (Test-Path e2e-corpus-a/coverage.md) {
+              "## קורפוס, שכבה א (דיווח בלבד)" | Add-Content $env:GITHUB_STEP_SUMMARY
+              Get-Content e2e-corpus-a/coverage.md | Add-Content $env:GITHUB_STEP_SUMMARY
+            }
+          } else {
+            "## קורפוס, שכבה א: לא הורץ (אין observations.json)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-corpus-a-${{ matrix.os }}
+          path: e2e-corpus-a/
+          if-no-files-found: ignore
 
   # The fourteen test shards consume the same core supplier batch. Receiving
   # it once here (run, job and artifact reads plus fourteen archive requests)
