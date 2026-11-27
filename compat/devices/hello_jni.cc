@@ -1,6 +1,6 @@
 // Copyright (C) 2026 The Gesher Authors
 // SPDX-License-Identifier: Apache-2.0
-// Gesher (devices track, ADR 0091): com.gesher.server.WindowsHello's natives over
+// Gesher (devices track, ADR 0094): com.gesher.server.WindowsHello's natives over
 // hello_win.h. Registered by register_gesher_devices (devices_jni.cc).
 // docs/research/windows-hello-native-spec.md section 3. No callbacks into Java and
 // no attached native threads: WindowsHello's own daemon thread blocks in await.
@@ -10,6 +10,7 @@
 #include <nativehelper/JNIHelp.h>
 
 #include "core_jni_helpers.h"
+#include "hello_owner.h"
 #include "hello_win.h"
 
 namespace android {
@@ -43,6 +44,20 @@ jint WindowsHello_availability(JNIEnv* env, jclass, jintArray hrOut) {
     ALOGW("hello: availability query failed: HRESULT 0x%08lX", static_cast<unsigned long>(hr));
   }
   return availability;
+}
+
+jint WindowsHello_windowsBuild(JNIEnv*, jclass) {
+  return static_cast<jint>(hello::WindowsBuild());
+}
+
+jlong WindowsHello_ownerWindow(JNIEnv*, jclass, jint pid) {
+  return static_cast<jlong>(
+      reinterpret_cast<intptr_t>(hello::OwnerWindow(static_cast<DWORD>(pid))));
+}
+
+jint WindowsHello_ownerRelation(JNIEnv*, jclass, jlong owner, jint pid) {
+  return static_cast<jint>(hello::ForegroundRelation(
+      reinterpret_cast<HWND>(static_cast<intptr_t>(owner)), static_cast<DWORD>(pid)));
 }
 
 jlong WindowsHello_start(JNIEnv* env, jclass, jint pid, jstring message, jintArray out) {
@@ -83,6 +98,9 @@ void WindowsHello_release(JNIEnv*, jclass, jlong handle) {
 
 const JNINativeMethod gMethods[] = {
     {"nativeAvailability", "([I)I", GESHER_JNI(WindowsHello_availability)},
+    {"nativeWindowsBuild", "()I", GESHER_JNI(WindowsHello_windowsBuild)},
+    {"nativeOwnerWindow", "(I)J", GESHER_JNI(WindowsHello_ownerWindow)},
+    {"nativeOwnerRelation", "(JI)I", GESHER_JNI(WindowsHello_ownerRelation)},
     {"nativeStart", "(ILjava/lang/String;[I)J", GESHER_JNI(WindowsHello_start)},
     {"nativeAwait", "(J)I", GESHER_JNI(WindowsHello_await)},
     {"nativeCancel", "(J)V", GESHER_JNI(WindowsHello_cancel)},

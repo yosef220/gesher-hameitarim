@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Run the production auth (IAuthService) contracts of ADR 0091 on a host JVM.
+"""Run the production auth (IAuthService) contracts of ADR 0094 on a host JVM.
 
 The Android and system-server boundaries are stand-ins with android-16.0.0_r4's
-constant values; AuthService and WindowsHelloBackend are compiled unchanged apart
-from their package, imports, boundary type qualification and public class visibility;
-StandIn, the dispatch the service's Binder uses, is compiled the same way. Tests cover the
-sensor-less AOSP answers with no Windows Hello backend (production today), and,
-with an isolated test double only, the device-credential confirmation outcomes,
-cancellation, replacement, client death and callback ordering.
+constant values; AuthService, WindowsHello, WindowsHelloBackend, DeviceCredential,
+ConfirmCredential and OwnerWatch are compiled unchanged apart from their package,
+imports, boundary type qualification and public class visibility; StandIn, the dispatch the service's Binder
+uses, is compiled the same way. Tests cover the sensor-less AOSP answers with
+no Windows Hello backend, and, with an isolated test double only, the
+device-credential confirmation outcomes, cancellation, replacement, client death
+and callback ordering; the one availability decision (natives, Windows build
+22000, Windows Hello's answer at start and now) behind canAuthenticate, prompts
+and the confirm-credential intent; that intent's results; when a prompt's
+owner counts as having left the foreground; and AOSP's permission on every
+IAuthService method through the Binder-facing path.
 Use --source-ref to run the contracts against another revision of the sources.
 """
 from __future__ import annotations
@@ -24,8 +29,23 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = {
     "// PRODUCTION_BACKEND": ("app/java/com/gesher/server/WindowsHelloBackend.java",
                               "public interface WindowsHelloBackend", "interface WindowsHelloBackend"),
+    "// PRODUCTION_KEY_OPERATIONS": ("app/java/com/gesher/server/KeystoreOperations.java",
+                                     "public interface KeystoreOperations",
+                                     "interface KeystoreOperations"),
+    "// PRODUCTION_WINDOWS_HELLO": ("app/java/com/gesher/server/WindowsHello.java",
+                                    "final class WindowsHello", "final class WindowsHello"),
+    "// PRODUCTION_HELLO_KEY_BACKEND": ("app/java/com/gesher/server/HelloKeyBackend.java",
+                                       "public interface HelloKeyBackend", "interface HelloKeyBackend"),
+    "// PRODUCTION_KEY_NATIVE": ("app/java/com/gesher/server/WindowsHelloKey.java",
+                                        "final class WindowsHelloKey", "final class WindowsHelloKey"),
     "// PRODUCTION_SERVICE": ("app/java/com/gesher/server/AuthService.java",
                               "public final class AuthService", "final class AuthService"),
+    "// PRODUCTION_CREDENTIAL": ("app/java/com/gesher/server/DeviceCredential.java",
+                                 "final class DeviceCredential", "final class DeviceCredential"),
+    "// PRODUCTION_WATCH": ("app/java/com/gesher/server/OwnerWatch.java",
+                            "final class OwnerWatch", "final class OwnerWatch"),
+    "// PRODUCTION_CONFIRM": ("app/java/com/gesher/server/ConfirmCredential.java",
+                              "final class ConfirmCredential", "final class ConfirmCredential"),
     # The Binder-facing dispatch: every IAuthService call an app makes goes through it.
     "// PRODUCTION_STANDIN": ("app/java/com/gesher/server/StandIn.java",
                               "public final class StandIn", "final class StandIn"),
@@ -49,9 +69,9 @@ def main() -> None:
         print(Path(relative).name, "SHA256", hashlib.sha256(source.encode()).hexdigest(), flush=True)
         # The harness declares java.util.* once; Android types are its stand-ins.
         source = re.sub(r"^package .*;\n|^import .*;\n", "", source, flags=re.MULTILINE)
-        # StandIn's extension signatures use fully qualified Android boundary types.
-        source = source.replace("android.os.Parcel", "Parcel").replace(
-            "android.os.RemoteException", "RemoteException")
+        if marker == "// PRODUCTION_STANDIN":
+            source = source.replace("android.os.Parcel", "Parcel")
+            source = source.replace("android.os.RemoteException", "RemoteException")
         if public not in source:
             raise SystemExit(f"{relative}: expected '{public}'")
         harness = harness.replace(marker, source.replace(public, private, 1))

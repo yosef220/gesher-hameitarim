@@ -8,6 +8,7 @@
 
 #include "exec_spawn.h"
 
+#include <gesher/binder_bootstrap.h>
 #include <gesher/system_properties.h>
 #include <gesher/logging.h>
 #include <gesher/reserved_names.h>
@@ -142,7 +143,9 @@ int Ls(const std::vector<std::string>& args) {
 // --- id ------------------------------------------------------------------------
 
 int Id(const std::vector<std::string>&) {
-  int uid = std::atoi(EnvOr("GESHER_UID", "10000").c_str());
+  const uint32_t assigned = binder_bootstrap::GuestUid();
+  int uid = assigned != 0 ? static_cast<int>(assigned)
+                          : std::atoi(EnvOr("GESHER_UID", "10000").c_str());
   std::fprintf(stdout, "uid=%d(u0_a%d) gid=%d(u0_a%d) groups=%d(u0_a%d)\n", uid,
                uid >= 10000 ? uid - 10000 : uid, uid, uid >= 10000 ? uid - 10000 : uid, uid,
                uid >= 10000 ? uid - 10000 : uid);
@@ -365,7 +368,12 @@ int DeviceCommand(const std::string& tool, const std::vector<std::string>& args)
     boot_class_path += vm_path(directory + jar);
   }
   std::vector<std::string> command{Narrow(directory + L"dalvikvm.exe"),
-      boot_class_path, "-Ximage:" + vm_path(image), "-Xusejit:false", "com.gesher.server.RuntimeCommands", tool};
+      boot_class_path, "-Ximage:" + vm_path(image), "-Xusejit:false", "com.gesher.server.RuntimeCommands"};
+  if (binder_bootstrap::GuestUid() == 0 &&
+      EnvOr("GESHER_SANDBOX", "") == "appcontainer-trusted") {
+    command.emplace_back("--device-operator");
+  }
+  command.push_back(tool);
   command.insert(command.end(), args.begin(), args.end());
   Launch launch;
   int error = PrepareLaunch(command, Narrow(directory), &launch);

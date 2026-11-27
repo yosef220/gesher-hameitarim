@@ -130,6 +130,17 @@ static const std::wstring& File() { static const std::wstring none; return none;
 static bool IsName(const char*) { return false; }
 }
 namespace procfs { static unsigned Type(const std::wstring&) { return 0; } }
+namespace drop_mount {
+inline constexpr char kAndroidPrefix[] = "/mnt/gesher/drop/";
+inline bool Enabled() { return false; }
+}
+namespace storage_root {
+struct Selection {
+  int error = 0;
+  explicit operator bool() const { return false; }
+};
+static Selection Lookup(const std::wstring&) { return {}; }
+}
 '''
     signatures = ["bool IsDriveLetter(", "std::string_view NextPart(", "PathKind VirtualKind(",
                   "bool DrivePath(", "void Lengthen(", "PathKind MapPath(", "bool DiskPath("]
