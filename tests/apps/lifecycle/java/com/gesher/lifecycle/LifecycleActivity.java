@@ -6,11 +6,15 @@ package com.gesher.lifecycle;
 
 import android.app.Activity;
 import android.content.res.TypedArray;
+import android.hardware.usb.UsbManager;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.StatFs;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 import android.util.Log;
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +39,13 @@ public class LifecycleActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         report("LifecycleActivity onCreate, savedInstanceState=" + savedInstanceState);
+        if (getIntent().getBooleanExtra("com.gesher.lifecycle.CHECK_USB_SERVICE", false)) {
+            UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
+            if (usb == null || usb.getDeviceList() == null) {
+                throw new IllegalStateException("USB service unavailable in Activity.onCreate");
+            }
+            report("LifecycleActivity onCreate: USB service available");
+        }
     }
 
     @Override
@@ -83,6 +94,33 @@ public class LifecycleActivity extends Activity {
         if (getIntent().getBooleanExtra("com.gesher.lifecycle.RUN_NATIVE_CHILD", false)) {
             checkNativeChildren();
         }
+        if (getIntent().getBooleanExtra("com.gesher.lifecycle.CHECK_ANDROID_DATA", false)) {
+            checkAndroidDataCapacity();
+        }
+    }
+
+    private void checkAndroidDataCapacity() {
+        StatFs filesystem = new StatFs("/data");
+        if (filesystem.getBlockSizeLong() <= 0 || filesystem.getBlockCountLong() <= 0
+                || filesystem.getAvailableBlocksLong() > filesystem.getBlockCountLong()) {
+            throw new AssertionError("Invalid Android data filesystem capacity");
+        }
+        // Isolation of the device state exists only in the AppContainer mode (GESHER_SANDBOX=appcontainer-trusted),
+        // which Gesher HaMeitarim keeps off by default: a plain run reads it, so it is checked only when asked.
+        if (!getIntent().getBooleanExtra("com.gesher.lifecycle.EXPECT_DEVICE_STATE_DENIED", false)) {
+            report("LifecycleActivity Android data capacity verified");
+            return;
+        }
+        String statePath = new File(Environment.getDataDirectory(), "system/gesher-device").getPath();
+        try {
+            Os.close(Os.open(statePath, OsConstants.O_RDONLY, 0));
+            throw new AssertionError("Installed app read the protected device state");
+        } catch (ErrnoException e) {
+            if (e.errno != OsConstants.EACCES && e.errno != OsConstants.EPERM) {
+                throw new AssertionError("Expected the installed app's access to device state to be denied", e);
+            }
+        }
+        report("LifecycleActivity Android data capacity and device-state isolation verified");
     }
 
     private String command(String... command) throws IOException, InterruptedException {

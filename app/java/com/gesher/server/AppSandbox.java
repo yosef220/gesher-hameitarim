@@ -5,7 +5,9 @@
 package com.gesher.server;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -131,6 +133,11 @@ final class AppSandbox {
                 grantCapability(dir, RUNTIME_FILES, READ_EXECUTE, true);
             }
         }
+        // The user's CA certificates, which every app reads as on Android (KeyChain makes
+        // them world-readable): $ANDROID_DATA/misc/user/0 (docs/network.md).
+        File userCas = new File(Device.dataDir(), "misc/user/0/cacerts-added");
+        userCas.mkdirs();
+        grantCapability(userCas.getParent(), RUNTIME_FILES, READ_EXECUTE, true);
         // The APK itself; its directory (and the oat files in it) only when it is the
         // package's own code directory under data/app. An APK run from where the user
         // keeps it (Downloads) must not open that directory to the container.
@@ -145,6 +152,9 @@ final class AppSandbox {
         }
         grantContainer(pkg.credentialProtectedDataDir(), container, MODIFY, true);
         grantContainer(pkg.deviceProtectedDataDir(), container, MODIFY, true);
+        if (SystemServer.isProtectedDevice()) {
+            grantExternalStorage(packageName, container);
+        }
         File profile = Dexopt.currentProfile(packageName).getParentFile();
         if (profile != null) grantContainer(profile.getPath(), container, MODIFY, true);
         // The logcat file the process opens by name (GESHER_LOG_FILE); its stdout and
@@ -253,6 +263,21 @@ final class AppSandbox {
         String target = Zygote.windowsPath(path);
         int error = Zygote.nativeGrantToAppContainer(target, container, access, inherit);
         checkGrant(error, container, target);
+    }
+
+    private static void grantExternalStorage(String packageName, String container) {
+        List<Path> directories;
+        try {
+            directories = AppDataStorage.prepareExternalDirectories(new File(Device.dataDir()),
+                    packageName);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot prepare external storage for " + packageName, e);
+        }
+        for (Path directory : directories) {
+            String target = Zygote.windowsPath(directory.toString());
+            ensureGrant(Zygote.nativeGrantToAppContainer(target, container, MODIFY, true),
+                    container, target);
+        }
     }
 
     private static File grantPath(File path) {

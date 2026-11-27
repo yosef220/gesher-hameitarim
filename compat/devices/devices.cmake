@@ -11,14 +11,28 @@ target_sources(framework_runtime PRIVATE
   ${CMAKE_SOURCE_DIR}/compat/devices/bluetooth_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/camera_frames.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/brokered_camera.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/caption_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/caption_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/camera_metadata_jni.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/camera_mf.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/devices_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/hello_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/hello_key_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/hello_key_win.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/hello_owner.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/hello_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/location_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/sensors.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/sensors_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/speech_recognition_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/speech_recognition_win.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/speech_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/speech_win.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/webauthn_jni.cc
+  ${CMAKE_SOURCE_DIR}/compat/devices/webauthn_win.cc
   ${CMAKE_SOURCE_DIR}/compat/devices/winrt.cc)
-target_include_directories(framework_runtime PRIVATE ${CMAKE_SOURCE_DIR}/compat/devices)
+target_include_directories(framework_runtime PRIVATE ${CMAKE_SOURCE_DIR}/compat/devices
+  ${CMAKE_SOURCE_DIR}/compat/bionic/include)  # gesher/rgba_buffers.h
 target_link_libraries(framework_runtime PUBLIC ole32)
 target_sources(binderd PRIVATE
   ${CMAKE_SOURCE_DIR}/compat/devices/brokered_camera.cc
@@ -26,8 +40,14 @@ target_sources(binderd PRIVATE
 target_include_directories(binderd PRIVATE ${CMAKE_SOURCE_DIR}/compat/devices)
 target_compile_definitions(binderd PRIVATE GESHER_CAMERA_BROKER_HOST=1)
 target_link_libraries(binderd PRIVATE mfuuid)
+# Location: the GNSS receiver's device interface (CM_Get_Device_Interface_List).
+target_link_libraries(framework_runtime PUBLIC cfgmgr32)
 # Bluetooth (docs/bluetooth.md): Winsock's AF_BTH sockets and WSASetService for
 # RFCOMM; IID_IUnknown. BluetoothApis.dll and the WinRT classes are found at run time.
+# Speech recognition (docs/speech-recognition.md): IID_IStream; SAPI's classes are
+# created through COM (sapi.dll), so nothing more is linked.
+# Speech synthesis (docs/tts.md): IID_IStream; shcore.dll's
+# CreateStreamOverRandomAccessStream is found at run time.
 target_link_libraries(framework_runtime PUBLIC ws2_32 uuid)
 
 # libcamera_metadata (system/media/camera/Android.bp): the metadata buffers

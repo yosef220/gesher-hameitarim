@@ -29,6 +29,11 @@
 #include <linux/android/binder.h>
 #include <gesher/binder_endpoint.h>
 #include <gesher/file_description.h>
+#include <gesher/rooted_storage_wire.h>
+// The fork set (gesher/fork.h); absent where a host test compiles this file alone.
+#if __has_include(<gesher/fork.h>)
+#include <gesher/fork.h>
+#endif
 
 #include "binder_internal.h"
 #include "binder_file_descriptions.h"
@@ -156,6 +161,10 @@ struct BinderFile {
   uint32_t proc_id = 0;
   uint64_t key = 0;
   bool non_block = false;
+  // The process that opened it. A forked child (gesher/fork.h, ADR 0092)
+  // shares the parent's broker connections and has no copy of its binder
+  // mapping: as Android's libbinder, binder is not usable there.
+  DWORD owner = GetCurrentProcessId();
 
   std::mutex mutex;  // guards what follows
   uint8_t* map = nullptr;
@@ -928,6 +937,36 @@ HANDLE binder_endpoint::OpenDropWorker() {
   return connected;
 }
 
+int binder_endpoint::QueryAndroidDataCapacity(rooted_storage_wire::Filesystem* capacity) {
+  if (capacity == nullptr) return EFAULT;
+  auto& binding = binder_endpoint::Current();
+  if (!binding.IsGuest() || binding.IsStandalone()) return EACCES;
+  const std::wstring name = RecordPipeName();
+  if (name.empty()) return EACCES;
+  RecordPipe pipe{ConnectPipe(name)};
+  if (pipe.handle == INVALID_HANDLE_VALUE) return ErrnoFromWin32(GetLastError());
+  DWORD mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+  if (!SetNamedPipeHandleState(pipe.handle, &mode, nullptr, nullptr)) return EIO;
+  uint32_t request[] = {3 * sizeof(uint32_t), wire::kAndroidDataCapacity, wire::kMagic, wire::kVersion};
+  struct {
+    uint32_t length;
+    int32_t status;
+  } header{};
+  const ULONGLONG deadline = GetTickCount64() + 5000;
+  if (!binder_bootstrap::Transfer(pipe.handle, request, sizeof(request), true, deadline) ||
+      !binder_bootstrap::Transfer(pipe.handle, &header, sizeof(header), false, deadline)) return EIO;
+  if (header.status != 0) {
+    return header.length == sizeof(header.status) && header.status < 0 && header.status >= -4095
+        ? -header.status : EPROTO;
+  }
+  rooted_storage_wire::Filesystem result{};
+  if (header.length != sizeof(header.status) + sizeof(result)) return EPROTO;
+  if (!binder_bootstrap::Transfer(pipe.handle, &result, sizeof(result), false, deadline)) return EIO;
+  if (!binding.VerifyPipe(pipe.handle)) return EACCES;
+  *capacity = result;
+  return 0;
+}
+
 int binder_endpoint::FileRecordLock(HANDLE file, int command, record_locks::LinuxFlock* flock) {
   if (!binder_endpoint::Current().IsGuest() || !flock) return EACCES;
   const std::wstring name = RecordPipeName();
@@ -1020,9 +1059,14 @@ int OpenBinder(int flags) {
 
 bool IsBinderFd(int fd) { return Lookup(fd) != nullptr; }
 
+bool BinderFdOwnedHere(int fd) {
+  std::shared_ptr<BinderFile> file = Lookup(fd);
+  return file != nullptr && file->owner == GetCurrentProcessId();
+}
+
 void SetBinderMapping(int fd, void* addr, size_t size) {
   std::shared_ptr<BinderFile> file = Lookup(fd);
-  if (file == nullptr) return;
+  if (file == nullptr || file->owner != GetCurrentProcessId()) return;
   std::lock_guard<std::mutex> lock(file->mutex);
   if (file->map != nullptr) return;  // the first mapping is the receive buffer
   file->map = static_cast<uint8_t*>(addr);
@@ -1034,6 +1078,11 @@ void SetBinderMapping(int fd, void* addr, size_t size) {
 bool BinderIoctl(int fd, unsigned long request, void* arg, int* result) {
   std::shared_ptr<BinderFile> file = Lookup(fd);
   if (file == nullptr) return false;
+  if (file->owner != GetCurrentProcessId()) {
+    errno = EINVAL;
+    *result = -1;
+    return true;
+  }
   uint32_t req = static_cast<uint32_t>(request);
   switch (req) {
     case BINDER_WRITE_READ:
@@ -1102,3 +1151,8 @@ void DupBinder(int fd, int fd2) {
 }
 
 }  // namespace gesher
+
+#ifdef GESHER_FORK_LOCK
+// fork (gesher/fork.h): the binder file table in a forked child.
+GESHER_FORK_LOCK(gesher::kForkOrderSubsystem, std::mutex, gesher::files_mutex);
+#endif
