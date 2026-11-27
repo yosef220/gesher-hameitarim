@@ -1,0 +1,141 @@
+# Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+#
+# גשר המיתרים: בדיקות התקנה בסביבה ישראלית (שלב 3.3 בתוכנית העבודה). ה-workflow הזה לא קיים ב-upstream.
+#   - המתקין של גרסה שפורסמה, כמו שמשתמש מוריד אותו, מאומת מול ה-digest של GitHub ומול SHA256SUMS.txt
+#   - משתמש Windows עם שם עברי ("ישראל ישראלי"): התקנה, הפעלה של אפליקציות אמיתיות מ-F-Droid,
+#     והקומפילציה של dex2oat תחת הנתיב שלו (issue #355). פעם כשלתיקיית המשתמש יש שם קצר (8.3),
+#     כמו ברוב המחשבים, ופעם בלי, כשהריצה מקבלת את הנתיב בעברית
+#   - משתמש ביקורת עם שם ASCII, באותה מכונה ובאותה בדיקה. כשהוא עובר והמשתמש בשם עברי נכשל,
+#     הכשל שייך לנתיב בעברית
+#   - כונן שאינו NTFS (דיסק-און-קי): התקנה ופתיחה של APK מכונן exFAT ומכונן FAT32 (#306, ‏#456),
+#     והגרסה הניידת כשכל הקבצים שלה על exFAT (#417)
+# הסקריפטים והתיעוד: tests/install-env. התוצאות עולות כ-artifacts (install-env-*), עם הלוגים של גשר.
+#
+# לא בונה את המוצר ולא מריץ את ci.yml: שלוש משימות Windows, על מתקין שכבר פורסם.
+name: hameitarim-install-env
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'תג הגרסה לבדיקה, למשל v1.0.0 (ריק: הגרסה האחרונה שפורסמה)'
+        type: string
+        default: ''
+      run_id:
+        description: 'או: מספר של ריצת ci.yml (למשל על product-candidate), שהמתקין שלה ייבדק במקום גרסה שפורסמה'
+        type: string
+        default: ''
+  push:
+    # ענפי פיתוח של הבדיקות האלה. על main ועל גרסאות התהליך רץ בהפעלה ידנית.
+    branches: ['install-env/**']
+    paths:
+      - '.github/workflows/hameitarim-install-env.yml'
+      - 'tests/install-env/**'
+
+permissions:
+  contents: read
+  actions: read  # המתקין מריצת CI אחרת (run_id)
+
+concurrency:
+  group: hameitarim-install-env-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hebrew-user:
+    name: משתמש בשם עברי, ${{ matrix.label }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            short_names: 'on'
+            label: 'עם שם קצר, וביקורת ASCII'
+            control: true
+          - os: windows-2025
+            short_names: 'off'
+            label: 'בלי שם קצר'
+            control: false
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # שתי אפליקציות מ-tests/e2e/apps.json: מחשבון פשוט, ופנקס עם מסד נתונים בתיקיית הנתונים.
+      APPS: 'com.ath0.rpn,com.nononsenseapps.notepad'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tests/e2e
+            tests/windows/graphics
+            tests/install-env
+
+      - name: המתקין של הגרסה, מאומת
+        id: installer
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -RunId "$env:RUN_ID" -Destination installer
+
+      - name: 'ביקורת: משתמש עם שם ASCII'
+        if: ${{ matrix.control }}
+        shell: pwsh
+        run: |
+          tests/install-env/HebrewUserChecks.ps1 -InstallerPath '${{ steps.installer.outputs.path }}' `
+            -ShortNames any -UserName 'gesher-ascii' -Apps $env:APPS.Split(',') -OutDir results/ascii
+
+      - name: משתמש בשם עברי
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          tests/install-env/HebrewUserChecks.ps1 -InstallerPath '${{ steps.installer.outputs.path }}' `
+            -ShortNames '${{ matrix.short_names }}' -Apps $env:APPS.Split(',') -OutDir 'results/hebrew-${{ matrix.short_names }}'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: install-env-hebrew-${{ matrix.short_names }}-${{ matrix.os }}
+          path: results/
+          if-no-files-found: warn
+
+  # כונן שאינו NTFS, כמו דיסק-און-קי: התקנה ופתיחה של APK מכונן exFAT ומכונן FAT32
+  # (issues #306 ו-#456, התיקון #313), והגרסה הניידת כשכל הקבצים שלה על exFAT (#417).
+  non-ntfs:
+    name: כוננים exFAT ו-FAT32 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tests/e2e
+            tests/install-env
+            tests/windows/shell
+
+      - name: המתקין והגרסה הניידת, מאומתים
+        id: release
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: tests/install-env/Get-ReleaseInstaller.ps1 -Tag "$env:TAG" -RunId "$env:RUN_ID" -Destination installer -IncludePortable
+
+      - name: התקנה ופתיחה מכונן exFAT ומכונן FAT32, וגרסה ניידת על exFAT
+        shell: pwsh
+        run: |
+          tests/install-env/NonNtfsDriveChecks.ps1 -InstallerPath '${{ steps.release.outputs.path }}' `
+            -PortableZipPath '${{ steps.release.outputs.portable }}' -Version '${{ steps.release.outputs.version }}' `
+            -OutDir results/non-ntfs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: install-env-non-ntfs-${{ matrix.os }}
+          path: results/
+          if-no-files-found: warn

@@ -1,0 +1,336 @@
+﻿# Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+param(
+    [Parameter(Mandatory = $true)][string] $InstallerPath,
+    [Parameter(Mandatory = $true)][string] $OutDir,
+    # שמות החבילות מ-tests/e2e/apps.json, מופרדים בפסיק (הכל עובר כמחרוזת אחת בשורת הפקודה).
+    [Parameter(Mandatory = $true)][string] $Apps,
+    [Parameter(Mandatory = $true)][ValidateSet('on', 'off', 'any')][string] $ShortNames,
+    # אפליקציה נוספת מ-apps.json שמותקנת מקובץ בשם עברי בתיקיית ההורדות. ריק: בלי הבדיקה הזאת.
+    [string] $DownloadsApp = '',
+    [string] $PathFile = ''
+)
+
+# גשר המיתרים: הסשן של המשתמש שנוצר ב-HebrewUserChecks.ps1. רץ בשם המשתמש הזה, עם הסביבה
+# שנבנתה מהפרופיל שלו.
+#
+#   1. בודק את הסביבה: מי אני, ושהנתיבים שלי (פרופיל, AppData, ‏TEMP ותפריט התחל) הם מה שהבדיקה
+#      צריכה. אצל משתמש בשם עברי הם בעברית. כשהסביבה לא כזאת, הסשן עוצר עם קוד 2, ולא בודק את גשר.
+#      לאבחון נרשם גם אם tmpfile() של ה-CRT עובד בתיקייה הזמנית של המשתמש.
+#   2. מריץ את tests/e2e/run-e2e.ps1 על האפליקציות שהתבקשו: התקנה של המתקין, התקנה של כל
+#      אפליקציה, הפעלה עד הפריים הראשון, קלט, סגירה, ההפעלה דרך הקישור לקובצי ‎.apk ודרך הקיצור
+#      בתפריט התחל. כל קיצור ב-"Gesher Apps" נקרא בנוסף דרך Shell.Application, לצד הקריאה של ה-e2e.
+#   3. מתקין אפליקציה נוספת מקובץ בשם עברי בתיקיית ההורדות (Downloads\אפליקציה מהאינטרנט.apk),
+#      כמו משתמש שמוריד APK מהדפדפן.
+#   4. בודק את מה ש-#355 שבר: ש-dex2oat קומפל כל אפליקציה (base.vdex בתיקיית הקוד שלה, תחת
+#      הפרופיל), ושאין בלוגים "dex2oat failed". רושם מה הריצה קיבלה בפועל: נתיב ASCII דרך השם
+#      הקצר, או הנתיב בעברית. ‏profman רץ רק כשהמכשיר פנוי ויש פרופיל חדש, ולכן הוא נרשם אם רץ,
+#      ולא נדרש.
+#   5. כשהמכשיר לא עלה ו-tmpfile() נכשל: ניסיון נוסף עם TEMP ו-TMP בנתיב ASCII, כדי לדעת אם זו
+#      הסיבה היחידה. התוצאה נרשמת לאבחון, ולא מבטלת את הכשל.
+#
+# הכל נכתב ל-session.log ול-report.json בתיקיית התוצאות. קוד יציאה: 0 הצליח, 1 כשל של גשר,
+# 2 כשל של הסביבה או של הבדיקה עצמה.
+
+$ErrorActionPreference = 'Stop'
+$null = [IO.Directory]::CreateDirectory($OutDir)
+$log = Join-Path $OutDir 'session.log'
+$reportPath = Join-Path $OutDir 'report.json'
+$script:Lines = [Collections.Generic.List[string]]::new()
+$script:Report = [ordered]@{ lines = $script:Lines }
+
+function Write-Session([string] $Line) {
+    Add-Content -LiteralPath $log -Value ((Get-Date).ToString('HH:mm:ss') + ' ' + $Line) -Encoding utf8
+}
+# שורה של סיכום: גם בלוג, וגם ברשימה שהסקריפט שמריץ מעביר לסיכום של הריצה ב-CI.
+function Add-Result([string] $Line) {
+    Write-Session $Line
+    $script:Lines.Add($Line)
+}
+function Save-Report {
+    $json = $script:Report | ConvertTo-Json -Depth 6
+    [IO.File]::WriteAllText($reportPath, $json, [Text.UTF8Encoding]::new($false))
+}
+function Test-NonAscii([string] $Text) { return [bool]($Text -match '[^\x00-\x7F]') }
+
+try {
+    # --- 0. הכלים של ה-CI (pwsh ו-python) לפני ה-PATH שנבנה מהפרופיל.
+    if ($PathFile -and (Test-Path -LiteralPath $PathFile)) {
+        $extra = @(Get-Content -LiteralPath $PathFile -Encoding utf8 | Where-Object { $_ })
+        $env:PATH = (($extra + @($env:PATH)) -join ';')
+    }
+
+    # --- 1. הסביבה.
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $userName = [Environment]::UserName
+    $userProfile = $env:USERPROFILE
+    $knownLocal = [Environment]::GetFolderPath('LocalApplicationData')
+    $temp = [IO.Path]::GetTempPath()
+    $programs = [Environment]::GetFolderPath('Programs')
+    $fso = New-Object -ComObject Scripting.FileSystemObject
+    $profileShort = $fso.GetFolder($userProfile).ShortPath
+    $hasShortName = $profileShort -cne $userProfile
+    $groups = (& whoami /groups /fo csv 2>$null | Out-String)
+    $environment = [ordered]@{
+        user = $userName
+        sid = $identity.User.Value
+        administrators_member = [bool]($groups -match 'S-1-5-32-544')
+        user_profile = $userProfile
+        user_profile_short = $profileShort
+        has_short_name = $hasShortName
+        local_app_data_env = $env:LOCALAPPDATA
+        local_app_data_known_folder = $knownLocal
+        temp = $temp
+        start_menu_programs = $programs
+        ansi_code_page = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage').ACP
+        os = (Get-CimInstance Win32_OperatingSystem).Caption
+        powershell = $PSVersionTable.PSVersion.ToString()
+    }
+    $script:Report.environment = $environment
+    foreach ($key in $environment.Keys) { Write-Session "סביבה: $key = $($environment[$key])" }
+
+    $hebrewUser = Test-NonAscii $userName
+    $problems = @()
+    foreach ($pair in @(@('הפרופיל', $userProfile), @('LOCALAPPDATA', $env:LOCALAPPDATA),
+                        @('LocalAppData של Windows', $knownLocal), @('תפריט התחל', $programs))) {
+        if ((Test-NonAscii $pair[1]) -ne $hebrewUser) {
+            $problems += "הנתיב של $($pair[0]) ($($pair[1])) לא תואם לשם המשתמש '$userName'"
+        }
+    }
+    if ($env:LOCALAPPDATA -cne $knownLocal) {
+        $problems += "LOCALAPPDATA ($env:LOCALAPPDATA) שונה מהתיקייה של Windows ($knownLocal): הסביבה לא נבנתה מהפרופיל"
+    }
+    # Windows נותן ל-TEMP לפעמים את הצורה הקצרה (8.3) של תיקיית המשתמש. מה שחשוב הוא שהיא
+    # התיקייה הזמנית של המשתמש הזה, ולכן משווים את שתיהן בצורה הקצרה.
+    $profileTemp = Join-Path $userProfile 'AppData\Local\Temp'
+    if (-not (Test-Path -LiteralPath $profileTemp) -or
+        $fso.GetFolder($temp).ShortPath -cne $fso.GetFolder($profileTemp).ShortPath) {
+        $problems += "TEMP ($temp) היא לא התיקייה הזמנית של המשתמש ($profileTemp)"
+    }
+    if ($ShortNames -eq 'on' -and (-not $hasShortName -or (Test-NonAscii $profileShort))) {
+        $problems += "ביקשנו שם קצר לתיקיית המשתמש, ואין: $profileShort"
+    }
+    if ($ShortNames -eq 'off' -and $hasShortName) {
+        $problems += "ביקשנו תיקיית משתמש בלי שם קצר, ויש: $profileShort"
+    }
+    $script:Report.environment_problems = $problems
+    if ($problems) {
+        foreach ($problem in $problems) { Add-Result "FAIL  סביבת הבדיקה: $problem" }
+        $script:Report.verdict = 'environment-fail'
+        Save-Report
+        exit 2
+    }
+    $shortText = if ($hasShortName) { "יש לה שם קצר ($profileShort)" } else { 'אין לה שם קצר' }
+    Add-Result "PASS  סביבת הבדיקה: המשתמש '$userName', תיקיית המשתמש $userProfile ($shortText), דף הקוד של המערכת $($environment.ansi_code_page)"
+    Save-Report
+
+    # --- 1א. אבחון: tmpfile() של ה-CRT של Windows (ucrtbase.dll, שגשר בנוי עליו) בתיקייה הזמנית
+    # של המשתמש. ‏ashmem של AOSP (libcutils/ashmem-host.cpp) יוצר כל אזור זיכרון משותף דרך tmpfile().
+    # זה מידע לאבחון, ולא בדיקה של גשר: התוצאה נרשמת, ולא משנה את קוד היציאה.
+    if (-not ('Hameitarim.Crt' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace Hameitarim {
+    public static class Crt {
+        [DllImport("ucrtbase.dll", CallingConvention = CallingConvention.Cdecl)] public static extern IntPtr tmpfile();
+        [DllImport("ucrtbase.dll", CallingConvention = CallingConvention.Cdecl)] public static extern int fclose(IntPtr file);
+        [DllImport("ucrtbase.dll", CallingConvention = CallingConvention.Cdecl)] public static extern IntPtr _errno();
+        // tmpfile ו-errno באותה קריאה, באותו thread.
+        public static int TryTmpfile() {
+            IntPtr file = tmpfile();
+            if (file != IntPtr.Zero) { fclose(file); return 0; }
+            return Marshal.ReadInt32(_errno());
+        }
+    }
+}
+'@
+    }
+    $tmpfileErrno = [Hameitarim.Crt]::TryTmpfile()
+    $script:Report.crt_tmpfile_errno = $tmpfileErrno
+    if ($tmpfileErrno -eq 0) {
+        Add-Result "INFO  אבחון: tmpfile() של ucrtbase.dll יוצר קובץ זמני ב-$temp"
+    } else {
+        Add-Result "INFO  אבחון: tmpfile() של ucrtbase.dll נכשל ב-$temp (errno $tmpfileErrno). ‏ashmem של AOSP נשען עליו"
+    }
+    Save-Report
+
+    # --- 2. ההתקנה והאפליקציות, דרך ה-e2e הרגיל של הפרויקט.
+    $appList = @($Apps.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $e2eScript = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\e2e\run-e2e.ps1'))
+    $e2eOut = Join-Path $OutDir 'e2e'
+    $literal = { param([string] $Value) "'" + $Value.Replace("'", "''") + "'" }
+    $only = ($appList | ForEach-Object { & $literal $_ }) -join ','
+    $command = "& $(& $literal $e2eScript) -Setup $(& $literal $InstallerPath) -OutDir $(& $literal $e2eOut) -Only @($only); exit `$LASTEXITCODE"
+    Write-Session "e2e: $command"
+    # הפלט של ה-e2e עובר דרך הקונסולה המשותפת. בלי UTF-8, נתיב בעברית מגיע ללוג כסימני שאלה.
+    try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { Write-Session "קידוד הקונסולה לא שונה: $($_.Exception.Message)" }
+    & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -ExecutionPolicy Bypass -Command $command 2>&1 |
+        ForEach-Object { Write-Session "e2e | $_" }
+    $e2eExit = $LASTEXITCODE
+    $script:Report.e2e_exit = $e2eExit
+    $e2eSummary = Join-Path $e2eOut 'summary.txt'
+    $e2eLines = if (Test-Path -LiteralPath $e2eSummary) { @(Get-Content -LiteralPath $e2eSummary -Encoding utf8 | Where-Object { $_ -match '^(PASS|FAIL|KNOWN-FAIL) ' }) } else { @() }
+    foreach ($line in $e2eLines) { Add-Result "      $line" }
+
+    # --- 2א. הקיצורים בתפריט התחל. ה-e2e קורא קיצור דרך WScript.Shell. כאן כל קיצור נקרא גם
+    # דרך Shell.Application, שקורא את הקובץ כמו סייר הקבצים, ושתי הקריאות נרשמות זו לצד זו.
+    # כך אפשר להבחין בין קיצור שלא נוצר לבין קיצור שרק אחת הדרכים לא מצליחה לקרוא.
+    $appsFolder = Join-Path $programs 'Gesher Apps'
+    $shortcuts = @()
+    if (Test-Path -LiteralPath $appsFolder) {
+        $shellApplication = New-Object -ComObject Shell.Application
+        $scriptShell = New-Object -ComObject WScript.Shell
+        $namespace = $shellApplication.NameSpace($appsFolder)
+        foreach ($file in Get-ChildItem -LiteralPath $appsFolder -Filter *.lnk) {
+            $entry = [ordered]@{ name = $file.Name; size = $file.Length }
+            try {
+                $link = $namespace.ParseName($file.Name).GetLink
+                $entry.target = $link.Path
+                $entry.arguments = $link.Arguments
+            } catch { $entry.shell_application_error = $_.Exception.Message }
+            try { $entry.wscript_arguments = $scriptShell.CreateShortcut($file.FullName).Arguments }
+            catch { $entry.wscript_error = $_.Exception.Message }
+            $shortcuts += $entry
+        }
+    }
+    $script:Report.start_menu_folder = $appsFolder
+    $script:Report.start_menu_shortcuts = $shortcuts
+    foreach ($shortcut in $shortcuts) {
+        Write-Session "קיצור: $($shortcut.name) | Shell.Application: '$($shortcut.target)' '$($shortcut.arguments)' | WScript.Shell: '$($shortcut.wscript_arguments)'"
+    }
+    foreach ($package in $appList) {
+        $found = @($shortcuts | Where-Object { $_.arguments -match "(^|\s)launch $([regex]::Escape($package))$" })
+        if ($found) {
+            Add-Result "INFO  קיצור בתפריט התחל ל-$($package): $($found[0].name), נקרא דרך Shell.Application ('$($found[0].target)' '$($found[0].arguments)'). ‏WScript.Shell, שה-e2e קורא בו, החזיר '$($found[0].wscript_arguments)'"
+        } else {
+            Add-Result "INFO  קיצור בתפריט התחל ל-$($package): לא נמצא ב-$appsFolder גם דרך Shell.Application ($($shortcuts.Count) קיצורים בתיקייה)"
+        }
+    }
+
+    # --- 3. איפה גשר הותקן, ואיזה נתיב הריצה מקבלת.
+    $app = Join-Path $env:LOCALAPPDATA 'Programs\Gesher'
+    $profileRoot = Join-Path $env:LOCALAPPDATA 'Gesher'
+    $installed = Test-Path -LiteralPath (Join-Path $app 'gesher-app.cmd')
+    $productFailed = (-not $installed) -or ($e2eExit -ne 0)
+    $runtimePaths = [ordered]@{ install = $app; profile = $profileRoot }
+    if ($installed) {
+        # מה הריצה מקבלת: אותה המרה ש-gesher-app.ps1 עושה ל-ANDROID_DATA ולנתיבי ההתקנה.
+        . (Join-Path $app 'gesher-runtime-files.ps1')
+        $runtimePaths.android_data = ConvertTo-GesherAndroidPath -Path (Join-Path $profileRoot 'data')
+        $runtimePaths.android_install = ConvertTo-GesherAndroidPath -Path $app
+    }
+    $script:Report.runtime_paths = $runtimePaths
+    if ($installed) {
+        $route = "נתיב ASCII ($($runtimePaths.android_data))"
+        if (Test-NonAscii $runtimePaths.android_data) { $route = "הנתיב בעברית ($($runtimePaths.android_data))" }
+        Add-Result "PASS  ההתקנה: גשר הותקן ב-$app. הריצה מקבלת את הפרופיל כ$route"
+    } else {
+        Add-Result "FAIL  ההתקנה: אין $app\gesher-app.cmd אחרי המתקין"
+    }
+
+    # --- 4. התקנה מקובץ בשם עברי בתיקיית ההורדות, כמו משתמש שמוריד APK ולוחץ עליו. אפליקציה
+    # שה-e2e לא התקין, כדי שזו תהיה התקנה חדשה, עם dex2oat, ולא "כבר מותקן".
+    $downloadsPackage = $null
+    if ($installed -and $DownloadsApp) {
+        . (Join-Path $PSScriptRoot '..\e2e\apks.ps1')
+        $manifest = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\e2e\apps.json') -Encoding utf8 | ConvertFrom-Json
+        $entry = @($manifest.apps | Where-Object { $_.package -ceq $DownloadsApp })
+        if ($entry.Count -ne 1) { throw "$DownloadsApp לא מופיע ב-tests/e2e/apps.json" }
+        $downloads = Join-Path $userProfile 'Downloads'
+        $null = [IO.Directory]::CreateDirectory($downloads)
+        $hebrewApk = Join-Path $downloads 'אפליקציה מהאינטרנט.apk'
+        Get-PinnedApk $hebrewApk "$($entry[0].package)_$($entry[0].versionCode).apk" $entry[0].sha256 (@(@($manifest.repo) + @($manifest.mirrors)) | Where-Object { $_ })
+        $installOut = & (Join-Path $app 'gesher-app.cmd') install $hebrewApk 2>&1 | Out-String
+        $installExit = $LASTEXITCODE
+        Set-Content -LiteralPath (Join-Path $OutDir 'install-from-downloads.log') -Value $installOut -Encoding utf8
+        & (Join-Path $app 'gesher-app.cmd') shutdown 2>&1 | Out-Null
+        if ($installExit -eq 0 -and $installOut -match "installed $([regex]::Escape($DownloadsApp))") {
+            Add-Result "PASS  התקנה מההורדות: $DownloadsApp הותקן מ-$hebrewApk"
+            $downloadsPackage = $DownloadsApp
+        } else {
+            $productFailed = $true
+            $firstLine = (($installOut -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join ' | '
+            Add-Result "FAIL  התקנה מההורדות: $DownloadsApp לא הותקן מ-$hebrewApk (קוד $installExit): $firstLine"
+        }
+    }
+
+    # --- 5. מה ש-#355 שבר: הקומפילציה של dex2oat תחת פרופיל בנתיב של המשתמש, לכל אפליקציה.
+    $logs = Join-Path $profileRoot 'logs'
+    $serverLog = "$(Get-Content -Raw -LiteralPath (Join-Path $logs 'system_server.log') -Encoding utf8 -ErrorAction SilentlyContinue)"
+    $dexoptLog = "$(Get-Content -Raw -LiteralPath (Join-Path $logs 'dexopt.log') -Encoding utf8 -ErrorAction SilentlyContinue)"
+    $appRoot = Join-Path $profileRoot 'data\app'
+    $appResults = @()
+    foreach ($package in @($appList) + @($downloadsPackage | Where-Object { $_ })) {
+        $codeDirs = @(Get-ChildItem -LiteralPath $appRoot -Directory -Filter "$package-*" -ErrorAction SilentlyContinue)
+        $vdex = @($codeDirs | ForEach-Object { Join-Path $_.FullName 'oat\x86_64\base.vdex' } |
+            Where-Object { (Test-Path -LiteralPath $_) -and (Get-Item -LiteralPath $_).Length -gt 0 })
+        $failedLine = [regex]::Match($serverLog, "dexopt: $([regex]::Escape($package)): dex2oat failed[^\r\n]*")
+        $profman = [regex]::Match($serverLog, "dexopt: $([regex]::Escape($package)): profman merged[^\r\n]*")
+        $entry = [ordered]@{
+            package = $package
+            code_dirs = @($codeDirs | ForEach-Object { $_.FullName })
+            vdex = @($vdex)
+            dex2oat_failed = if ($failedLine.Success) { $failedLine.Value } else { $null }
+            profman = if ($profman.Success) { $profman.Value } else { $null }
+        }
+        $appResults += $entry
+        if ($vdex -and -not $failedLine.Success) {
+            Add-Result "PASS  dex2oat: $package קומפל ($($vdex[0]))"
+        } else {
+            $productFailed = $true
+            $why = if ($failedLine.Success) { $failedLine.Value } elseif (-not $codeDirs) { "אין תיקיית קוד תחת $appRoot" } else { 'אין base.vdex בתיקיית הקוד' }
+            Add-Result "FAIL  dex2oat: $package לא קומפל: $why"
+        }
+        if ($profman.Success) { Add-Result "PASS  profman: $($profman.Value)" }
+        else { Add-Result "INFO  profman: לא רץ על $package בבדיקה הזאת (הוא רץ רק כשהמכשיר פנוי ויש פרופיל חדש), ולכן לא נבדק" }
+    }
+    $script:Report.apps = $appResults
+    # סימן לנתיב שעבר דרך דף קוד שאין בו עברית: רצף של סימני שאלה. סימן בלבד, לא הוכחה.
+    $questionRuns = [regex]::Matches($serverLog + "`n" + $dexoptLog, '\?{3,}').Count
+    $script:Report.question_mark_runs = $questionRuns
+    if ($questionRuns) { Add-Result "INFO  בלוגים של המכשיר יש $questionRuns רצפים של '???'. ייתכן שנתיב עבר דרך דף קוד בלי עברית. כדאי לבדוק ב-gesher-logs" }
+
+    # --- 6. כשהמכשיר לא עלה: אותו משתמש, עם TEMP ו-TMP בנתיב ASCII בלבד. הפרופיל, ההתקנה
+    # וה-APK נשארים בנתיבים בעברית. כך נבדק אם הנתיב הזמני הוא הסיבה היחידה, ואם dex2oat מקבל
+    # נתיבים בעברית ב-UTF-8 (#328). התוצאה לא מבטלת את הכשל שלמעלה.
+    if ($installed -and $productFailed -and $tmpfileErrno -ne 0) {
+        $asciiTemp = Join-Path "$env:SystemDrive\" 'GesherTemp'
+        $null = [IO.Directory]::CreateDirectory($asciiTemp)
+        $savedTemp = $env:TEMP; $savedTmp = $env:TMP
+        $env:TEMP = $asciiTemp; $env:TMP = $asciiTemp
+        try {
+            $retryApk = Get-ChildItem -LiteralPath (Join-Path $savedTemp 'gesher-e2e') -Filter "$($appList[0])_*.apk" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $script:Report.ascii_temp_crt_tmpfile_errno = [Hameitarim.Crt]::TryTmpfile()
+            if (-not $retryApk) {
+                Add-Result "INFO  ניסיון עם TEMP בנתיב ASCII: אין APK של $($appList[0]) מה-e2e, ולכן לא נוסה"
+            } else {
+                $env:GESHER_APP_WINDOW = 'headless'
+                $retryOut = & (Join-Path $app 'gesher-app.cmd') $retryApk.FullName --headless 2>&1 | Out-String
+                $retryExit = $LASTEXITCODE
+                Remove-Item Env:GESHER_APP_WINDOW -ErrorAction SilentlyContinue
+                Set-Content -LiteralPath (Join-Path $OutDir 'ascii-temp-retry.log') -Value $retryOut -Encoding utf8
+                & (Join-Path $app 'gesher-app.cmd') shutdown 2>&1 | Out-Null
+                $retryVdex = @(Get-ChildItem -LiteralPath $appRoot -Directory -Filter "$($appList[0])-*" -ErrorAction SilentlyContinue |
+                    ForEach-Object { Join-Path $_.FullName 'oat\x86_64\base.vdex' } | Where-Object { Test-Path -LiteralPath $_ })
+                $script:Report.ascii_temp_retry = [ordered]@{ temp = $asciiTemp; exit = $retryExit; vdex = @($retryVdex) }
+                if ($retryExit -eq 0 -and $retryVdex) {
+                    Add-Result "INFO  ניסיון עם TEMP ו-TMP ב-$($asciiTemp): המכשיר עלה, $($appList[0]) הותקן, קומפל ב-dex2oat תחת הנתיב בעברית ($($retryVdex[0])) ונפתח. כלומר הנתיב הזמני הוא מה שעצר את המכשיר"
+                } else {
+                    $tail = (($retryOut -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join ' | '
+                    Add-Result "INFO  ניסיון עם TEMP ו-TMP ב-$($asciiTemp): נכשל גם כך (קוד $retryExit): $tail"
+                }
+            }
+        } finally {
+            $env:TEMP = $savedTemp; $env:TMP = $savedTmp
+        }
+    }
+
+    $script:Report.verdict = if ($productFailed) { 'product-fail' } else { 'pass' }
+    Save-Report
+    exit $(if ($productFailed) { 1 } else { 0 })
+} catch {
+    Add-Result "FAIL  הבדיקה עצמה: $($_.Exception.Message) ($($_.InvocationInfo.PositionMessage -replace '\s+', ' '))"
+    $script:Report.verdict = 'harness-fail'
+    try { Save-Report } catch { }
+    exit 2
+}
