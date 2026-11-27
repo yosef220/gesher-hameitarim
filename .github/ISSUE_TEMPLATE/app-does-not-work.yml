@@ -1,0 +1,66 @@
+# Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0
+# דיווח על אפליקציה שלא עובדת במיתר / Report an app that does not work in Meitar.
+# כל דיווח כזה נכנס לקורפוס הבדיקות (docs/he/02-work-plan.md, שלב 3).
+name: אפליקציה לא עובדת / App does not work
+description: אפליקציית Android שלא מותקנת, לא נפתחת, קורסת או עובדת חלקית / An Android app that fails to install, start, or work
+title: "[אפליקציה] "
+labels: ["app-compat"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        תודה על הדיווח. כל פרט שתמלא עוזר לנו לשחזר ולבדוק. / Thanks. Every detail helps us reproduce and test.
+        **לפני שמעלים לוגים:** הם עלולים להכיל שמות אפליקציות ונתיבים במחשב. אל תעלה סיסמאות, שמות חשבונות או מידע אישי. / Logs can contain app names and file paths. Do not post passwords, account names or personal data.
+  - type: input
+    id: app
+    attributes:
+      label: שם האפליקציה וגרסה / App name and version
+      description: ואיפה הורדת אותה (Aurora Store, APK מהאתר וכו') / and where you got it
+      placeholder: "למשל / e.g. Moovit 5.x, from the developer's site"
+    validations:
+      required: true
+  - type: input
+    id: meitar
+    attributes:
+      label: גרסת מיתר / Meitar version
+      description: במרכז הבקרה, "אודות" / Control Center, About
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: גרסת Windows ומעבד / Windows version and CPU
+      placeholder: "Windows 11 23H2, x64"
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: איפה זה נכשל / Where it fails
+      options:
+        - לא מתקין / Does not install
+        - מתקין אבל לא נפתח / Installs but does not start
+        - נפתח וקורס / Starts and crashes
+        - נפתח אבל חלק לא עובד / Starts but something does not work
+        - איטי או תקוע / Slow or stuck
+        - אחר / Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: מה קרה ומה ציפית / What happened and what you expected
+      description: צעדים לשחזור, אם יש / Steps to reproduce, if any
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: לוגים / Logs
+      description: |
+        במרכז הבקרה לחץ "פתיחת תיקיית הלוגים" (Open the logs folder), וצרף את הקבצים האחרונים או הדבק את סוף הקובץ.
+        / In the Control Center click "Open the logs folder" and attach the latest files or paste the end of the file.
+      render: text
+    validations:
+      required: false
