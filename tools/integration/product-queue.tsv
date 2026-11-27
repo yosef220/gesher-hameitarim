@@ -8,9 +8,10 @@ lev-app-compat	origin:refs/heads/topic/lev-app-compat	2c0f496ceef606e222172a546f
 # "network specifier requests and suggestions through user-approved Windows profiles" ותיקונים שאחריו:
 # ‏WlanProfiles.java, ‏WindowsWifiTransportTest ו-ADR 0093. ההתנגשויות היו אותו קוד בשתי גרסאות.
 # pr-403	upstream:refs/pull/403/head	e9f4035c39f7f36b974bc72397c55905666169e7	402,403	1	Wi-Fi: בדיקות WifiManager כמו באנדרואיד (‏#402), ובקשות רשת והצעות רשת דרך אישור המשתמש (‏#403, מכיל את #402)
-# ‏pr-427 ממתין (26.11): ‏91 קומיטים ו-176 קבצים (כ-17,000 שורות) מבסיס ישן (#262), מעל ה-PoC של #323
-# שכבר ב-main, ומתנגש ב-23 קבצים. כבוי כברירת מחדל, ולכן נדחה לסוף, לענף נושא ייעודי.
-pr-427	upstream:refs/pull/427/head	950dc2dbee2454d35e0f7265d50d146f41638264	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל
+# ‏pr-427 (27.11): נכנס דרך topic/pr-427, אחרי פתרון 28 קבצים בהתנגשות. הגרסה של ה-PR מפעילה את הבידוד
+# בכל הפעלה מהמשגרים המותקנים, ולכן שם הוחזרה ברירת המחדל הרגילה (הצטרפות מפורשת בלבד), לפי התוכנית: ברירת
+# מחדל רק אחרי בדיקות "אפליקציה עוינת". פירוט בהודעת הקומיט של הענף.
+pr-427	origin:refs/heads/topic/pr-427	8c7cd6721ba415e28f3eacea8f4021a90a7092f0	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל: הקוד נכנס במלואו, והמשגרים המותקנים נשארים בריצה הרגילה. הצטרפות: GESHER_SANDBOX=appcontainer-trusted
 # הוצא ב-25.11: ‏main כבר מממש את הייצוא של libstdc++.so ב-compat/bionic/cxx_bionic.cc (מ-#432, התיקון של Dreame),
 # כולל SIGABRT למטפל של האפליקציה (tests/native2/libstdcxx_fatal_test.cpp). ‏#484 מוסיף מימוש שני של אותן
 # פונקציות ב-shim.cc, ושני מימושים יחד היו מתנגשים.
@@ -81,7 +82,7 @@ pr-430	origin:refs/heads/archive/apache-snapshots	3a309b747fc604f84fa20a42bbd875
 pr-413	origin:refs/heads/archive/apache-snapshots	7e205878cec54dbbd52bbac8a90b22e190798a5e	413	3	ביצועים: חיפוש לאחור במילים תחומות ב-memrchr
 pr-401	origin:refs/heads/topic/pr-401	489d173f262556d3334b4f99ba2819df636dc892	401	3	ביצועים: מעבר על הקואורדינטות המדויקות של מישורי ImageReader בלי חילוק לכל פיקסל
 pr-372	origin:refs/heads/topic/pr-372	2194bcf91a52adc15fe7138aa3db7886fc5880b2	372	3	ביצועים: בלי מעברים חוזרים על פריימים בצילום בקצב שווה
-pr-360	origin:refs/heads/topic/pr-360	0746ef25f5c77a30138d97e4a98878367021ffe0	360	3	ביצועים: בלי מיפוי קואורדינטות מחדש ל-RGBA באותו גודל
+pr-360	origin:refs/heads/topic/pr-360	f53a34ca254593ad9d7e7b2a201ec2a6c533eb42	360	3	ביצועים: בלי מיפוי קואורדינטות מחדש ל-RGBA באותו גודל
 pr-354	origin:refs/heads/topic/pr-354	6ac40d2093ad4caa3287edadcd08290836f14ca7	354	3	ביצועים: קישורי הספקים של HTTP/2 נפתרים פעם אחת לכל טוען של ה-framework
 pr-350	origin:refs/heads/topic/pr-350	92027790f70e92867d6c312cc1d148d88996806b	350	3	רשת: הגבלה של פרצי בקשות HTTP יחידות, ושמירה על ההתקדמות בביטול
 pr-349	origin:refs/heads/topic/pr-349	7fddb49b351d9dce9bcdff63964121300770a19e	349	3	ביצועים: העברה של פלט HEVC ארוז בלי העתקה של פריים
