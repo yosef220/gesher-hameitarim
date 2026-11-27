@@ -43,5 +43,12 @@ class DialogBidi(unittest.TestCase):
                                  "%s: %s is not isolated" % (key, match.group()))
 
 
+    def test_latin_snippets_in_hebrew_hints_are_isolated(self):
+        # A Latin run with punctuation inside a Hebrew sentence ("(intent://)") is shown scrambled
+        # unless it is isolated; seen in the Control Center preview (control-center-preview.ps1).
+        hint = CATALOG["cp_web_intent_fallback_hint"]["he"]
+        self.assertIn("(\u2068intent://\u2069)", hint)
+
+
 if __name__ == "__main__":
     unittest.main()
