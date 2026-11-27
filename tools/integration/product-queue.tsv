@@ -88,3 +88,7 @@ pr-350	origin:refs/heads/topic/pr-350	92027790f70e92867d6c312cc1d148d88996806b	3
 pr-349	origin:refs/heads/topic/pr-349	7fddb49b351d9dce9bcdff63964121300770a19e	349	3	ביצועים: העברה של פלט HEVC ארוז בלי העתקה של פריים
 pr-347	origin:refs/heads/topic/pr-347	41c41e1ce8391a14b905aeada7e90704dfacfc09	347	3	מדיה: חצי מההקצאות בפענוח MP3, ‏Vorbis ו-Opus, עם זיכרון עבודה בבעלות
 pr-342	origin:refs/heads/topic/pr-342	42130a090b44f396d1ed02e7c50b2e2722db775a	342	3	ביצועים: העברה של פריימים ארוזים של AVC בבעלות, בלי העתקה
+pr-440	origin:refs/heads/topic/pr-440	5c4895308d7fbc44be970f0c5470b9bddaa577f1	440	4	בדיקה: נתיבי SQLite אחרי #427 (גל 4)
+pr-405	origin:refs/heads/topic/pr-405	74db474b527e7eacccf11c7371dbd497ba14f79d	405	4	בדיקה: מפקד PID אחרי יציאה של שורש נשמר (גל 4)
+pr-435	origin:refs/heads/topic/pr-435	71718637027e58888d8d3c2ce3c7b464c31822a9	435	4	CI: התאוששות מקריאה של GitHub שנחתכה (גל 4)
+pr-429	origin:refs/heads/topic/pr-429	eb39a36fc51b5fd3a4c62730761cccd76ae2e2ff	429	4	רשת: NETLINK_ROUTE על Windows, מוגבל להרשאה (גל 4)
