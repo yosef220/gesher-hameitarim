@@ -298,6 +298,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Location mode contracts failed' }
           python tools/tests/test_panel_resize.py
           if ($LASTEXITCODE -ne 0) { throw 'Panel resize contracts failed' }
+          python tools/tests/test_dialog_bidi.py
+          if ($LASTEXITCODE -ne 0) { throw 'Dialog bidi contracts failed' }
       - name: API 37 report gate failure and selection contracts
         if: ${{ !cancelled() }}
         shell: bash
