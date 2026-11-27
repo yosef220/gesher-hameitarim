@@ -11,7 +11,7 @@ lev-app-compat	origin:refs/heads/topic/lev-app-compat	2c0f496ceef606e222172a546f
 # ‏pr-427 (27.11): נכנס דרך topic/pr-427, אחרי פתרון 28 קבצים בהתנגשות. הגרסה של ה-PR מפעילה את הבידוד
 # בכל הפעלה מהמשגרים המותקנים, ולכן שם הוחזרה ברירת המחדל הרגילה (הצטרפות מפורשת בלבד), לפי התוכנית: ברירת
 # מחדל רק אחרי בדיקות "אפליקציה עוינת". פירוט בהודעת הקומיט של הענף.
-pr-427	origin:refs/heads/topic/pr-427	8c7cd6721ba415e28f3eacea8f4021a90a7092f0	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל: הקוד נכנס במלואו, והמשגרים המותקנים נשארים בריצה הרגילה. הצטרפות: GESHER_SANDBOX=appcontainer-trusted
+pr-427	origin:refs/heads/topic/pr-427	e1ba6a70d0c9b32c1971ea3ca550c5746a355308	427	1	בידוד ב-AppContainer, כבוי כברירת מחדל: הקוד נכנס במלואו, והמשגרים המותקנים נשארים בריצה הרגילה. הצטרפות: GESHER_SANDBOX=appcontainer-trusted
 # הוצא ב-25.11: ‏main כבר מממש את הייצוא של libstdc++.so ב-compat/bionic/cxx_bionic.cc (מ-#432, התיקון של Dreame),
 # כולל SIGABRT למטפל של האפליקציה (tests/native2/libstdcxx_fatal_test.cpp). ‏#484 מוסיף מימוש שני של אותן
 # פונקציות ב-shim.cc, ושני מימושים יחד היו מתנגשים.
@@ -73,7 +73,10 @@ pr-441	origin:refs/heads/topic/pr-441	6d595403fd556b539bb5bf4401968cbad8384f92	4
 # גל 3 (26.11.2026): ‏PRs פתוחים שנקיים מול main ומתנגשים זה בזה, מהעותקים מלפני השינוי ברישיון.
 # שבעה מהם (#452, ‏#465, ‏#467, ‏#478, ‏#489, ‏#490, ‏#492) כבר ב-main, ו-#450, ‏#468 ו-#473 למעלה.
 # הסגורים (#82, ‏#83, ‏#84) נבדקים בנפרד, כמו בגל 5: האם התוכן כבר נכנס בדרך אחרת.
-pr-469	origin:refs/heads/topic/pr-469	e9e956c8a8d635f34ba958f07cc42f95f4a7b2cd	469	3	רשת: מצב של רשת מוגבלת (metered) והגבלת נתוני רקע לפי Windows
+# ‏pr-469 הוצא (27.11): בדיקת ה-Windows שלו נכשלת בריצה 45917568285: ‏StartCostWatch מחזיר 0x80040202
+# (CONNECT_E_CANNOTCONNECT) בשני הסבבים, כלומר ההרשמה לאירועי העלות של Network List Manager לא עובדת על
+# מכונות ה-CI. עד שיוסבר, לא מכניסים תכונה שהבדיקה האמיתית שלה נכשלת. ענף הנושא topic/pr-469 נשאר.
+# pr-469	origin:refs/heads/topic/pr-469	e9e956c8a8d635f34ba958f07cc42f95f4a7b2cd	469	3	רשת: מצב של רשת מוגבלת (metered) והגבלת נתוני רקע לפי Windows
 # ‏pr-430 ו-pr-413 ממתינים (26.11): שניהם נועצים את compat/bionic/posix_bionic.cc בגרסה שאחרי השינוי שלהם
 # (scandir-source.json ו-memrchr-source.json, עם היפוך של התיקון לבסיס), ו-#256 שינה את אותו קובץ
 # (ההפניה של mkfifo). כדי לשלב: מעבר מאושר של FIFO ב-posix_bionic.cc שמתהפך לפני השרשרת שלהם.
