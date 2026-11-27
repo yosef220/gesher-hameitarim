@@ -26,8 +26,8 @@ on:
         type: string
         default: ''
   push:
-    # הענפים שבהם התהליך מפותח. אחרי המיזוג ל-main הוא רץ בהפעלה ידנית, על כל גרסה.
-    branches: ['claude/gracious-bohr-8xtijg', 'install-env/**']
+    # ענפי פיתוח של הבדיקות האלה. על main ועל גרסאות התהליך רץ בהפעלה ידנית.
+    branches: ['install-env/**']
     paths:
       - '.github/workflows/hameitarim-install-env.yml'
       - 'tests/install-env/**'
