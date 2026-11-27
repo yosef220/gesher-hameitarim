@@ -742,6 +742,7 @@ final class BroadcastController {
                 throw new SecurityException("Receiver Binder belongs to another application");
             }
             rl.filters.add(new ReceiverFilter(filter, requiredPermission, flags));
+            StickyBroadcasts.receiverRegistered(rl, filter);
         }
         StringBuilder actions = new StringBuilder();
         for (int i = 0; i < filter.countActions(); i++) {
@@ -814,6 +815,7 @@ final class BroadcastController {
                 throw new SecurityException("Cannot unregister another application's receiver");
             }
             mRegistered.remove(receiver.asBinder());
+            if (rl != null) StickyBroadcasts.receiverUnregistered(rl);
         }
         if (rl != null) SystemServer.log("unregisterReceiver of " + rl.packageName);
         pumpOrdered();
@@ -1262,7 +1264,11 @@ final class BroadcastController {
     /** The process went away: so did its registered receivers. */
     void processDied(ActivityTaskManagerService.ProcessRecord app) {
         synchronized (this) {
-            mRegistered.values().removeIf(rl -> rl.app == app);
+            mRegistered.values().removeIf(rl -> {
+                if (rl.app != app) return false;
+                StickyBroadcasts.receiverUnregistered(rl);
+                return true;
+            });
             mTimedOut.remove(app);
             for (ManifestDelivery delivery : new ArrayList<>(mManifest)) {
                 // Unassigned work may already target a replacement process that
