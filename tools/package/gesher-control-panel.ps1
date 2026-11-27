@@ -50,6 +50,7 @@ $script:AppWindowsFile = Join-Path $root 'data/system/app-windows.properties'
 $script:ProxyFile = Join-Path $root 'data/system/proxy.properties'
 # Gesher's camera settings: image_picker_fallback=true.
 $script:CameraFile = Join-Path $root 'data/system/camera.properties'
+$script:WebFile = Join-Path $root 'data/system/webview.properties'
 
 $isHe = ($script:GesherUiLanguage -eq 'he')
 $flowDirection = if ($isHe) { 'RightToLeft' } else { 'LeftToRight' }
@@ -62,6 +63,7 @@ $script:ViewState = @{ Device = $null; Microg = $null; Store = $null; AppsSignat
 $script:LiveState = @{ Stamp = $null; AppsStamp = $null; PendingSince = $null; PendingFirst = $null; Tick = 0; WasVisible = $false; RecoveryAt = $null }
 $script:MetadataMonitor = $null
 $script:UpdatingCameraView = $false
+$script:UpdatingWebView = $false
 
 # Camera image-picker fallback setting (data/system/camera.properties).
 function Get-CameraImagePickerEnabled {
@@ -94,6 +96,41 @@ function Set-CameraImagePickerEnabled([bool] $enabled) {
     $temporary = $script:CameraFile + '.tmp'
     [IO.File]::WriteAllLines($temporary, $lines, [Text.UTF8Encoding]::new($false))
     Move-Item -LiteralPath $temporary -Destination $script:CameraFile -Force
+}
+
+# WebView setting "open the web address an unhandled intent: link carries"
+# (data/system/webview.properties, key intent_browser_fallback; off when absent). The system
+# server answers apps' WebViews from this file (WebSettingsService.java).
+function Get-WebIntentFallbackEnabled {
+    if ([string]::IsNullOrEmpty($script:WebFile) -or -not (Test-Path -LiteralPath $script:WebFile)) { return $false }
+    $enabled = $false
+    try {
+        foreach ($line in Get-Content -LiteralPath $script:WebFile) {
+            if ($line -match '^\s*intent_browser_fallback\s*[=:]\s*(.+?)\s*$') {
+                $enabled = ($Matches[1].Trim().ToLowerInvariant() -eq 'true')
+            }
+        }
+    } catch { return $false }
+    return $enabled
+}
+
+function Set-WebIntentFallbackEnabled([bool] $enabled) {
+    $lines = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $script:WebFile) {
+        foreach ($line in Get-Content -LiteralPath $script:WebFile) {
+            if ($line -match '^\s*intent_browser_fallback\s*[=:]') { continue }
+            $lines.Add($line)
+        }
+    } else {
+        $lines.Add('#Gesher WebView settings')
+    }
+    if ($enabled) { $lines.Add('intent_browser_fallback=true') }
+    $directory = Split-Path -Parent $script:WebFile
+    if (-not (Test-Path -LiteralPath $directory)) { [void](New-Item -ItemType Directory -Path $directory) }
+    # The system server reads the file at any time: write a sibling, then move it into place.
+    $temporary = $script:WebFile + '.tmp'
+    [IO.File]::WriteAllLines($temporary, $lines, [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temporary -Destination $script:WebFile -Force
 }
 
 # Packages whose tasks are windows of their own (AppWindows.java's file).
@@ -446,6 +483,7 @@ function Get-StateStamp {
         Get-FileStamp $script:AppWindowsFile
         Get-FileStamp $script:ProxyFile
         Get-FileStamp $script:CameraFile
+        Get-FileStamp $script:WebFile
     ) -join '|')
 }
 
@@ -481,6 +519,7 @@ function Update-PanelMetadataWatch {
         $script:AppWindowsFile
         $script:ProxyFile
         $(if (-not [string]::IsNullOrEmpty($script:CameraFile)) { $script:CameraFile })
+        $(if (-not [string]::IsNullOrEmpty($script:WebFile)) { $script:WebFile })
     ) + @($script:ViewState.AppFiles)
     $script:MetadataMonitor.SetFiles($root, [string[]]$paths)
 }
@@ -665,6 +704,7 @@ $updateStatusText = $window.FindName('UpdateStatusText')
 $automaticUpdateChecks = $window.FindName('AutomaticUpdateChecks')
 $automaticUpdateInstall = $window.FindName('AutomaticUpdateInstall')
 $cameraImagePickerFallback = $window.FindName('CameraImagePickerFallback')
+$webIntentFallback = $window.FindName('WebIntentFallback')
 $btnCheckUpdate = $window.FindName('BtnCheckUpdate')
 $btnInstallUpdate = $window.FindName('BtnInstallUpdate')
 $btnCancelUpdate = $window.FindName('BtnCancelUpdate')
@@ -879,6 +919,7 @@ function Refresh-Dashboard {
     Update-DeviceView (Get-DeviceStatus)
     Update-MicrogView (Get-MicrogStatus)
     if (Get-Command Update-CameraView -ErrorAction SilentlyContinue) { Update-CameraView }
+    if (Get-Command Update-WebView -ErrorAction SilentlyContinue) { Update-WebView }
     $installed = Get-InstalledApps $appReadStamps
     Update-StoreView $installed
     Update-AppsView $installed $appReadStamps
@@ -2055,6 +2096,27 @@ function Set-PanelCameraImagePickerFallback([bool] $enabled) {
 
 $cameraImagePickerFallback.Add_Checked({ Set-PanelCameraImagePickerFallback $true })
 $cameraImagePickerFallback.Add_Unchecked({ Set-PanelCameraImagePickerFallback $false })
+
+function Update-WebView {
+    if ($null -eq $webIntentFallback) { return }
+    $script:UpdatingWebView = $true
+    try { $webIntentFallback.IsChecked = [bool](Get-WebIntentFallbackEnabled) }
+    finally { $script:UpdatingWebView = $false }
+}
+
+function Set-PanelWebIntentFallback([bool] $enabled) {
+    if ($script:UpdatingWebView) { return }
+    try {
+        Set-WebIntentFallbackEnabled $enabled
+        $statusMessage.Text = Get-GesherText 'cp_web_intent_fallback_saved'
+    } catch {
+        Show-ModernMessageDialog -Title (Get-GesherText 'cp_title') -Message (Get-GesherText 'cp_web_intent_fallback_failed' @($_.Exception.Message)) -IsError $true
+        Update-WebView
+    }
+}
+
+$webIntentFallback.Add_Checked({ Set-PanelWebIntentFallback $true })
+$webIntentFallback.Add_Unchecked({ Set-PanelWebIntentFallback $false })
 $btnUpdateNotes.Add_Click({
     try {
         if ($script:UpdateState.Release) { Start-Process -FilePath $script:UpdateState.Release.Url }

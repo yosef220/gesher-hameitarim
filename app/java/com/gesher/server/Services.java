@@ -203,6 +203,7 @@ public final class Services {
         services.put(Context.SPEECH_RECOGNITION_SERVICE, new SpeechRecognitionManagerService(am, atm, pm));
         // The camera image-picker setting's question and file picker (docs/devices.md).
         services.put(CameraSourceService.NAME, new CameraSourceService(am));
+        services.put(WebSettingsService.NAME, new WebSettingsService());
         services.put(Context.CLIPBOARD_SERVICE, StandIn.of(android.content.IClipboard.class,
                 clipboard).asBinder());
         // print (docs/print.md): FEATURE_PRINTING means the runtime has the Windows

@@ -2030,7 +2030,25 @@ final class GesherWebViewProvider implements WebViewProvider, WebViewProvider.Vi
         // app about either (a WebViewClient that takes its base URL would cancel the load).
         mStartingApi = !redirect && mApiNavigations.started(url, handed);
         if (mStartingApi) return false;
-        if (!mOverridesNavigation) return false;
+        if (mOverridesNavigation && appTakesNavigation(url, userInitiated, redirect)) return true;
+        return openIntentFallback(url);
+    }
+
+    /**
+     * An intent: link the app did not take, with the user's setting on (IntentFallback): the web
+     * address it carries is loaded instead of the failed navigation. Off by default; logged.
+     */
+    private boolean openIntentFallback(String url) {
+        String address = IntentFallback.address(url);
+        if (address == null || !IntentFallback.enabled()) return false;
+        GesherWebView.log("intent: link not handled by the app; opening its web address (setting on): "
+                + address);
+        mUi.post(() -> mView.loadUrl(address));
+        return true;
+    }
+
+    /** Whether the app's shouldOverrideUrlLoading took the navigation. */
+    private boolean appTakesNavigation(String url, boolean userInitiated, boolean redirect) {
         String appUrl = FileUrls.fromWebView2(url);
         final WebViewClient client = mClient;
         FutureTask<Boolean> ask = new FutureTask<>(() -> client.shouldOverrideUrlLoading(mView,

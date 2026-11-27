@@ -1128,6 +1128,26 @@
       "en": "Resize the settings column",
       "he": "שינוי הרוחב של עמודת ההגדרות"
     },
+    "cp_web_title": {
+      "en": "Links inside websites",
+      "he": "קישורים בתוך אתרים"
+    },
+    "cp_web_intent_fallback": {
+      "en": "When an app link has no app to open it, open its web address",
+      "he": "כשקישור לאפליקציה לא נפתח באף אפליקציה, לפתוח את כתובת האינטרנט שלו"
+    },
+    "cp_web_intent_fallback_hint": {
+      "en": "Some websites send a link meant to open an app (intent://), and put a web address in it for when no app can open it. Android's WebView does not open that address by itself, so the page fails to load. When this is on, Meitar opens the web address instead, which differs from Android. Off by default. Applies to pages loaded from now on.",
+      "he": "אתרים מסוימים שולחים קישור שנועד לפתוח אפליקציה (intent://), ושמים בו כתובת אינטרנט למקרה שאף אפליקציה לא יכולה לפתוח אותו. ה-WebView של Android לא פותח את הכתובת הזאת בעצמו, והדף לא נטען. כשההגדרה פועלת, מיתר פותח את כתובת האינטרנט במקום להיכשל, וזה שונה ממה שקורה ב-Android. כבויה כברירת מחדל. חלה על דפים שייטענו מעתה."
+    },
+    "cp_web_intent_fallback_saved": {
+      "en": "The setting was saved. It applies to pages loaded from now on.",
+      "he": "ההגדרה נשמרה. היא חלה על דפים שייטענו מעתה."
+    },
+    "cp_web_intent_fallback_failed": {
+      "en": "Saving the setting failed: ⁨{0}⁩",
+      "he": "שמירת ההגדרה נכשלה: ⁨{0}⁩"
+    },
     "cp_camera_title": {
       "en": "Camera",
       "he": "מצלמה"
