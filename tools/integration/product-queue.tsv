@@ -24,7 +24,7 @@ pr-473	origin:refs/heads/topic/pr-473	59c46d223b32cda7c8cc6435738eb2135dae768e	4
 pr-450	origin:refs/heads/topic/pr-450	0ff8f9bde10e7972e8c1236626852b121171664f	450	3	‏content://media מאינדקס של MediaStore על האחסון המשותף (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-468	origin:refs/heads/topic/pr-468	0944c1433c779b29a8a3392ef18ceb5d7f6f3342	468	3	CaptioningManager לפי הגדרות הכתוביות של Windows (מוזג ב-upstream אחרי השינוי ברישיון)
 pr-475	origin:refs/heads/topic/pr-475	1d8346ff1440c970e38912d785d172c3b980f03e	340,470,471,475	1	סדרת Windows Hello: הרשאות AuthService ‏(‏#340), ‏Windows Hello עסוק (‏#470), המתנה תחומה אחרי ביטול (‏#471) ותיעוד (‏#475, מכיל את כולם)
-pr-256	origin:refs/heads/topic/pr-256	52a72360d938f5c9e21006c2f5c2694b84a49dec	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
+pr-256	origin:refs/heads/topic/pr-256	1135e182b6044b5ca8f9e1321a4a062968754bef	256	4	FIFO אמיתי של POSIX בין תהליכים (mkfifo), במקום ה-mkfifo המזויף שהוצא מ-lev-app-compat (מוזג ב-upstream אחרי השינוי ברישיון)
 # ‏pr-475 ממתין: ‏main קיבל את השלב הקודם של סדרת Windows Hello בגרסה אחרת (#366, ‏e074b67b2), וה-PR המשיך
 # מאותה נקודה בכיוון אחר. מול main יש 75 מקטעים בהתנגשות (כ-1,800 שורות), רובם בלוגיקה של AuthService,
 # ‏WindowsHello ו-PackageManagerService. צריך ענף נושא ייעודי שעובר על כל מקטע ומבין את שני הצדדים.
