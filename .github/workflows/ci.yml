@@ -302,6 +302,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Dialog bidi contracts failed' }
           python tools/tests/test_web_intent_fallback.py
           if ($LASTEXITCODE -ne 0) { throw 'WebView intent fallback contracts failed' }
+          python tools/tests/test_host_account_commands.py
+          if ($LASTEXITCODE -ne 0) { throw 'Host account command contracts failed' }
       - name: API 37 report gate failure and selection contracts
         if: ${{ !cancelled() }}
         shell: bash

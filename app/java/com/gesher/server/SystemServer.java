@@ -553,6 +553,23 @@ public final class SystemServer {
         }
 
         @Override
+        public String[] accounts() {
+            AccountManagerService accounts = mServices.accounts;
+            if (accounts == null) throw new IllegalStateException("The account service is not running");
+            return accounts.hostAccountRows();
+        }
+
+        @Override
+        public boolean removeAccount(String type, String name) {
+            AccountManagerService accounts = mServices.accounts;
+            if (accounts == null) throw new IllegalStateException("The account service is not running");
+            boolean removed = accounts.hostRemoveAccount(type, name);
+            log("account " + (removed ? "removed" : "not found") + ": " + type
+                    + " (the user's choice in the host shell)");
+            return removed;
+        }
+
+        @Override
         public String[] specialAccess(String packageName) {
             return SpecialAccess.rows(SpecialAccess.query(mServices.pm, packageName));
         }

@@ -1,0 +1,41 @@
+<!-- Copyright (C) 2026 The Gesher HaMeitarim Authors (גשר המיתרים); SPDX-License-Identifier: LicenseRef-PolyForm-Strict-1.0.0 -->
+<!-- החשבונות במיתר, והסרה שלהם (Show-AccountsDialog ב-gesher-control-panel.ps1). השורות נבנות בקוד.
+     השמות של הרכיבים הם החוזה עם הקוד; הצבעים והסגנונות מגיעים מ-New-PanelView. -->
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="500" SizeToContent="Height" MaxHeight="620"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FlowDirection="{DynamicResource PanelFlowDirection}"
+        FontFamily="{DynamicResource PanelUiFont}"
+        FontSize="14"
+        Foreground="{DynamicResource GesherInkBrush}"
+        Background="{DynamicResource GesherSurfaceRaisedBrush}"
+        UseLayoutRounding="True">
+    <Border Padding="28,24,28,22">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Name="DialogTitle" Style="{StaticResource TextScreenTitle}"/>
+            <TextBlock Grid.Row="1" Name="DialogMessage" Style="{StaticResource TextMuted}" Margin="0,6,0,16"/>
+
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" MaxHeight="340" Focusable="False">
+                <StackPanel>
+                    <TextBlock Name="AccountStatus" Style="{StaticResource TextBody}"/>
+                    <StackPanel Name="AccountList"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <TextBlock Grid.Row="3" Name="AccountError" Style="{StaticResource TextMuted}" Foreground="{StaticResource GesherDangerBrush}" Margin="0,10,0,0" Visibility="Collapsed"/>
+
+            <Button Grid.Row="4" Name="BtnClose" IsCancel="True" IsDefault="True" MinWidth="92" HorizontalAlignment="Right" Margin="0,24,0,0"/>
+        </Grid>
+    </Border>
+</Window>
