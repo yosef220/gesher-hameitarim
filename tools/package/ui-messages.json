@@ -660,6 +660,70 @@
       "en": "Proxy for every app",
       "he": "פרוקסי לכל היישומים"
     },
+    "cp_btn_accounts": {
+      "en": "Accounts",
+      "he": "חשבונות"
+    },
+    "cp_accounts_desc": {
+      "en": "Accounts that apps added in Meitar, and removing them",
+      "he": "החשבונות שיישומים הוסיפו במיתר, והסרה שלהם"
+    },
+    "cp_accounts_title": {
+      "en": "Accounts in Meitar",
+      "he": "חשבונות במיתר"
+    },
+    "cp_accounts_intro": {
+      "en": "Accounts that apps added here. Removing an account removes it from Meitar only.",
+      "he": "חשבונות שיישומים הוסיפו כאן. הסרה של חשבון מוחקת אותו ממיתר בלבד."
+    },
+    "cp_accounts_loading": {
+      "en": "Loading accounts…",
+      "he": "טוען חשבונות…"
+    },
+    "cp_accounts_empty": {
+      "en": "There are no accounts in Meitar.",
+      "he": "אין חשבונות במיתר."
+    },
+    "cp_accounts_unavailable": {
+      "en": "Could not read the accounts. Restart Meitar and try again.",
+      "he": "לא ניתן לקרוא את החשבונות. יש להפעיל את מיתר מחדש ולנסות שוב."
+    },
+    "cp_accounts_owner": {
+      "en": "App: {0}",
+      "he": "יישום: {0}"
+    },
+    "cp_accounts_remove": {
+      "en": "Remove",
+      "he": "הסרה"
+    },
+    "cp_accounts_remove_title": {
+      "en": "Remove account",
+      "he": "הסרת חשבון"
+    },
+    "cp_accounts_remove_confirm": {
+      "en": "Remove the account ⁨{0}⁩ from Meitar?",
+      "he": "להסיר את החשבון ⁨{0}⁩ ממיתר?"
+    },
+    "cp_accounts_remove_detail": {
+      "en": "Only Meitar's record of the account is deleted. The app and the account at its provider do not change, and the app may ask you to sign in again.",
+      "he": "יימחק רק הרישום של החשבון במיתר. היישום והחשבון אצל הספק שלו לא ישתנו, וייתכן שהיישום יבקש להתחבר שוב."
+    },
+    "cp_accounts_removed": {
+      "en": "The account was removed from Meitar.",
+      "he": "החשבון הוסר ממיתר."
+    },
+    "cp_accounts_remove_failed": {
+      "en": "The account was not removed. Try again.",
+      "he": "החשבון לא הוסר. אפשר לנסות שוב."
+    },
+    "cp_accounts_cli_only": {
+      "en": "To remove it, use: gesher-app remove-account",
+      "he": "להסרה יש להשתמש בפקודה: gesher-app remove-account"
+    },
+    "cp_accounts_close": {
+      "en": "Close",
+      "he": "סגירה"
+    },
     "cp_proxy_app_title": {
       "en": "Proxy for ⁨{0}⁩",
       "he": "פרוקסי עבור ⁨{0}⁩"
@@ -939,6 +1003,22 @@
     "package_count_one": {
       "en": "{0} installed package",
       "he": "מספר היישומים המותקנים: {0}"
+    },
+    "accounts_count": {
+      "en": "Accounts in Meitar: {0}",
+      "he": "מספר החשבונות במיתר: {0}"
+    },
+    "accounts_none": {
+      "en": "There are no accounts in Meitar",
+      "he": "אין חשבונות במיתר"
+    },
+    "account_removed": {
+      "en": "Removed the account ⁨{0}⁩ ({1}) from Meitar. The app and the account at its provider are not changed.",
+      "he": "החשבון ⁨{0}⁩ ({1}) הוסר ממיתר. היישום והחשבון אצל הספק שלו לא שונו."
+    },
+    "account_not_found": {
+      "en": "There is no account ⁨{0}⁩ ({1}) in Meitar",
+      "he": "אין חשבון ⁨{0}⁩ ({1}) במיתר"
     },
     "launch_not_identified": {
       "en": "the system server did not identify the launched process",

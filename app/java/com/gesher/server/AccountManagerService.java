@@ -927,6 +927,55 @@ public final class AccountManagerService extends IAccountManager.Default {
         deliverChange(change); return true;
     }
 
+    /**
+     * The accounts for the host shell (the CLI and the Control Center, through GesherService):
+     * rows of "type TAB name TAB owner package" (owner empty when none is recorded). The
+     * stand-in Google account is not listed (it is not one the user can remove), nor is an
+     * account whose type or name holds a control character (the rows could not carry it).
+     * Package-private: apps reach accounts only through the binder methods above.
+     */
+    synchronized String[] hostAccountRows() {
+        List<String> rows = new ArrayList<>();
+        for (Map.Entry<Account, Entry> item : mAccounts.entrySet()) {
+            Account account = item.getKey();
+            Entry e = item.getValue();
+            if (synthetic(account, e) || hasControl(account.type) || hasControl(account.name)) continue;
+            String owner = e.owner == null ? "" : e.owner;
+            if (hasControl(owner)) continue;
+            rows.add(account.type + "\t" + account.name + "\t" + owner);
+        }
+        return rows.toArray(new String[0]);
+    }
+
+    private static boolean hasControl(String s) {
+        for (int i = 0; i < s.length(); i++) if (Character.isISOControl(s.charAt(i))) return true;
+        return false;
+    }
+
+    /**
+     * Removes one account as the user chose in the host shell, as removeAccountExplicitly does
+     * for its owner (listeners and sync are told; apps see it as Android's removal). Only the
+     * record in this device goes: the app's own data and the account at its provider stay.
+     * False when there is no such account, or it is the stand-in Google account.
+     */
+    boolean hostRemoveAccount(String type, String name) {
+        Account account;
+        try {
+            account = new Account(name, type);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        AccountChange change;
+        synchronized (this) {
+            Entry removed = mAccounts.get(account);
+            if (removed == null || synthetic(account, removed)) return false;
+            change = captureChange(account, true, removed, true);
+            beginMutation(); mAccounts.remove(account); save();
+        }
+        deliverChange(change);
+        return true;
+    }
+
     @Override
     public void removeAccountAsUser(IAccountManagerResponse response, Account account,
             boolean expectActivityLaunch, int userId) {

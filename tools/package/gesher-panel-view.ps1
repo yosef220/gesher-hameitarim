@@ -1,6 +1,6 @@
 ﻿# Copyright (C) 2026 The Gesher Authors; SPDX-License-Identifier: Apache-2.0
 # Presentation only. Call on the WPF dispatcher; caller owns events and lifetime.
-function New-PanelView([ValidateSet('dashboard', 'confirm', 'message')] [string] $Name, [hashtable] $Resources) {
+function New-PanelView([ValidateSet('dashboard', 'confirm', 'message', 'accounts')] [string] $Name, [hashtable] $Resources) {
     $path = Join-Path $PSScriptRoot ("gesher-panel-{0}.xaml" -f $Name)
     $source = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)
     [xml]$document = $source

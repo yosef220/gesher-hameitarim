@@ -68,6 +68,8 @@ public final class Services {
         final ActivityManagerService am;
         final ClipboardService clipboard;
         final Map<String, IBinder> services;
+        /** Set once the account service exists; for the host shell's account commands. */
+        volatile AccountManagerService accounts;
 
         Created(PackageManagerService pm, ActivityTaskManagerService atm,
                 ActivityManagerService am, ClipboardService clipboard,
@@ -287,6 +289,7 @@ public final class Services {
         // their authenticators.
         AccountManagerService accounts = new AccountManagerService(am, pm, persistentAccounts);
         accounts.setSyncRetirement(sync::accountsRemoved);
+        created.accounts = accounts;
         services.put(Context.ACCOUNT_SERVICE, StandIn.of(android.accounts.IAccountManager.class,
                 accounts).asBinder());
         sync.start(accounts::syncableAccounts, accounts::canAccessAccount);
