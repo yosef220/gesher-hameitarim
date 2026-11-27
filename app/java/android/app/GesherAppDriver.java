@@ -105,6 +105,9 @@ public final class GesherAppDriver {
         }
 
         // Process state ActivityManagerService would have sent in bindApplication.
+        // ART uses this boundary to distinguish the primary APK from secondary
+        // dex loaded from writable app data, before LoadedApk opens any code.
+        VMRuntime.setProcessDataDirectory(appInfo.dataDir);
         try {
             VMRuntime.getRuntime().setTargetSdkVersion(appInfo.targetSdkVersion);
         } catch (Throwable t) {
@@ -122,6 +125,9 @@ public final class GesherAppDriver {
         // As handleBindApplication: /proc/self/cmdline names the app's process, which
         // libraries compare with the package name to tell its main process.
         android.os.Process.setArgV0(data.processName);
+        // The zygote's specialisation: not dumpable unless debuggable (ADR 0093).
+        com.gesher.app.ProcessSpecialization.apply(
+                com.gesher.app.ProcessSpecialization.runtimeFlagsFor(appInfo), "gesher-app");
         data.config = config;
         data.compatInfo = compat;
         data.disabledCompatChanges = disabledChanges;
@@ -157,6 +163,9 @@ public final class GesherAppDriver {
         Instrumentation instrumentation = new Instrumentation();
         instrumentation.basicInit(thread);
         thread.mInstrumentation = instrumentation;
+
+        // The user's CA directories, as ActivityThread.main sets them (GesherAppProcess).
+        GesherAppProcess.useUserCaCertificates();
 
         // The app's network security config (cleartext policy, trust anchors), installed
         // before any app code runs, as handleBindApplication does (docs/network.md).

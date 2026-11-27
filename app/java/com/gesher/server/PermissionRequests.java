@@ -22,11 +22,38 @@ import java.util.function.Consumer;
  * The host runtime-permission controller. The ATM authenticates the requesting
  * activity/process before entering here; intent extras never identify the owner.
  * The host's default-No consent dialog runs away from app/Binder/UI threads.
+ * A background permission (ACCESS_BACKGROUND_LOCATION) is never granted by the
+ * foreground Allow: like Android 16's PermissionController it has its own choice,
+ * here a separate native dialog (see PermissionPolicy.planRequest).
  */
 final class PermissionRequests {
-    // Keep these values in sync with compat/credentials/permission_dialog.inc.
-    static final int DISMISSED = 0, DENIED = 1, ALLOWED = 2;
-    public interface Decision { int decide(String packageName, String permissionNames); }
+    // Keep these values in sync with compat/credentials/permission_dialog.inc and
+    // background_permission_dialog.inc. Cancellation is not a user denial, and a dialog
+    // that could not be shown (UNAVAILABLE) is not even a dismissal.
+    static final int UNAVAILABLE = -1, DISMISSED = 0, DENIED = 1, ALLOWED = 2, FOREGROUND_ONLY = 3, ALWAYS = 4;
+    /**
+     * Where a background choice is made. UPGRADE: the request dialog of a pre-R target
+     * (PermissionController's upgrade dialog). SETTINGS: the app's own App info page.
+     * REDIRECT: a target R+ background request, which Android sends to that Settings page
+     * (GrantPermissionsViewModel.sendDirectlyToSettings).
+     */
+    enum BackgroundMode { UPGRADE, SETTINGS, REDIRECT }
+    public interface Decision {
+        /** The foreground dialog: DISMISSED, DENIED or ALLOWED. */
+        int decide(String packageName, String permissionNames);
+        /** The background dialog: UNAVAILABLE, DISMISSED, DENIED, FOREGROUND_ONLY or ALWAYS. */
+        int decideBackground(String packageName, String permissionNames);
+    }
+
+    private interface Owner {
+        String name();
+        boolean isCurrent();
+        boolean canRequest(String permission);
+        int check(String permission);
+        void recordUserDecision(List<String> permissions, boolean allowed);
+        /** The installed package behind this owner, or null for a transient (standalone) one. */
+        ApkPackage installed();
+    }
 
     private final PackageManagerService mPm;
     private final Executor mExecutor;
@@ -38,7 +65,14 @@ final class PermissionRequests {
             Thread thread = new Thread(r, "permission-consent");
             thread.setDaemon(true);
             return thread;
-        }), PermissionRequests::confirmDecision);
+        }), new Decision() {
+            @Override public int decide(String packageName, String permissionNames) {
+                return confirmDecision(packageName, permissionNames);
+            }
+            @Override public int decideBackground(String packageName, String permissionNames) {
+                return confirmBackground(packageName, permissionNames);
+            }
+        });
     }
 
     /** Server-local injection for regression tests; never exposed through Binder or env. */
@@ -63,10 +97,119 @@ final class PermissionRequests {
         }
     }
 
+    static int confirmBackground(String packageName, String permissions) {
+        try {
+            AccountSecretStore.ensureLoaded();
+            int choice = nativeConfirmBackground(packageName, permissions);
+            return choice == DISMISSED || choice == DENIED || choice == FOREGROUND_ONLY || choice == ALWAYS
+                    ? choice : UNAVAILABLE;
+        } catch (LinkageError | SecurityException e) {
+            SystemServer.log("background permission consent unavailable: " + e.getClass().getSimpleName());
+            return UNAVAILABLE;
+        }
+    }
+
     private static native int nativeConfirm(String packageLabel, String permissionNames);
+    private static native int nativeConfirmBackground(String packageLabel, String permissionNames);
+
+    private boolean current(ApkPackage captured) {
+        return !mPm.isRemovalPending(captured.packageName) && mPm.get(captured.packageName) == captured;
+    }
+
+    /**
+     * The background dialog, then its commit. The policy rechecks this APK generation and the
+     * granted foreground under the PM monitor, and stops the app only after releasing it.
+     * Closing the dialog records nothing, except on the REDIRECT path, where Android counts
+     * returning from Settings without a choice against the app.
+     */
+    private void chooseBackground(PermissionPolicy policy, ApkPackage captured, String background,
+            boolean killOnRevoke, BackgroundMode mode) {
+        boolean settings = mode != BackgroundMode.UPGRADE;
+        if (!current(captured) || !policy.backgroundChoiceAvailable(captured, background, settings)) return;
+        int choice = mDecision.decideBackground(captured.packageName, describe(policy, List.of(background)));
+        if (choice == DENIED || choice == FOREGROUND_ONLY || choice == ALWAYS) {
+            policy.recordBackgroundChoice(captured, background, choice, killOnRevoke, settings);
+        } else if (choice == DISMISSED && mode == BackgroundMode.REDIRECT) {
+            policy.recordBackgroundDismissal(captured, background);
+        }
+    }
+
+    /**
+     * An app opening its own App info (ACTION_APPLICATION_DETAILS_SETTINGS) while one of its
+     * background permissions waits for the user's choice, as microG does after a request:
+     * Android's Settings page offers that choice, so show the background dialog, then run
+     * {@code completion} once the user has chosen. Returns false (nothing shown) when no
+     * such choice is pending; the caller then opens the Control Center as before.
+     */
+    boolean backgroundSettings(ApkPackage captured, Runnable completion) {
+        if (captured == null || completion == null) throw new IllegalArgumentException("Invalid settings request");
+        PermissionPolicy policy = mPm.permissions();
+        String background = policy.pendingBackgroundChoice(captured);
+        if (background == null) return false;
+        boolean accepted;
+        synchronized (mPending) { accepted = mPending.add(captured.packageName); }
+        if (!accepted) {
+            // A consent dialog for this app is already open; Settings returns at once.
+            completion.run();
+            return true;
+        }
+        try {
+            mExecutor.execute(() -> {
+                try {
+                    chooseBackground(policy, captured, background, true, BackgroundMode.SETTINGS);
+                } catch (RuntimeException e) {
+                    SystemServer.log("background permission choice failed for " + captured.packageName
+                            + ": " + e.getClass().getSimpleName());
+                } finally {
+                    synchronized (mPending) { mPending.remove(captured.packageName); }
+                }
+                completion.run();
+            });
+        } catch (RuntimeException e) {
+            synchronized (mPending) { mPending.remove(captured.packageName); }
+            throw e;
+        }
+        return true;
+    }
 
     void request(ApkPackage captured, String[] requested, Consumer<Intent> completion) {
-        if (captured == null || requested == null || requested.length > 128) {
+        if (captured == null) throw new IllegalArgumentException("Invalid runtime permission owner");
+        PermissionPolicy policy = mPm.permissions();
+        request(new Owner() {
+            @Override public String name() { return captured.packageName; }
+            @Override public boolean isCurrent() {
+                return !mPm.isRemovalPending(name()) && mPm.get(name()) == captured;
+            }
+            @Override public boolean canRequest(String permission) {
+                return policy.canRequest(name(), permission);
+            }
+            @Override public int check(String permission) {
+                return policy.checkPermission(name(), permission);
+            }
+            @Override public void recordUserDecision(List<String> permissions, boolean allowed) {
+                policy.recordUserDecision(captured, permissions, allowed);
+            }
+            @Override public ApkPackage installed() { return captured; }
+        }, requested, completion);
+    }
+
+    void requestScoped(PermissionPolicy.ScopedOwner captured, String[] requested,
+            Consumer<Intent> completion) {
+        if (captured == null) throw new IllegalArgumentException("Invalid runtime permission owner");
+        request(new Owner() {
+            @Override public String name() { return captured.packageName(); }
+            @Override public boolean isCurrent() { return captured.isCurrent(); }
+            @Override public boolean canRequest(String permission) { return captured.canRequest(permission); }
+            @Override public int check(String permission) { return captured.check(permission); }
+            @Override public void recordUserDecision(List<String> permissions, boolean allowed) {
+                captured.recordUserDecision(permissions, allowed);
+            }
+            @Override public ApkPackage installed() { return null; }
+        }, requested, completion);
+    }
+
+    private void request(Owner owner, String[] requested, Consumer<Intent> completion) {
+        if (requested == null || requested.length > 128) {
             throw new IllegalArgumentException("Invalid runtime permission request");
         }
         String[] names = requested.clone();
@@ -76,7 +219,7 @@ final class PermissionRequests {
             }
         }
         boolean accepted;
-        synchronized (mPending) { accepted = mPending.add(captured.packageName); }
+        synchronized (mPending) { accepted = mPending.add(owner.name()); }
         if (!accepted) {
             int[] denied = new int[names.length];
             Arrays.fill(denied, PackageManager.PERMISSION_DENIED);
@@ -88,42 +231,92 @@ final class PermissionRequests {
                 int[] grants = new int[names.length];
                 Arrays.fill(grants, PackageManager.PERMISSION_DENIED);
                 try {
-                    PermissionPolicy policy = mPm.permissions();
-                    List<String> prompt = new ArrayList<>();
-                    for (String name : names) {
-                        if (name != null && policy.canRequest(captured.packageName, name)
-                                && policy.checkPermission(captured.packageName, name)
-                                        != PackageManager.PERMISSION_GRANTED
-                                && !prompt.contains(name)) prompt.add(name);
-                    }
-                    int decision = !prompt.isEmpty() && !mPm.isRemovalPending(captured.packageName)
-                            && mPm.get(captured.packageName) == captured
-                            ? mDecision.decide(captured.packageName, describe(policy, prompt)) : DISMISSED;
-                    // PM.add/remove are synchronized on the PM. Keep identity stable
-                    // across the final recheck and the entire grant operation.
-                    synchronized (mPm) {
-                        if (!mPm.isRemovalPending(captured.packageName) && mPm.get(captured.packageName) == captured) {
-                            if (decision == ALLOWED || decision == DENIED) {
-                                policy.recordUserDecision(captured, prompt, decision == ALLOWED);
-                            }
-                            for (int i = 0; i < names.length; i++) {
-                                if (names[i] != null) {
-                                    grants[i] = policy.checkPermission(captured.packageName, names[i]);
-                                }
+                    if (mPm.isCohost()) {
+                        if (owner.isCurrent()) {
+                            int[] actual = Zygote.nativeCohostPermissionExchange(
+                                    CohostPermissionHost.REQUEST, names);
+                            if (actual != null && actual.length == names.length && owner.isCurrent()) {
+                                grants = actual;
                             }
                         }
+                    } else if (owner.installed() != null) {
+                        installedConsent(owner.installed(), names, grants);
+                    } else {
+                        hostConsent(owner, names, grants);
                     }
                 } catch (RuntimeException e) {
-                    SystemServer.log("permission request denied for " + captured.packageName
+                    SystemServer.log("permission request denied for " + owner.name()
                             + ": " + e.getClass().getSimpleName());
                 } finally {
-                    synchronized (mPending) { mPending.remove(captured.packageName); }
+                    synchronized (mPending) { mPending.remove(owner.name()); }
                 }
                 completion.accept(result(names, grants));
             });
         } catch (RuntimeException e) {
-            synchronized (mPending) { mPending.remove(captured.packageName); }
+            synchronized (mPending) { mPending.remove(owner.name()); }
             throw e;
+        }
+    }
+
+    /**
+     * An installed package's request: the foreground dialog, then each background permission's own
+     * choice once its foreground is granted (Android 16 BackgroundGrantBehavior).
+     */
+    private void installedConsent(ApkPackage captured, String[] names, int[] grants) {
+        PermissionPolicy policy = mPm.permissions();
+        PermissionPolicy.RequestPlan plan = current(captured)
+                ? policy.planRequest(captured, names) : PermissionPolicy.RequestPlan.NONE;
+        List<String> prompt = plan.foreground();
+        int decision = !prompt.isEmpty() && current(captured)
+                ? mDecision.decide(captured.packageName, describe(policy, prompt)) : DISMISSED;
+        // PM.add/remove are synchronized on the PM. Keep identity stable
+        // across the final recheck and the entire grant operation.
+        synchronized (mPm) {
+            if (current(captured) && (decision == ALLOWED || decision == DENIED)) {
+                policy.recordUserDecision(captured, prompt, decision == ALLOWED);
+            }
+        }
+        // Each background permission gets its own choice once its foreground is
+        // granted; a foreground denial leaves it unasked, as on Android. A target
+        // R+ request reaches it only alone, which Android sends to Settings.
+        BackgroundMode mode = captured.parsed.getTargetSdkVersion() >= android.os.Build.VERSION_CODES.R
+                ? BackgroundMode.REDIRECT : BackgroundMode.UPGRADE;
+        for (String background : plan.background()) {
+            chooseBackground(policy, captured, background,
+                    plan.foregroundAlreadyGranted().contains(background), mode);
+        }
+        synchronized (mPm) {
+            if (current(captured)) {
+                for (int i = 0; i < names.length; i++) {
+                    if (names[i] != null) grants[i] = policy.checkPermission(captured.packageName, names[i]);
+                }
+            }
+        }
+    }
+
+    /**
+     * A transient (standalone) owner: foreground consent only. It has no installed package for the
+     * background-permission plan, so it keeps the single dialog it had before that plan existed.
+     */
+    private void hostConsent(Owner owner, String[] names, int[] grants) {
+        List<String> prompt = new ArrayList<>();
+        for (String name : names) {
+            if (name != null && owner.canRequest(name)
+                    && owner.check(name) != PackageManager.PERMISSION_GRANTED
+                    && !prompt.contains(name)) prompt.add(name);
+        }
+        int decision = !prompt.isEmpty() && owner.isCurrent()
+                ? mDecision.decide(owner.name(), describe(mPm.permissions(), prompt)) : DISMISSED;
+        // PM.add/remove are synchronized on the PM. Keep identity stable
+        // across the final recheck and the entire grant operation.
+        synchronized (mPm) {
+            if (!owner.isCurrent()) return;
+            if (decision == ALLOWED || decision == DENIED) {
+                owner.recordUserDecision(prompt, decision == ALLOWED);
+            }
+            for (int i = 0; i < names.length; i++) {
+                if (names[i] != null) grants[i] = owner.check(names[i]);
+            }
         }
     }
 

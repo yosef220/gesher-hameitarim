@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -28,6 +29,7 @@ struct DescriptorSnapshot {
 using DescriptorSnapshotPtr = std::shared_ptr<DescriptorSnapshot>;
 DescriptorSnapshotPtr CaptureDescriptor(int fd);
 DescriptorSnapshotPtr CaptureFileHandle(HANDLE file);
+std::wstring DropDescriptorPath(const DescriptorSnapshotPtr& descriptor);
 // A new descriptor alias with independent descriptor flags. The snapshot
 // retains its reference; the new slot owns an explicit native duplicate.
 int AttachFileDescription(const DescriptorSnapshotPtr& snapshot, bool close_on_exec);
@@ -41,6 +43,11 @@ int FileDescriptionIoFlags(const DescriptorSnapshotPtr& snapshot);
 // Call only for a freshly created, unpublished synchronous pipe endpoint.
 // Its access and wait mode are supplied by the creator, before any I/O.
 int InitializePipeDescription(const DescriptorSnapshotPtr& snapshot, int flags);
+// Call only for a freshly created, unpublished POSIX FIFO pipe endpoint.
+int InitializeFifoDescription(const DescriptorSnapshotPtr& snapshot, int flags,
+                              uint32_t fifo_vol, uint32_t fifo_idx_hi, uint32_t fifo_idx_lo,
+                              uint32_t fifo_mode, uint64_t writer_gen,
+                              const char* pipe_gate, HANDLE write_handle);
 bool FileDescriptionIsRevocable(const DescriptorSnapshotPtr& snapshot);
 bool FileDescriptionIsMemfd(const DescriptorSnapshotPtr& snapshot);
 // Consumes both owned handles on every outcome. Used after a broker has
