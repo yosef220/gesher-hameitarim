@@ -97,11 +97,31 @@ it is removed or redesigned.
   code generated with AI. Generated explanations and passing tests are not
   substitutes for reviewing its behavior.
 
-Gesher HaMeitarim is offered under the [PolyForm Strict License 1.0.0](LICENSE),
-which does not permit making changes or new works based on the software. Ask the
-repository owner before preparing a contribution: a contribution is accepted only
-under a separate written agreement that lets the owner offer it under the
-project's license. The parts that come from Gesher remain under the
+Meitar is offered under the [PolyForm Strict License 1.0.0](LICENSE), which does not
+permit making changes or new works based on the software. The following applies to
+contributions and overrides that restriction only for this purpose:
+
+1. **Permission to prepare a suggestion.** You may modify a copy of the software, and
+   publish the modification in a pull request to this repository, solely in order to
+   suggest it to the repository owner.
+2. **Your grant.** By submitting a contribution you grant the repository owner a worldwide,
+   perpetual, irrevocable, royalty-free license to use, copy, modify, distribute and
+   sublicense it, under any terms the owner chooses, including this project's license. You
+   keep the copyright in your contribution. You confirm that you have the right to grant
+   this license, including any permission your employer requires.
+3. **No obligation.** The owner may accept, change, postpone or decline a contribution,
+   and is not obliged to use, credit or reply to it. A submitted contribution is a suggestion.
+4. **Everything else is unchanged.** This does not give anyone else any right to the
+   software beyond the license.
+
+(This text has not been reviewed by a lawyer; see `docs/he/09-license.md`.)
+
+התרגום לעברית: תרומה היא הצעה. בהגשתה אתה מתיר לבעל המאגר לשנות עותק של התוכנה כדי להכין אותה, ומעניק
+לו רישיון עולמי, בלתי חוזר וללא תמלוגים להשתמש בה ולהפיץ אותה בכל תנאים שיבחר, בלי שהוא מחויב לקבל
+אותה, להשתמש בה, לתת לה קרדיט או להשיב עליה. זכויות היוצרים נשארות שלך. הנוסח הנוסף אינו מעניק לאף אחד
+אחר זכות כלשהי בתוכנה.
+
+The parts that come from Gesher remain under the
 [Apache License 2.0](LICENSE-APACHE) (see [NOTICE.md](NOTICE.md) and the original
 [licensing decision](docs/decisions/0001-license.md)). Identify third-party code,
 its source and license, retain required notices, and ensure you have the right
