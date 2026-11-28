@@ -48,6 +48,11 @@ OutputBaseFilename=gesher-setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+; מיתר: עמוד הפתיחה מוצג (כך השורה "מבוסס על Gesher" נראית), עם תמונות המותג במקום התמונות של Inno Setup.
+; התמונות מופקות עם tools/icons/gesher-wizard-images.cjs ו-make-wizard-images.py, בגדלים ל-100%, 150% ו-200% DPI.
+DisableWelcomePage=no
+WizardImageFile=wizard-164x314.bmp,wizard-246x459.bmp,wizard-328x604.bmp
+WizardSmallImageFile=small-55x55.bmp,small-83x80.bmp,small-110x106.bmp
 UninstallDisplayName={cm:setup_app_name} {#AppVersion}
 ; Gesher's icon (tools/icons/make-icons.py): Setup, Add/Remove Programs, the
 ; Start menu entries and the .apk file type.
