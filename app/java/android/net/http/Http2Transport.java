@@ -10,6 +10,7 @@ import java.net.*;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
+import org.brotli.dec.BrotliInputStream;
 
 /** A narrow adapter to AOSP OkHttp's HTTP/2 framing already in core-libart.jar.
  * Like Network's HttpURLConnectionFactory adapter, reflection keeps this out of
@@ -194,7 +195,8 @@ final class Http2Transport implements Closeable {
     }
     void setResponseEncoding(String encoding) throws IOException {
         if (!encoding.isEmpty() && !encoding.equalsIgnoreCase("identity")
-                && !encoding.equalsIgnoreCase("gzip") && !encoding.equalsIgnoreCase("deflate"))
+                && !encoding.equalsIgnoreCase("gzip") && !encoding.equalsIgnoreCase("deflate")
+                && !encoding.equalsIgnoreCase("br"))
             throw new IOException("Unsupported HTTP content encoding");
         responseEncoding=encoding;
     }
@@ -217,6 +219,7 @@ final class Http2Transport implements Closeable {
         // the body pump, after the response-header callback has been dispatched:
         // a duplex peer may wait for a write from that callback before its body.
         InputStream decoded=responseEncoding.equalsIgnoreCase("gzip") ? new GZIPInputStream(raw)
+                : responseEncoding.equalsIgnoreCase("br") ? new BrotliInputStream(raw)
                 : new InflaterInputStream(raw);
         synchronized (this) {
             if (closed) { decoded.close(); throw new IOException("Stream closed"); }
@@ -250,7 +253,8 @@ final class Http2Transport implements Closeable {
         enter();
         try {
         if (decodedBody==null && (responseEncoding.equalsIgnoreCase("gzip")
-                || responseEncoding.equalsIgnoreCase("deflate"))) initDecodedBody();
+                || responseEncoding.equalsIgnoreCase("deflate")
+                || responseEncoding.equalsIgnoreCase("br"))) initDecodedBody();
         if (decodedBody==null) return readRaw(bytes,offset,count);
         return decodedBody.read(bytes,offset,count);
         } finally { leave(); }

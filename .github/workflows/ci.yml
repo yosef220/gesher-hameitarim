@@ -298,6 +298,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Location mode contracts failed' }
           python tools/tests/test_panel_resize.py
           if ($LASTEXITCODE -ne 0) { throw 'Panel resize contracts failed' }
+          python tools/tests/test_brotli_decoder.py
+          if ($LASTEXITCODE -ne 0) { throw 'Brotli decoder contracts failed' }
           python tools/tests/test_dialog_bidi.py
           if ($LASTEXITCODE -ne 0) { throw 'Dialog bidi contracts failed' }
           python tools/tests/test_web_intent_fallback.py

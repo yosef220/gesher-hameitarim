@@ -36,7 +36,7 @@
 
 ## רכיבים של צד שלישי
 
-‏AOSP, ‏ANGLE, ‏dynarmic ואחרים מופצים לפי הרישיונות וההודעות שבתיקייה `licenses` ובקבצי ה-NOTICES. הגופנים David Libre ו-IBM Plex Sans Hebrew מופצים לפי SIL Open Font License 1.1, והרישיונות שלהם נמצאים ב-`tools/package/ui-fonts`. הרישיון של מיתר לא משנה את התנאים של הרכיבים האלה.
+‏AOSP, ‏ANGLE, ‏dynarmic ואחרים מופצים לפי הרישיונות וההודעות שבתיקייה `licenses` ובקבצי ה-NOTICES. הגופנים David Libre ו-IBM Plex Sans Hebrew מופצים לפי SIL Open Font License 1.1, והרישיונות שלהם נמצאים ב-`tools/package/ui-fonts`. מפענח Brotli ב-`app/java/org/brotli/dec` (`org.brotli:dec` 0.1.2 של Google) מופץ לפי רישיון MIT, הרישיון ב-`app/java/org/brotli/LICENSE`. הרישיון של מיתר לא משנה את התנאים של הרכיבים האלה.
 
 ---
 
