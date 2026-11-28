@@ -26,6 +26,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
@@ -622,7 +623,12 @@ public final class DnsResolverHost {
             check(WindowsNetworks.active.get() == 32 && WindowsNetworks.calls.get() == 32,
                     "controlled timeouts cannot retire or replace actual native calls");
             observer.start();
-            until(() -> observationDone.getCount() == 0 || observer.getState() == Thread.State.TIMED_WAITING,
+            // המצב TIMED_WAITING זמני: המשקיף מתעורר כל 2 מילישניות כדי לדגום. הפונקציה
+            // until בודקת את התנאי פעם נוספת אחרי הלולאה, ולכן מצב שנראה פעם אחת חייב
+            // להישאר "נצפה". אחרת הדגימה השנייה נכשלת לפעמים כשהמעבד עמוס.
+            AtomicBoolean waitObserved = new AtomicBoolean();
+            until(() -> waitObserved.get() || observationDone.getCount() == 0
+                            || (observer.getState() == Thread.State.TIMED_WAITING && waitObserved.compareAndSet(false, true)),
                     "retirement observation reaches its bounded wait");
             if (observationFailure.get() != null)
                 throw new AssertionError("callback notification is not Executor retirement", observationFailure.get());
