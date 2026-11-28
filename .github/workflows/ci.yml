@@ -2137,6 +2137,9 @@ jobs:
         shell: pwsh
         run: |
           $invocation = [guid]::NewGuid().ToString('N')
+          # מזהה נפרד לקורפוס: coverage.py קורא את GESHER_E2E_INVOCATION_ID של הצעד הראשון, ולכן
+          # הדוח של הקורפוס מקבל את המזהה שלו במפורש (--expected-invocation-id).
+          "GESHER_E2E_CORPUS_INVOCATION_ID=$invocation" >> $env:GITHUB_ENV
           $setup = (Get-ChildItem installer\gesher-setup-*.exe).FullName
           pwsh -NoProfile -File tests/e2e/run-e2e.ps1 -Setup $setup -Manifest tests/e2e/apps-corpus-a.json -Out e2e-corpus-a -InvocationId $invocation -SkipInstall -RequireApkIdentity -BuildTools $env:GESHER_TEST_BUILD_TOOLS
           exit $LASTEXITCODE
@@ -2147,7 +2150,7 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path e2e-corpus-a/observations.json) {
-            python tests/e2e/coverage.py --manifest tests/e2e/apps-corpus-a.json --observations e2e-corpus-a/observations.json --out-dir e2e-corpus-a --require-apk-identity
+            python tests/e2e/coverage.py --manifest tests/e2e/apps-corpus-a.json --observations e2e-corpus-a/observations.json --out-dir e2e-corpus-a --expected-invocation-id $env:GESHER_E2E_CORPUS_INVOCATION_ID --require-apk-identity
             if (Test-Path e2e-corpus-a/coverage.md) {
               "## קורפוס, שכבה א (דיווח בלבד)" | Add-Content $env:GITHUB_STEP_SUMMARY
               Get-Content e2e-corpus-a/coverage.md | Add-Content $env:GITHUB_STEP_SUMMARY
