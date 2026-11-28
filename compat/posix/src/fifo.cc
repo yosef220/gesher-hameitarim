@@ -944,6 +944,10 @@ HANDLE OpenPathMaybeFifo(const std::wstring& windows, DWORD access, bool follow,
 
 int OpenFifo(const std::wstring& windows, int flags, bool* handled) {
   *handled = false;
+  // A FIFO is a reparse point. A path that exists without that attribute is a regular
+  // file or a directory, so the common open skips the extra open and close of a probe handle.
+  const DWORD attributes = GetFileAttributesW(windows.c_str());
+  if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) return -1;
   const bool follow = (flags & O_NOFOLLOW) == 0;
   bool is_fifo = false;
   HANDLE h = OpenPathMaybeFifo(windows, FILE_READ_ATTRIBUTES | FILE_READ_EA, follow, &is_fifo);
