@@ -3,7 +3,8 @@
 #   - מסך הפתיחה האמיתי (GDI+) מצויר על Windows בכל המצבים, לצילומים לביקורת
 #   - דף הרישיון באשף ההתקנה מצולם בעברית ובאנגלית
 #   - מרכז הבקרה: בדיקות החוזה של התצוגה על WPF, וצילומים בכל מצב ושפה עם הדיאלוגים
-# הצילומים עולים כ-artifacts (splash-screens, license-page-screens, control-center-screens), וגם ללוג.
+#   - הדיאלוגים הנייטיב של המארח (הרשאה, חשבון, הודעה): אותו קוד כמו במוצר, מצולם על Windows בעברית ובאנגלית, בבהיר ובכהה
+# הצילומים עולים כ-artifacts (splash-screens, license-page-screens, control-center-screens, host-dialog-screens), וגם ללוג.
 name: hameitarim-design
 
 on:
@@ -101,6 +102,76 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: splash-screens
+          path: screens/
+          retention-days: 30
+
+  host-dialogs-build:
+    name: בניית כלי התצוגה של הדיאלוגים הנייטיב
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: הורדת המהדר
+        run: |
+          mkdir -p ~/toolchain
+          curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/$LLVM_MINGW_NAME.tar.xz" \
+            | tar -xJ -C ~/toolchain
+      - name: בנייה עם ההגדרות של הפרויקט
+        run: |
+          CC="$HOME/toolchain/$LLVM_MINGW_NAME/bin/x86_64-w64-mingw32-clang"
+          # כמו compat/credentials/credentials.cmake: בלי NOGDI, והאזהרות הן שגיאות
+          mkdir -p out
+          $CC -std=gnu11 -UNOGDI -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0A00 -Wall -Wextra -Werror -municode \
+            -c tools/ui/host-dialogs-preview.c -o out/host-dialogs-preview.o
+          $CC -municode out/host-dialogs-preview.o -o out/host-dialogs-preview.exe \
+            -luser32 -lgdi32 -ladvapi32 -lshell32 -static
+          cp tools/package/gesher.ico out/gesher.ico
+          cp -r tools/package/ui-fonts out/ui-fonts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-dialogs-preview-tool
+          path: out/
+          retention-days: 3
+
+  host-dialogs-render:
+    name: צילומי הדיאלוגים הנייטיב על Windows
+    needs: host-dialogs-build
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-dialogs-preview-tool
+          path: tool
+      - name: הצגה וצילום של כל דיאלוג
+        shell: pwsh
+        run: |
+          $raw = New-Item -ItemType Directory -Force -Path raw
+          & tool/host-dialogs-preview.exe $raw.FullName
+          if ($LASTEXITCODE -ne 0) { throw "host-dialogs-preview נכשל בקוד $LASTEXITCODE" }
+          Add-Type -AssemblyName System.Drawing
+          $screens = New-Item -ItemType Directory -Force -Path screens
+          foreach ($file in Get-ChildItem $raw -Filter *.bmp) {
+            $image = [Drawing.Image]::FromFile($file.FullName)
+            $image.Save((Join-Path $screens.FullName ($file.BaseName + '.png')), [Drawing.Imaging.ImageFormat]::Png)
+            $image.Dispose()
+          }
+          $count = @(Get-ChildItem $screens -Filter *.png).Count
+          if ($count -lt 24) { throw "נוצרו רק $count צילומים" }
+      - name: הצילומים גם בלוג (base64), לסביבות שלא מגיעות לאחסון ה-artifacts
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem screens -Filter *.png | Sort-Object Name) {
+            "HOSTDLG-PNG-BEGIN $($file.Name)"
+            $data = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
+            for ($i = 0; $i -lt $data.Length; $i += 4000) { $data.Substring($i, [Math]::Min(4000, $data.Length - $i)) }
+            'HOSTDLG-PNG-END'
+          }
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: host-dialog-screens
           path: screens/
           retention-days: 30
 

@@ -1,8 +1,10 @@
 /* Copyright (C) 2026 The Gesher Authors. SPDX-License-Identifier: Apache-2.0 */
 /*
- * Native Gesher-host dialogs. Match the Control Center's light, blue-accent
- * surfaces without changing Windows control classes, accessibility, tab order,
- * or the default-deny behavior of permission/account prompts.
+ * Native Gesher-host dialogs. They take their colors from the same design
+ * tokens as the Control Center (gesher_tokens.h, generated from ui/tokens.json),
+ * light or dark as Windows' app setting says, without changing Windows control
+ * classes, accessibility, tab order, or the default-deny behavior of
+ * permission/account prompts.
  *
  * Only Gesher-owned chrome is styled. Android application windows, OS common
  * dialogs, and system high-contrast colors are left to their respective owners.
@@ -13,6 +15,8 @@
 
 #include <windows.h>
 #include <wchar.h>
+
+#include "gesher_tokens.h"
 
 /* The project defines NOGDI for AOSP code. Includers must undefine it before
  * <windows.h> (as gesher_launch.cc and the -UNOGDI credential targets do). */
@@ -29,7 +33,13 @@ typedef struct {
   HBRUSH surface;
   HBRUSH input;
   BOOL high_contrast;
+  BOOL dark;
 } GesherHostTheme;
+
+/* A token role in the theme's mode: GESHER_HOST_ROLE(theme, INK) is
+ * GESHER_INK_DARK in dark mode and GESHER_INK_LIGHT otherwise. */
+#define GESHER_HOST_ROLE(theme, role) \
+  ((theme)->dark ? GESHER_##role##_DARK : GESHER_##role##_LIGHT)
 
 static inline BOOL GesherHostHighContrast(void) {
   HIGHCONTRASTW contrast;
@@ -39,17 +49,37 @@ static inline BOOL GesherHostHighContrast(void) {
       && (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0;
 }
 
-static inline COLORREF GesherHostTextColor(const GesherHostTheme* theme) {
-  return theme->high_contrast ? GetSysColor(COLOR_WINDOWTEXT) : RGB(16, 24, 40);
+/* Windows' "choose your default app mode" for the current user: dark when
+ * AppsUseLightTheme is 0. Without the value (or when it cannot be read) the
+ * dialogs are light, as the Control Center is. */
+static inline BOOL GesherHostAppsUseDark(void) {
+  typedef LONG (WINAPI *GetValueFn)(HKEY, LPCWSTR, LPCWSTR, DWORD, LPDWORD, PVOID, LPDWORD);
+  HMODULE module = LoadLibraryExW(L"advapi32.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+  if (module == NULL) return FALSE;
+  GetValueFn get_value = (GetValueFn)(void*)GetProcAddress(module, "RegGetValueW");
+  DWORD light = 1, size = sizeof(light);
+  BOOL dark = get_value != NULL
+      && get_value(HKEY_CURRENT_USER,
+                   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                   L"AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &light, &size) == ERROR_SUCCESS
+      && light == 0;
+  FreeLibrary(module);
+  return dark;
 }
 
+static inline COLORREF GesherHostTextColor(const GesherHostTheme* theme) {
+  return theme->high_contrast ? GetSysColor(COLOR_WINDOWTEXT) : GESHER_HOST_ROLE(theme, INK);
+}
+
+/* The brand line and the focus ring: the brand color, which the tokens
+ * lighten in dark mode so it keeps its contrast. */
 static inline COLORREF GesherHostAccentColor(const GesherHostTheme* theme) {
-  return theme->high_contrast ? GetSysColor(COLOR_HOTLIGHT) : RGB(21, 112, 239);
+  return theme->high_contrast ? GetSysColor(COLOR_HOTLIGHT) : GESHER_HOST_ROLE(theme, BRAND);
 }
 
 /* DWM attributes are optional: Windows 10 and non-composited desktops retain
  * the normal title bar, and high-contrast overrides are never painted over. */
-static inline void GesherHostApplyCaption(HWND window) {
+static inline void GesherHostApplyCaptionFor(HWND window, BOOL dark) {
   if (GesherHostHighContrast()) return;
   HMODULE module = LoadLibraryExW(L"dwmapi.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
   if (module == NULL) return;
@@ -57,8 +87,10 @@ static inline void GesherHostApplyCaption(HWND window) {
   SetAttribute set_attribute = (SetAttribute)GetProcAddress(module, "DwmSetWindowAttribute");
   if (set_attribute != NULL) {
     const DWORD corner = 2; /* DWMWCP_ROUND, Windows 11; ignored elsewhere. */
-    const COLORREF caption = RGB(255, 255, 255);
-    const COLORREF text = RGB(16, 24, 40);
+    const DWORD immersive_dark = dark ? 1 : 0;
+    const COLORREF caption = dark ? GESHER_SURFACE_RAISED_DARK : GESHER_SURFACE_RAISED_LIGHT;
+    const COLORREF text = dark ? GESHER_INK_DARK : GESHER_INK_LIGHT;
+    set_attribute(window, 20, &immersive_dark, sizeof(immersive_dark)); /* DWMWA_USE_IMMERSIVE_DARK_MODE */
     set_attribute(window, 33, &corner, sizeof(corner)); /* DWMWA_WINDOW_CORNER_PREFERENCE */
     set_attribute(window, 35, &caption, sizeof(caption)); /* DWMWA_CAPTION_COLOR */
     set_attribute(window, 36, &text, sizeof(text)); /* DWMWA_TEXT_COLOR */
@@ -66,11 +98,19 @@ static inline void GesherHostApplyCaption(HWND window) {
   FreeLibrary(module);
 }
 
+/* The caption of a host window that has no theme of its own (the launcher's
+ * splash fallback): the mode Windows says. */
+static inline void GesherHostApplyCaption(HWND window) {
+  GesherHostApplyCaptionFor(window, GesherHostAppsUseDark());
+}
+
 static inline void GesherHostThemeInit(GesherHostTheme* theme, HWND window) {
   theme->high_contrast = GesherHostHighContrast();
-  theme->surface = theme->high_contrast ? NULL : CreateSolidBrush(RGB(255, 255, 255));
-  theme->input = theme->high_contrast ? NULL : CreateSolidBrush(RGB(249, 250, 251));
-  GesherHostApplyCaption(window);
+  theme->dark = !theme->high_contrast && GesherHostAppsUseDark();
+  /* The dialog is a raised surface; read-only boxes sit on the window surface. */
+  theme->surface = theme->high_contrast ? NULL : CreateSolidBrush(GESHER_HOST_ROLE(theme, SURFACE_RAISED));
+  theme->input = theme->high_contrast ? NULL : CreateSolidBrush(GESHER_HOST_ROLE(theme, SURFACE));
+  GesherHostApplyCaptionFor(window, theme->dark);
 }
 
 static inline void GesherHostThemeDispose(GesherHostTheme* theme) {
@@ -143,13 +183,14 @@ static inline void GesherHostDrawButton(const DRAWITEMSTRUCT* item,
     ink = GetSysColor(disabled ? COLOR_GRAYTEXT
                              : primary ? COLOR_HIGHLIGHTTEXT : COLOR_BTNTEXT);
   } else {
-    fill = disabled ? RGB(242, 244, 247)
-        : primary ? (pressed ? RGB(23, 92, 211) : RGB(21, 112, 239))
-                  : (pressed ? RGB(242, 244, 247) : RGB(255, 255, 255));
+    fill = disabled ? GESHER_HOST_ROLE(theme, FILL_DISABLED)
+        : primary ? (pressed ? GESHER_HOST_ROLE(theme, BRAND_PRESSED) : GESHER_HOST_ROLE(theme, BRAND))
+                  : (pressed ? GESHER_HOST_ROLE(theme, SURFACE_HOVER) : GESHER_HOST_ROLE(theme, SURFACE_RAISED));
     border = primary && !disabled ? fill
-        : focused && !disabled ? GesherHostAccentColor(theme) : RGB(208, 213, 221);
-    ink = disabled ? RGB(152, 162, 179)
-        : primary ? RGB(255, 255, 255) : RGB(52, 64, 84);
+        : disabled ? GESHER_HOST_ROLE(theme, LINE)
+        : focused ? GESHER_HOST_ROLE(theme, FOCUS) : GESHER_HOST_ROLE(theme, LINE_STRONG);
+    ink = disabled ? GESHER_HOST_ROLE(theme, INK_DISABLED)
+        : primary ? GESHER_HOST_ROLE(theme, ON_BRAND) : GESHER_HOST_ROLE(theme, INK);
   }
   /* Paint the corners outside the rounded shape with the dialog surface. */
   FillRect(item->hDC, &item->rcItem, GesherHostSurface(theme));
@@ -160,7 +201,7 @@ static inline void GesherHostDrawButton(const DRAWITEMSTRUCT* item,
     HGDIOBJ old_brush = SelectObject(item->hDC, brush);
     HGDIOBJ old_pen = SelectObject(item->hDC, pen);
     RECT bounds = item->rcItem;
-    int radius = MulDiv(12, dpi, 96);
+    int radius = MulDiv(2 * GESHER_RADIUS_BUTTON, dpi, 96);
     RoundRect(item->hDC, bounds.left, bounds.top, bounds.right, bounds.bottom, radius, radius);
     SelectObject(item->hDC, old_brush);
     SelectObject(item->hDC, old_pen);
@@ -208,8 +249,10 @@ static inline INT_PTR GesherHostThemeEvent(HWND dialog, GesherHostTheme* theme,
     return FALSE; /* Let the dialog manager rescale the dialog and its layout. */
   }
   if (message == WM_SYSCOLORCHANGE
-      || (message == WM_SETTINGCHANGE && wparam == SPI_SETHIGHCONTRAST)) {
-    /* Follow a high-contrast switch while the dialog is open. */
+      || (message == WM_SETTINGCHANGE && wparam == SPI_SETHIGHCONTRAST)
+      || (message == WM_SETTINGCHANGE && lparam != 0
+          && lstrcmpW((LPCWSTR)lparam, L"ImmersiveColorSet") == 0)) {
+    /* Follow a high-contrast or light/dark switch while the dialog is open. */
     GesherHostThemeDispose(theme);
     GesherHostThemeInit(theme, dialog);
     InvalidateRect(dialog, NULL, TRUE);
@@ -226,7 +269,7 @@ static inline INT_PTR GesherHostThemeEvent(HWND dialog, GesherHostTheme* theme,
         && GetDlgCtrlID((HWND)lparam) == brand_id
         ? GesherHostAccentColor(theme) : GesherHostTextColor(theme));
     SetBkColor(dc, theme->high_contrast ? GetSysColor(COLOR_WINDOW)
-               : input ? RGB(249, 250, 251) : RGB(255, 255, 255));
+               : input ? GESHER_HOST_ROLE(theme, SURFACE) : GESHER_HOST_ROLE(theme, SURFACE_RAISED));
     return (INT_PTR)(input ? GesherHostInput(theme) : GesherHostSurface(theme));
   }
   if (message == WM_DRAWITEM && lparam != 0) {
