@@ -42,7 +42,17 @@ public final class WebViewOwnedResponsesHost {
     private final FixtureContext mContext = new FixtureContext();
     private final Settings mSettings = new Settings();
     private final WebViewClient mClient = new WebViewClient(this);
-    private final Object mView = new Object();
+    private final FixtureView mView = new FixtureView();
+    /** The WebView of the page: records the address the provider loads for an intent: link. */
+    private static final class FixtureView { volatile String loaded; void loadUrl(String url) { loaded = url; } }
+    /** The Control Center's setting and the parser (com.gesher.app.webview.IntentFallback), as fixtures. */
+    private static final class IntentFallback {
+        static volatile String fixtureAddress;
+        static volatile boolean fixtureEnabled;
+        static String address(String url) { return url != null && url.startsWith("intent:") ? fixtureAddress : null; }
+        static boolean enabled() { return fixtureEnabled; }
+    }
+    private static final boolean HAS_INTENT_FALLBACK = @HAS_INTENT_FALLBACK@;
 
     private static final class Delivery {
         final long id;
@@ -349,6 +359,35 @@ public final class WebViewOwnedResponsesHost {
     }
     private static void navigationCases() {
         String url = FileUrls.toWebView2(BASE);
+        scenario("an intent: link nobody took opens its web address only when the user's setting is on", () -> {
+            if (!HAS_INTENT_FALLBACK) return;  // an old-source control has no such setting
+            String link = "intent://x#Intent;S.browser_fallback_url=https%3A%2F%2Ffallback.example%2F;end";
+            try {
+                WebViewOwnedResponsesHost provider = new WebViewOwnedResponsesHost();
+                provider.mOverridesNavigation = true;  // the app is asked, and declines
+                WebView2Host host = provider.mHost;
+                IntentFallback.fixtureAddress = "https://fallback.example/";
+                IntentFallback.fixtureEnabled = false;
+                check(host.starting(link, true, false) > 0 && provider.mView.loaded == null,
+                        "with the setting off an intent: link opened something");
+                IntentFallback.fixtureEnabled = true;
+                check(host.starting(link, true, false) < 0 && "https://fallback.example/".equals(provider.mView.loaded),
+                        "with the setting on the web address of an unhandled intent: link was not opened");
+                provider.mView.loaded = null;
+                check(host.starting("https://page.example/", true, false) > 0 && provider.mView.loaded == null,
+                        "an ordinary link opened a fallback address");
+                IntentFallback.fixtureAddress = null;  // the link names no usable web address
+                check(host.starting(link, true, false) > 0 && provider.mView.loaded == null,
+                        "an intent: link without a web address opened something");
+                IntentFallback.fixtureAddress = "https://fallback.example/";
+                provider.mClient.takes = true;  // the app takes the navigation itself
+                check(host.starting(link, true, false) < 0 && provider.mView.loaded == null,
+                        "the fallback address was opened although the app took the navigation");
+            } finally {
+                IntentFallback.fixtureAddress = null;
+                IntentFallback.fixtureEnabled = false;
+            }
+        });
         scenario("two overlapping loads both start: neither is the app's", () -> {
             WebViewOwnedResponsesHost provider = taking(pending(BASE, "first", "text/html", "UTF-8"));
             provider.loadDataWithBaseURL(BASE, "second", "text/html", "UTF-8", null);
