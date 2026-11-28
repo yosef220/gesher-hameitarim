@@ -56,6 +56,8 @@ pr-380	origin:refs/heads/archive/apache-snapshots	261a7ee6bcc34fd75c9cef94ef3cda
 pr-389	origin:refs/heads/topic/pr-389	54a9129b88be94d2fe53bc6174eab946fd68b77c	389	2	ביצועים: מקדמי הכרומה של NV12 ל-RGBA נשמרים בין פריימים במצלמה
 pr-393	origin:refs/heads/topic/pr-393	9e2c9a1b0cf94e4d21e23e0902649338a56e81f5	393	2	CI: בידוד של observers של המטא-דאטה של TSF מכותבים שממתינים
 pr-394	origin:refs/heads/archive/apache-snapshots	d664ac2a90507b26b6b8a281ea6874063b94618a	394	2	בדיקה: DNS מחכה לקריאה האמיתית של ה-timeout ולסיום של ה-executor
+# ‏fix-dns-retirement-race (28.11): תיקון תזמון בבדיקה של #394. התנאי TIMED_WAITING נבדק פעמיים ב-until, והמצב זמני, ולכן הבדיקה נכשלה פעם ב-40 הרצות בעומס (נתפס ב-CI של המועמד של 1.2.1). אחרי התיקון: 0 כשלים ב-200 הרצות באותו עומס.
+fix-dns-retirement-race	origin:refs/heads/topic/fix-dns-retirement-race	aaad087ed80c88bcec3f2580e2519901f9b2ca06	-	ייצוב	בדיקה: DNS: מצב ההמתנה של המשקיף נשאר "נצפה" אחרי הלולאה
 pr-404	origin:refs/heads/archive/apache-snapshots	14fd8fcb01887d7883d4a209dd0762f90ef6bf0b	404	2	מדיה: מקדמי ה-resampler נשמרים בתוך כל מיקס
 pr-411	origin:refs/heads/archive/apache-snapshots	9f10e0845739ecbe1496fd5f0173ed000bb320da	411	2	בדיקה: UsbManager זמין בזמן ההפעלה של אפליקציה מותקנת (#407)
 pr-412	origin:refs/heads/topic/pr-412	60d1c1a739f205e123b7882959c6cefa9405b881	412	2	ביצועים: המרת שורות לחיתוך אי-זוגי של I420 בלי חישוב חוזר
