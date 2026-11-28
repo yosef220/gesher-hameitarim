@@ -210,7 +210,7 @@ void ShowLaunchFailure(const std::wstring& reason) {
   else text = formatted;
   GesherHostPrompt(GesherUiText(language, "brand"), text.c_str(),
                    GesherUiText(language, "cp_dialog_ok"), nullptr,
-                   GesherUiRtl(language), nullptr);
+                   GesherUiRtl(language), nullptr, MB_ICONERROR);
 }
 
 // A failing app starts this short-lived host process rather than waiting inside
@@ -237,7 +237,7 @@ int ShowAppCrash(int argc, LPWSTR* argv) {
   }
   GesherHostPrompt(GesherUiText(language, "brand"), message.c_str(),
                    GesherUiText(language, "cp_dialog_ok"), nullptr,
-                   GesherUiRtl(language), nullptr);
+                   GesherUiRtl(language), nullptr, MB_ICONERROR);
   return 0;
 }
 

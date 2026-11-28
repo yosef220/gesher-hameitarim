@@ -79,6 +79,9 @@ public final class ApkPackage {
     private static final long DIRECT_BOOT = PackageManager.MATCH_DIRECT_BOOT_AWARE
             | PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
 
+    // Tiny families cost less to generate directly than to index and copy.
+    private static final int BATCH_METADATA_COMPONENTS = 8;
+
     public final String apkPath;
     public final ParsedPackage parsed;
     public final String packageName;
@@ -211,6 +214,10 @@ public final class ApkPackage {
     }
 
     private ApkPackage(String apkPath, ParsedPackage parsed) throws IOException {
+        this(apkPath, parsed, apkPath);
+    }
+
+    private ApkPackage(String apkPath, ParsedPackage parsed, String inspectedCode) throws IOException {
         this.apkPath = apkPath;
         this.parsed = parsed;
         this.packageName = parsed.getPackageName();
@@ -222,7 +229,7 @@ public final class ApkPackage {
         parsed.setUid(-1);
         // Resolve the newly parsed APK, including before an install replaces the old one.
         sharedLibraries = SharedLibraryRegistry.resolve(parsed);
-        mHasCode = parsed.isDeclaredHavingCode() && hasDex(apkPath);
+        mHasCode = parsed.isDeclaredHavingCode() && hasDex(inspectedCode);
         for (ParsedActivity a : parsed.getActivities()) {
             for (ParsedIntentInfo info : a.getIntents()) {
                 IntentFilter filter = info.getIntentFilter();
@@ -263,6 +270,19 @@ public final class ApkPackage {
     /** Parses one APK; unrelated files beside an external APK are never part of it. */
     public static ApkPackage parse(String apkPath) throws Exception {
         return parse(apkPath, new File(apkPath));
+    }
+
+    /** Verify the same read lease the contained launcher will hand to the APK VM. */
+    static ApkPackage parseStandaloneInput(Zygote.StandaloneInput source) throws Exception {
+        var scratch = Files.createTempDirectory("gesher-apk-admission-");
+        var snapshot = scratch.resolve("base.apk");
+        try {
+            source.copyForVerification(snapshot);
+            return parse(source.path, snapshot.toFile(), snapshot.toString(), true);
+        } finally {
+            Files.deleteIfExists(snapshot);
+            Files.deleteIfExists(scratch);
+        }
     }
 
     /**
@@ -357,17 +377,29 @@ public final class ApkPackage {
     }
 
     private static ApkPackage parse(String apkPath, File parseRoot) throws Exception {
+        return parse(apkPath, parseRoot, apkPath, false);
+    }
+
+    private static ApkPackage parse(String apkPath, File parseRoot, String inspectedCode,
+            boolean pinnedStandalone) throws Exception {
         ParsedPackage pkg;
         try (PackageParser2 parser = new PackageParser2(null /* separateProcesses */,
                 null /* displayMetrics: the defaults */, null /* cacher */,
                 new ParserCallback())) {
             pkg = parser.parsePackage(parseRoot, 0 /* flags */, false /* useCaches */);
         }
-        SigningDetails signing = signingDetails(apkPath);
+        if (pinnedStandalone) {
+            // PackageParser2 uses the snapshot only for inspection. Keep both
+            // framework-visible code paths on the originally requested APK.
+            pkg.setPath(apkPath).setBaseApkPath(apkPath);
+        }
+        SigningDetails signing = signingDetails(inspectedCode);
         if (signing != null) {
             pkg.setSigningDetails(signing);
         }
-        ApkPackage appPkg = new ApkPackage(apkPath, pkg);
+        ApkPackage appPkg = pinnedStandalone ? new ApkPackage(apkPath, pkg, inspectedCode)
+                : new ApkPackage(apkPath, pkg);
+        if (pinnedStandalone) appPkg.rememberVerifiedIdentity(inspectedCode);
         if (pkg.getSigningDetails() == null || pkg.getSigningDetails() == SigningDetails.UNKNOWN) {
             Signature[] verified = appPkg.verifiedSignatures();
             if (verified != null) {
@@ -562,16 +594,18 @@ public final class ApkPackage {
 
     /** Current APK signers after full content verification, never the spoofed identity. */
     public synchronized Signature[] verifiedSignatures() {
-        if (!mSigningIdentityChecked) {
-            mSigningIdentityChecked = true;
-            VerifiedIdentity identity = verifyIdentity(apkPath);
-            if (identity != null) {
-                mVerifiedSignatures = identity.signatures;
-                mVerifiedLineage = identity.lineage;
-                mVerifiedSignatureSchemeVersion = identity.signatureSchemeVersion;
-            }
-        }
+        if (!mSigningIdentityChecked) rememberVerifiedIdentity(apkPath);
         return mVerifiedSignatures == null ? null : mVerifiedSignatures.clone();
+    }
+
+    private void rememberVerifiedIdentity(String inspectedCode) {
+        mSigningIdentityChecked = true;
+        VerifiedIdentity identity = verifyIdentity(inspectedCode);
+        if (identity != null) {
+            mVerifiedSignatures = identity.signatures;
+            mVerifiedLineage = identity.lineage;
+            mVerifiedSignatureSchemeVersion = identity.signatureSchemeVersion;
+        }
     }
 
     /** Matches a SHA-256 certificate digest against the verified APK identity. */
@@ -781,14 +815,14 @@ public final class ApkPackage {
 
     /** The PackageInfo PackageManager.getPackageInfo answers for these flags. */
     public PackageInfo packageInfo(long flags) {
-        return packageInfo(flags, false, null);
+        return packageInfo(flags, false, null, enabledState());
     }
 
-    private PackageInfo packageInfo(long flags, boolean providerQuery, String authority) {
+    private PackageInfo packageInfo(long flags, boolean providerQuery, String authority,
+            PackageEnabledStore.State state) {
         if ((flags & DIRECT_BOOT) == 0) {
             flags |= DIRECT_BOOT;
         }
-        PackageEnabledStore.State state = enabledState();
         // Include manifest-disabled declarations before applying installed overrides.
         // A provider query also needs both boot states: choose its registered first
         // component before either boot-state or enabled-state filtering.
@@ -836,10 +870,14 @@ public final class ApkPackage {
     }
 
     public ApplicationInfo applicationInfo(long flags) {
+        return applicationInfo(flags, enabledState());
+    }
+
+    private ApplicationInfo applicationInfo(long flags, PackageEnabledStore.State state) {
         return packageInfo(flags & ~(PackageManager.GET_ACTIVITIES
                 | PackageManager.GET_RECEIVERS | PackageManager.GET_SERVICES
                 | PackageManager.GET_PROVIDERS | PackageManager.GET_PERMISSIONS
-                | PackageManager.GET_CONFIGURATIONS)).applicationInfo;
+                | PackageManager.GET_CONFIGURATIONS), false, null, state).applicationInfo;
     }
 
     /** The activity named {@code className}, or null. */
@@ -911,9 +949,15 @@ public final class ApkPackage {
             }
             return result;
         }
-        for (Match m : match(parsed.getActivities(), intent, resolvedType, flags)) {
-            ActivityInfo a = activityInfo(m.name, flags);
-            if (a != null) result.add(m.resolveInfo(flags, a, null));
+        List<ParsedActivity> declarations = parsed.getActivities();
+        List<Match> matches = match(declarations, intent, resolvedType, flags);
+        if (matches.size() > 1 && declarations.size() >= BATCH_METADATA_COMPONENTS) {
+            addActivityMatches(result, matches, flags, false);
+        } else {
+            for (Match m : matches) {
+                ActivityInfo a = activityInfo(m.name, flags);
+                if (a != null) result.add(m.resolveInfo(flags, a, null));
+            }
         }
         return result;
     }
@@ -939,9 +983,15 @@ public final class ApkPackage {
             }
             return result;
         }
-        for (Match m : match(parsed.getServices(), intent, resolvedType, flags)) {
-            ServiceInfo s = serviceInfo(m.name, flags);
-            if (s != null) result.add(m.resolveInfo(flags, null, s));
+        var declarations = parsed.getServices();
+        List<Match> matches = match(declarations, intent, resolvedType, flags);
+        if (matches.size() > 1 && declarations.size() >= BATCH_METADATA_COMPONENTS) {
+            addServiceMatches(result, matches, flags);
+        } else {
+            for (Match m : matches) {
+                ServiceInfo s = serviceInfo(m.name, flags);
+                if (s != null) result.add(m.resolveInfo(flags, null, s));
+            }
         }
         return result;
     }
@@ -967,9 +1017,57 @@ public final class ApkPackage {
             }
             return result;
         }
-        for (Match m : match(parsed.getReceivers(), intent, resolvedType, flags)) {
-            ActivityInfo a = receiverInfo(m.name, flags);
-            if (a != null) result.add(m.resolveInfo(flags, a, null));
+        List<ParsedActivity> declarations = parsed.getReceivers();
+        List<Match> matches = match(declarations, intent, resolvedType, flags);
+        if (matches.size() > 1 && declarations.size() >= BATCH_METADATA_COMPONENTS) {
+            addActivityMatches(result, matches, flags, true);
+        } else {
+            for (Match m : matches) {
+                ActivityInfo a = receiverInfo(m.name, flags);
+                if (a != null) result.add(m.resolveInfo(flags, a, null));
+            }
+        }
+        return result;
+    }
+
+    /** Generate one family and enabled-state snapshot per batched query, never retain it. */
+    private void addActivityMatches(List<ResolveInfo> result, List<Match> matches,
+            long flags, boolean receivers) {
+        PackageEnabledStore.State state = enabledState();
+        Map<String, ActivityInfo> snapshot = firstComponents(receivers
+                ? packageInfo(flags | PackageManager.GET_RECEIVERS, false, null, state).receivers
+                : packageInfo(flags | PackageManager.GET_ACTIVITIES, false, null, state).activities);
+        for (Match m : matches) {
+            ActivityInfo template = snapshot.get(m.name);
+            if (template == null) continue;
+            ActivityInfo a = new ActivityInfo(template);
+            // The framework copy constructor shares this generated mutable set.
+            a.setKnownActivityEmbeddingCerts(template.getKnownActivityEmbeddingCerts());
+            if (!result.isEmpty()) a.applicationInfo = applicationInfo(flags, state);
+            result.add(m.resolveInfo(flags, a, null));
+        }
+    }
+
+    private void addServiceMatches(List<ResolveInfo> result, List<Match> matches, long flags) {
+        PackageEnabledStore.State state = enabledState();
+        Map<String, ServiceInfo> snapshot = firstComponents(
+                packageInfo(flags | PackageManager.GET_SERVICES, false, null, state).services);
+        for (Match m : matches) {
+            ServiceInfo template = snapshot.get(m.name);
+            if (template == null) continue;
+            ServiceInfo s = new ServiceInfo(template);
+            // Keep independently generated application/library metadata per result.
+            if (!result.isEmpty()) s.applicationInfo = applicationInfo(flags, state);
+            result.add(m.resolveInfo(flags, null, s));
+        }
+    }
+
+    private static <T extends ComponentInfo> Map<String, T> firstComponents(T[] components) {
+        Map<String, T> result = new HashMap<>();
+        if (components != null) {
+            // Match the single-component getters: the first declaration remaining
+            // after boot/enabled filtering wins, including duplicate names.
+            for (T component : components) result.putIfAbsent(component.name, component);
         }
         return result;
     }
@@ -1049,7 +1147,7 @@ public final class ApkPackage {
     }
 
     private List<ProviderInfo> providerList(long flags, String authority) {
-        PackageInfo pi = packageInfo(flags | PackageManager.GET_PROVIDERS, true, authority);
+        PackageInfo pi = packageInfo(flags | PackageManager.GET_PROVIDERS, true, authority, enabledState());
         List<ProviderInfo> result = new ArrayList<>();
         if (pi.providers != null) Collections.addAll(result, pi.providers);
         return result;

@@ -41,6 +41,11 @@ endif()
 # gesher-base: POSIX/Linux interfaces implemented on Win32.
 include(compat/posix/posix.cmake)
 
+add_executable(rooted_storage_probe tests/sandbox/rooted-storage-probe.cc)
+target_compile_options(rooted_storage_probe PRIVATE -Wall -Wextra -Werror)
+target_link_options(rooted_storage_probe PRIVATE -municode)
+target_link_libraries(rooted_storage_probe PRIVATE gesher_posix)
+
 # gesher: the ELF loader for x86-64 Android .so files (Phase 6).
 include(compat/elf/elf.cmake)
 # gesher: the bionic shim the loaded .so files link against (Phase 6).
@@ -58,6 +63,7 @@ include(cmake/aosp/boringssl.cmake)
 include(cmake/aosp/libcore_native.cmake)
 # Conscrypt's libjavacrypto and compat/net: TLS, Windows' trusted roots (docs/network.md).
 include(cmake/aosp/conscrypt.cmake)
+include(cmake/aosp/brotli.cmake)
 include(cmake/aosp/binder.cmake)
 include(cmake/aosp/servicemanager.cmake)
 include(cmake/aosp/framework.cmake)
