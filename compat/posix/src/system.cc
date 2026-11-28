@@ -374,6 +374,7 @@ int ioctl(int fd, unsigned long request, ...) {
   if (gesher::SyncFileIoctl(fd, request, argp, &fence_result)) return fence_result;
   gesher::SocketFd state;
   if (gesher::LookupSocket(fd, &state)) {
+    if (state.description->netlink) return errno = EACCES, -1;
     if (!argp && (request == FIONREAD || request == FIONBIO)) return errno = EFAULT, -1;
     if (request == FIONREAD) {
       if (gesher::ws::Available(state.socket, argp) != 0) return -1;
@@ -473,7 +474,8 @@ int fcntl(int fd, int cmd, ...) {
             std::lock_guard<std::mutex> lock(state.description->status_mutex);
             const bool on = (arg & O_NONBLOCK) != 0;
             if (on != state.description->nonblocking.load()) {
-              if (!state.description->native_nonblocking_datagram &&
+              if (!state.description->netlink &&
+                  !state.description->native_nonblocking_datagram &&
                   gesher::ws::SetNonBlocking(state.socket, on) < 0) return -1;
               state.description->nonblocking.store(on);
             }

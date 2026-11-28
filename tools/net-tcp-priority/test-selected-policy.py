@@ -497,7 +497,7 @@ APPCONTAINER_IDENTITY_SOURCE_SHA256 = {
  'tools/test_revocable_file_contracts.py': '7a47c95932e421deecf31456aee22eb3358a713550eb57f6a39cb837c4d37019',
 }
 
-def preceding_appcontainer_identity_sources():
+def preceding_appcontainer_identity_sources(netlink):
  patch=(ROOT/'tools/net-tcp-priority/qualified/appcontainer-identity-source.patch').read_bytes()
  assert hashlib.sha256(patch).hexdigest()==APPCONTAINER_IDENTITY_PATCH_SHA256,'AppContainer identity transition changed'
  paths=list(APPCONTAINER_IDENTITY_SOURCE_SHA256)
@@ -505,10 +505,35 @@ def preceding_appcontainer_identity_sources():
  with tempfile.TemporaryDirectory(prefix='gesher-identity-qualification-') as temporary:
   work=Path(temporary)
   for path,digest in APPCONTAINER_IDENTITY_SOURCE_SHA256.items():
-   source=(ROOT/path).read_bytes()
+   source=netlink.get(path,(ROOT/path).read_bytes())
    assert hashlib.sha256(source).hexdigest()==digest,path
    (work/path).parent.mkdir(parents=True,exist_ok=True)
    (work/path).write_bytes(source)
+  reverse=['git','-c','core.autocrlf=false','apply','--reverse','--unidiff-zero']
+  subprocess.run([*reverse,'--check','-'],input=patch,cwd=work,check=True,capture_output=True)
+  subprocess.run([*reverse,'-'],input=patch,cwd=work,check=True,capture_output=True)
+  return {path:(work/path).read_bytes() for path in paths}
+
+NETLINK_QUALIFICATION_SHA256 = '991c2ab3bf8c8e887ab07e0084f261b1ed24a2af828c94041ad778ea70a56cee'
+
+def preceding_netlink_sources():
+ folder=ROOT/'tools/net-tcp-priority/qualified'
+ raw=(folder/'netlink-route-source.json').read_bytes()
+ assert hashlib.sha256(raw).hexdigest()==NETLINK_QUALIFICATION_SHA256,'NETLINK source qualification changed'
+ qualification=json.loads(raw)
+ patch=(folder/'netlink-route-source.patch').read_bytes()
+ assert hashlib.sha256(patch).hexdigest()==qualification['patch_sha256'],'NETLINK transition patch changed'
+ sources=qualification['source_sha256']
+ paths=qualification['paths']
+ assert [line.decode().split(' b/',1)[1] for line in patch.splitlines() if line.startswith(b'diff --git ')]==paths
+ with tempfile.TemporaryDirectory(prefix='gesher-netlink-qualification-') as temporary:
+  work=Path(temporary)
+  for path,digest in sources.items():
+   source=(ROOT/path).read_bytes()
+   assert hashlib.sha256(source).hexdigest()==digest,path
+   if path in paths:
+    (work/path).parent.mkdir(parents=True,exist_ok=True)
+    (work/path).write_bytes(source)
   reverse=['git','-c','core.autocrlf=false','apply','--reverse','--unidiff-zero']
   subprocess.run([*reverse,'--check','-'],input=patch,cwd=work,check=True,capture_output=True)
   subprocess.run([*reverse,'-'],input=patch,cwd=work,check=True,capture_output=True)
@@ -525,7 +550,8 @@ def preceding_ofd_sources():
         'compat/posix/src/system.cc','compat/posix/src/winsock.cc']
  assert qualification['paths']==paths
  assert [line.decode().split(' b/',1)[1] for line in patch.splitlines() if line.startswith(b'diff --git ')]==paths
- identity=preceding_appcontainer_identity_sources()
+ netlink=preceding_netlink_sources()
+ identity={**netlink,**preceding_appcontainer_identity_sources(netlink)}
  memfd_lease=preceding_memfd_lease_sources(identity)
  shared_stdio=preceding_shared_stdio_sources(qualification,identity)
  assert memfd_lease.keys().isdisjoint(shared_stdio),'source qualifications overlap'
@@ -556,7 +582,7 @@ def preceding_ofd_sources():
    'compat/posix/src/fd.cc':[b'bool Remove(',b'void Insert(',b'bool ReplaceSocket(',b'bool LookupSocket(',b'static int PollFdsImpl('],
    'compat/posix/src/system.cc':[b'bool SocketIo('],
  }.items():
-  current=(ROOT/path).read_bytes()
+  current=netlink.get(path,(ROOT/path).read_bytes())
   for marker in markers:
    actual=function(current,marker);expected=function(previous[path],marker)
    if marker==b'static int PollFdsImpl(':
@@ -564,7 +590,7 @@ def preceding_ofd_sources():
      assert actual.count(after)==expected.count(before)==1,(path,marker)
      actual=actual.replace(after,before,1)
    assert actual==expected,(path,marker)
- return previous
+ return {**netlink,**previous}
 # Guest fork (ADR 0092) registers two fd.cc locks and one winsock.cc lock in
 # its fork set. Each file's one exact addition at its end, and nothing else, is
 # removed before the reviewed hunks and every byte check below run on the result.
@@ -797,6 +823,8 @@ def transition_negative_controls():
  from unittest.mock import patch
  original=Path.read_bytes
  cases=[
+  ('compat/posix/src/netlink.cc',b'request_link && !binder_endpoint::MayInspectNetlink()',b'false'),
+  ('compat/binder/binderd.cc',b'client->role == peer::Role::kSystemServer',b'true'),
   ('compat/posix/src/fd.cc',b'--state->description->descriptor_refs == 0',b'--state->description->descriptor_refs == 1'),
   ('compat/posix/src/fd.cc',b'return TransferPipe(snapshot, bytes, count, false);',b'return 0;'),
   ('compat/posix/src/system.cc',b'gesher::ws::RecvOwned(state.socket,',b'gesher::ws::SendOwned(state.socket,'),
@@ -851,7 +879,7 @@ def transition_negative_controls():
  # A lease path that the AppContainer identity transition also reverses (internal.h) is mutated in the
  # bytes that transition yields, since those are the bytes the lease transition receives: a mutation
  # of the current file would be rejected by the identity layer's own digest, not by the lease transition.
- real_identity=preceding_appcontainer_identity_sources()
+ real_identity=preceding_appcontainer_identity_sources(preceding_netlink_sources())
  for name,before,after in cases:
   target=ROOT/name
   assert before in original(target),name
@@ -872,7 +900,7 @@ def transition_negative_controls():
    if lease and name in real_identity:
     assert before in real_identity[name],name
     mutated_identity={**real_identity,name:real_identity[name].replace(before,after,1)}
-    pins['preceding_appcontainer_identity_sources']=lambda mutated_identity=mutated_identity:mutated_identity
+    pins['preceding_appcontainer_identity_sources']=lambda netlink,mutated_identity=mutated_identity:mutated_identity
     repin_data=mutated_identity[name]
    if repin and lease:
     receipt=memfd_lease_repin(name,repin_data)
