@@ -36,7 +36,8 @@
         "#327",
         "#483"
       ],
-      "why": "ל-iTag ו-iSee דרך Bluetooth LE: מבקשת BLUETOOTH, ‏BLUETOOTH_ADMIN ומיקום (כולל ברקע), ושירות בחזית. בלי ספריות נייטיב. מסלול הסריקה והחיבור שבו קרסו (#326, #327)."
+      "why": "ל-iTag ו-iSee דרך Bluetooth LE: מבקשת BLUETOOTH, ‏BLUETOOTH_ADMIN ומיקום (כולל ברקע), ושירות בחזית. בלי ספריות נייטיב. מסלול הסריקה והחיבור שבו קרסו (#326, #327).",
+      "diagnoseLog": "FATAL|AndroidRuntime|Caused by:|Exception|Error|stand-in|exited|boot class missing|Unable to create"
     },
     {
       "package": "com.dosse.airpods",
@@ -157,7 +158,8 @@
       "tier": "open",
       "capability": "Jetpack Compose",
       "issues": [],
-      "why": "שעון עצר ב-Jetpack Compose לפי תיאור F-Droid: ספריות נייטיב arm64 (androidx.graphics.path, ‏datastore), ‏FOREGROUND_SERVICE והתראות."
+      "why": "שעון עצר ב-Jetpack Compose לפי תיאור F-Droid: ספריות נייטיב arm64 (androidx.graphics.path, ‏datastore), ‏FOREGROUND_SERVICE והתראות.",
+      "diagnoseLog": "FATAL|AndroidRuntime|Caused by:|Exception|Error|stand-in|exited|boot class missing|Unable to create"
     },
     {
       "package": "net.sf.times",
@@ -172,7 +174,8 @@
       "issues": [
         "#355"
       ],
-      "why": "זמני תפילה: מבקשת מיקום, התראות מדויקות ו-USE_FULL_SCREEN_INTENT. ב-F-Droid היא מוצגת בעברית ובשפות נוספות. בלי ספריות נייטיב. השפה של המכשיר ב-CI אנגלית, ולכן **RTL לא נבדק כאן**."
+      "why": "זמני תפילה: מבקשת מיקום, התראות מדויקות ו-USE_FULL_SCREEN_INTENT. ב-F-Droid היא מוצגת בעברית ובשפות נוספות. בלי ספריות נייטיב. השפה של המכשיר ב-CI אנגלית, ולכן **RTL לא נבדק כאן**.",
+      "diagnoseLog": "FATAL|AndroidRuntime|Caused by:|Exception|Error|stand-in|exited|boot class missing|Unable to create"
     },
     {
       "package": "com.hebrewcal",
@@ -187,7 +190,8 @@
       "issues": [
         "#355"
       ],
-      "why": "לוח עברי לפי תיאור F-Droid: מבקשת התראות מדויקות ומיקום. ב-APK כ-1,900 קבצים. אותה הערה כמו ב-net.sf.times: **RTL לא נבדק**, כי שפת המכשיר ב-CI אנגלית."
+      "why": "לוח עברי לפי תיאור F-Droid: מבקשת התראות מדויקות ומיקום. ב-APK כ-1,900 קבצים. אותה הערה כמו ב-net.sf.times: **RTL לא נבדק**, כי שפת המכשיר ב-CI אנגלית.",
+      "diagnoseLog": "FATAL|AndroidRuntime|Caused by:|Exception|Error|stand-in|exited|boot class missing|Unable to create"
     }
   ]
 }
