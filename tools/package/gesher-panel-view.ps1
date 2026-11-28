@@ -79,7 +79,7 @@ function Set-PanelFonts($View) {
     }
 }
 
-function New-PanelView([ValidateSet('dashboard', 'confirm', 'message', 'proxy')] [string] $Name, [hashtable] $Resources) {
+function New-PanelView([ValidateSet('dashboard', 'confirm', 'message', 'proxy', 'accounts')] [string] $Name, [hashtable] $Resources) {
     $path = Join-Path $PSScriptRoot ("gesher-panel-{0}.xaml" -f $Name)
     $source = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)
     [xml]$document = $source

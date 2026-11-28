@@ -18,6 +18,12 @@
       "en": "Install or update Android application \u2068{0}\u2069 (version \u2068{1}\u2069)?\nThis approval applies to this installation only.",
       "he": "להתקין או לעדכן את יישום Android \u2068{0}\u2069 (גרסה \u2068{1}\u2069)?\nהאישור חל על התקנה זו בלבד."
     },
+    "launch_install_confirm": {
+      "en": "Install the file {0} in Meitar and open it?\nThe file is installed only if you approve. If you do not know where it came from, it is safer not to install it.",
+      "he": "להתקין את הקובץ {0} במיתר ולפתוח אותו?\nהקובץ יותקן רק באישורך. אם אינך מכיר את המקור שלו, מוטב לא להתקין אותו."
+    },
+    "launch_install_yes": {"en": "Install", "he": "התקנה"},
+    "launch_install_no": {"en": "Cancel", "he": "ביטול"},
     "removal_request": {
       "en": "Remove Android application \u2068{0}\u2069 (version \u2068{1}\u2069)?\nIts app data will be deleted. This approval applies to this removal only.",
       "he": "להסיר את יישום Android \u2068{0}\u2069 (גרסה \u2068{1}\u2069)?\nגם נתוני היישום יימחקו. האישור חל על הסרה זו בלבד."
@@ -566,7 +572,7 @@
     },
     "cp_proxy_save_failed": {
       "en": "Failed to save the proxy: {0}",
-      "he": "שמירת הפרוקסי נכשלה: {0}"
+      "he": "שמירת הפרוקסי נכשלה: \u2068{0}\u2069"
     },
     "cp_btn_proxy": {
       "en": "Proxy",
@@ -579,6 +585,70 @@
     "cp_btn_proxy_all": {
       "en": "Proxy for every app",
       "he": "פרוקסי לכל האפליקציות"
+    },
+    "cp_btn_accounts": {
+      "en": "Accounts",
+      "he": "חשבונות"
+    },
+    "cp_accounts_desc": {
+      "en": "Accounts that apps added in Meitar, and removing them",
+      "he": "החשבונות שיישומים הוסיפו במיתר, והסרה שלהם"
+    },
+    "cp_accounts_title": {
+      "en": "Accounts in Meitar",
+      "he": "חשבונות במיתר"
+    },
+    "cp_accounts_intro": {
+      "en": "Accounts that apps added here. Removing an account removes it from Meitar only.",
+      "he": "חשבונות שיישומים הוסיפו כאן. הסרה של חשבון מוחקת אותו ממיתר בלבד."
+    },
+    "cp_accounts_loading": {
+      "en": "Loading accounts…",
+      "he": "טוען חשבונות…"
+    },
+    "cp_accounts_empty": {
+      "en": "There are no accounts in Meitar.",
+      "he": "אין חשבונות במיתר."
+    },
+    "cp_accounts_unavailable": {
+      "en": "Could not read the accounts. Restart Meitar and try again.",
+      "he": "לא ניתן לקרוא את החשבונות. יש להפעיל את מיתר מחדש ולנסות שוב."
+    },
+    "cp_accounts_owner": {
+      "en": "App: {0}",
+      "he": "יישום: {0}"
+    },
+    "cp_accounts_remove": {
+      "en": "Remove",
+      "he": "הסרה"
+    },
+    "cp_accounts_remove_title": {
+      "en": "Remove account",
+      "he": "הסרת חשבון"
+    },
+    "cp_accounts_remove_confirm": {
+      "en": "Remove the account \u2068{0}\u2069 from Meitar?",
+      "he": "להסיר את החשבון \u2068{0}\u2069 ממיתר?"
+    },
+    "cp_accounts_remove_detail": {
+      "en": "Only Meitar's record of the account is deleted. The app and the account at its provider do not change, and the app may ask you to sign in again.",
+      "he": "יימחק רק הרישום של החשבון במיתר. היישום והחשבון אצל הספק שלו לא ישתנו, וייתכן שהיישום יבקש להתחבר שוב."
+    },
+    "cp_accounts_removed": {
+      "en": "The account was removed from Meitar.",
+      "he": "החשבון הוסר ממיתר."
+    },
+    "cp_accounts_remove_failed": {
+      "en": "The account was not removed. Try again.",
+      "he": "החשבון לא הוסר. אפשר לנסות שוב."
+    },
+    "cp_accounts_cli_only": {
+      "en": "To remove it, use: gesher-app remove-account",
+      "he": "להסרה יש להשתמש בפקודה: gesher-app remove-account"
+    },
+    "cp_accounts_close": {
+      "en": "Close",
+      "he": "סגירה"
     },
     "cp_proxy_app_title": {
       "en": "Proxy for ⁨{0}⁩",
@@ -698,7 +768,7 @@
     },
     "cp_action_failed": {
       "en": "The operation failed (exit code {0}).",
-      "he": "הפעולה נכשלה (קוד יציאה {0})."
+      "he": "הפעולה נכשלה (קוד יציאה \u2068{0}\u2069)."
     },
     "cp_action_finish": {
       "en": "Wait for the current operation to finish before closing.",
@@ -742,11 +812,11 @@
     },
     "cp_downloading": {
       "en": "Downloading {0}…",
-      "he": "מוריד את {0}…"
+      "he": "מוריד את \u2068{0}\u2069…"
     },
     "cp_installing": {
       "en": "Installing {0}…",
-      "he": "מתקין את {0}…"
+      "he": "מתקין את \u2068{0}\u2069…"
     },
     "files_all": {
       "en": "All files",
@@ -871,6 +941,22 @@
     "package_count_one": {
       "en": "{0} installed package",
       "he": "מספר היישומים המותקנים: {0}"
+    },
+    "accounts_count": {
+      "en": "Accounts in Meitar: {0}",
+      "he": "מספר החשבונות במיתר: {0}"
+    },
+    "accounts_none": {
+      "en": "There are no accounts in Meitar",
+      "he": "אין חשבונות במיתר"
+    },
+    "account_removed": {
+      "en": "Removed the account \u2068{0}\u2069 ({1}) from Meitar. The app and the account at its provider are not changed.",
+      "he": "החשבון \u2068{0}\u2069 ({1}) הוסר ממיתר. היישום והחשבון אצל הספק שלו לא שונו."
+    },
+    "account_not_found": {
+      "en": "There is no account \u2068{0}\u2069 ({1}) in Meitar",
+      "he": "אין חשבון \u2068{0}\u2069 ({1}) במיתר"
     },
     "launch_not_identified": {
       "en": "the system server did not identify the launched process",
@@ -1010,7 +1096,7 @@
     },
     "cp_update_exit_code": {
       "en": "Setup exit code: {0}",
-      "he": "קוד היציאה של תוכנית ההתקנה: {0}"
+      "he": "קוד היציאה של תוכנית ההתקנה: \u2068{0}\u2069"
     },
     "cp_update_finish_setup": {
       "en": "Finish or cancel setup before closing the control center.",
@@ -1027,6 +1113,30 @@
     "cp_update_reopen_failed": {
       "en": "The update is installed. Close and reopen the control center from the Start menu.",
       "he": "העדכון מותקן. סגור את לוח הבקרה ופתח אותו מחדש מתפריט התחל."
+    },
+    "cp_panel_resize": {
+      "en": "Resize the settings column",
+      "he": "שינוי הרוחב של עמודת ההגדרות"
+    },
+    "cp_web_title": {
+      "en": "Links inside websites",
+      "he": "קישורים בתוך אתרים"
+    },
+    "cp_web_intent_fallback": {
+      "en": "When an app link has no app to open it, open its web address",
+      "he": "כשקישור לאפליקציה לא נפתח באף אפליקציה, לפתוח את כתובת האינטרנט שלו"
+    },
+    "cp_web_intent_fallback_hint": {
+      "en": "Some websites send a link meant to open an app (intent://), and put a web address in it for when no app can open it. Android's WebView does not open that address by itself, so the page fails to load. When this is on, Meitar opens the web address instead, which differs from Android. Off by default. Applies to pages loaded from now on.",
+      "he": "אתרים מסוימים שולחים קישור שנועד לפתוח אפליקציה, ושמים בו כתובת אינטרנט למקרה שאף אפליקציה לא יכולה לפתוח אותו. ה-WebView של Android לא פותח את הכתובת הזאת בעצמו, והדף לא נטען. כשההגדרה פועלת, מיתר פותח את כתובת האינטרנט במקום להיכשל, וזה שונה ממה ש-Android עושה. כבויה כברירת מחדל. חלה על דפים שייטענו מעתה."
+    },
+    "cp_web_intent_fallback_saved": {
+      "en": "The setting was saved. It applies to pages loaded from now on.",
+      "he": "ההגדרה נשמרה. היא חלה על דפים שייטענו מעתה."
+    },
+    "cp_web_intent_fallback_failed": {
+      "en": "Saving the setting failed: \u2068{0}\u2069",
+      "he": "שמירת ההגדרה נכשלה: \u2068{0}\u2069"
     },
     "cp_camera_title": {
       "en": "Camera",
@@ -1046,7 +1156,7 @@
     },
     "cp_camera_image_picker_failed": {
       "en": "Could not save the camera setting: {0}",
-      "he": "שמירת הגדרת המצלמה נכשלה: {0}"
+      "he": "שמירת הגדרת המצלמה נכשלה: \u2068{0}\u2069"
     },
     "cp_search_hint": {
       "en": "Search apps",

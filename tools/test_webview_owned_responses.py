@@ -95,6 +95,11 @@ def main() -> None:
         'private static long number(String decimal)',
         'private PendingData claimData(String url, int context, boolean mainFrame)',
     ) if marker in production]
+    # The intent: fallback (the user's setting) is newer than an old-source control's code.
+    pieces += [method(production, marker) for marker in (
+        'private boolean appTakesNavigation(String url, boolean userInitiated, boolean redirect)',
+        'private boolean openIntentFallback(String url)',
+    ) if marker in production]
     if 'private static final class PendingData' in production:
         fields = ['private final AtomicReference<PendingData> mPendingData = new AtomicReference<>();',
                   'private final ApiNavigations mApiNavigations = new ApiNavigations();',
@@ -137,6 +142,8 @@ def main() -> None:
     ))
     template = (ROOT / 'tests/java-performance/WebViewOwnedResponsesHost.java.in').read_text(encoding='utf-8')
     generated = template.replace('@PRODUCTION@', exact).replace('@URL_MAPPINGS@', mappings)
+    generated = generated.replace('@HAS_INTENT_FALLBACK@',
+                                  'true' if 'private boolean openIntentFallback(String url)' in production else 'false')
     # The native callback is a declared boundary in this Java test. Preserve its
     # old matching behavior for old-source controls; the actual C++ helper has
     # its own executable regression tests.

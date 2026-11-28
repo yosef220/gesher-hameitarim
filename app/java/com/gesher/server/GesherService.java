@@ -46,6 +46,10 @@ public final class GesherService extends Binder {
     static final int SETTINGS_SHOWN = IBinder.FIRST_CALL_TRANSACTION + 13;
     static final int SETTINGS_VISIT_CLOSED = IBinder.FIRST_CALL_TRANSACTION + 14;
     static final int SET_SPECIAL_ACCESS_VISIT = IBinder.FIRST_CALL_TRANSACTION + 15;
+    /** The accounts of the device, as rows (the CLI's and the Control Center's account list). */
+    static final int ACCOUNTS = IBinder.FIRST_CALL_TRANSACTION + 16;
+    /** The user removed one account in the host shell. */
+    static final int REMOVE_ACCOUNT = IBinder.FIRST_CALL_TRANSACTION + 17;
 
     static final String EXIT_DESCRIPTOR = "com.gesher.ILaunchExit";
     static final int EXIT_STATUS = IBinder.FIRST_CALL_TRANSACTION;
@@ -128,6 +132,14 @@ public final class GesherService extends Binder {
         default int settingsScreensClosed(int pid, long startedAt, String[] tokens) {
             return settingsScreensClosed(tokens);
         }
+        /** The accounts: rows of "type TAB name TAB owner package". */
+        default String[] accounts() {
+            throw new UnsupportedOperationException("Account list unavailable");
+        }
+        /** Removes the account as the user chose; false when there is none. */
+        default boolean removeAccount(String type, String name) {
+            throw new UnsupportedOperationException("Account removal unavailable");
+        }
         /** A call came: the device is not idle. */
         void touch();
         /** A click on a toast of {@code appId} with the toast's {@code arguments}. */
@@ -147,7 +159,7 @@ public final class GesherService extends Binder {
     @Override
     protected boolean onTransact(int code, Parcel data, Parcel reply, int flags)
             throws RemoteException {
-        if (code < INSTALL || code > SET_SPECIAL_ACCESS_VISIT) {
+        if (code < INSTALL || code > REMOVE_ACCOUNT) {
             return super.onTransact(code, data, reply, flags);
         }
         data.enforceInterface(DESCRIPTOR);
@@ -263,6 +275,21 @@ public final class GesherService extends Binder {
                     }
                     reply.writeNoException();
                     reply.writeString(row);
+                    return true;
+                }
+                case ACCOUNTS: {
+                    data.enforceNoDataAvail();
+                    String[] rows = mDevice.accounts();
+                    reply.writeNoException();
+                    reply.writeStringArray(rows);
+                    return true;
+                }
+                case REMOVE_ACCOUNT: {
+                    String type = data.readString(), name = data.readString();
+                    data.enforceNoDataAvail();
+                    boolean removed = mDevice.removeAccount(type, name);
+                    reply.writeNoException();
+                    reply.writeBoolean(removed);
                     return true;
                 }
                 case SETTINGS_CLOSED: {
@@ -504,6 +531,40 @@ public final class GesherService extends Binder {
                 if (!mBinder.transact(SETTINGS_CLOSED, data, reply, 0)) throw olderDevice();
                 reply.readException();
                 return reply.readInt();
+            } finally {
+                data.recycle();
+                reply.recycle();
+            }
+        }
+
+        /** The device's accounts: rows of "type TAB name TAB owner package". */
+        public String[] accounts() throws RemoteException {
+            Parcel data = Parcel.obtain();
+            Parcel reply = Parcel.obtain();
+            try {
+                data.writeInterfaceToken(DESCRIPTOR);
+                if (!mBinder.transact(ACCOUNTS, data, reply, 0)) throw olderDevice();
+                reply.readException();
+                String[] rows = reply.createStringArray();
+                if (rows == null) throw olderDevice();
+                return rows;
+            } finally {
+                data.recycle();
+                reply.recycle();
+            }
+        }
+
+        /** Removes one account, as the user chose; false when the device has no such account. */
+        public boolean removeAccount(String type, String name) throws RemoteException {
+            Parcel data = Parcel.obtain();
+            Parcel reply = Parcel.obtain();
+            try {
+                data.writeInterfaceToken(DESCRIPTOR);
+                data.writeString(java.util.Objects.requireNonNull(type));
+                data.writeString(java.util.Objects.requireNonNull(name));
+                if (!mBinder.transact(REMOVE_ACCOUNT, data, reply, 0)) throw olderDevice();
+                reply.readException();
+                return reply.readBoolean();
             } finally {
                 data.recycle();
                 reply.recycle();

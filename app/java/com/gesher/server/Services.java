@@ -68,6 +68,8 @@ public final class Services {
         final ActivityManagerService am;
         final ClipboardService clipboard;
         final Map<String, IBinder> services;
+        /** Set once the account service exists; for the host shell's account commands. */
+        volatile AccountManagerService accounts;
 
         Created(PackageManagerService pm, ActivityTaskManagerService atm,
                 ActivityManagerService am, ClipboardService clipboard,
@@ -203,6 +205,7 @@ public final class Services {
         services.put(Context.SPEECH_RECOGNITION_SERVICE, new SpeechRecognitionManagerService(am, atm, pm));
         // The camera image-picker setting's question and file picker (docs/devices.md).
         services.put(CameraSourceService.NAME, new CameraSourceService(am));
+        services.put(WebSettingsService.NAME, new WebSettingsService());
         services.put(Context.CLIPBOARD_SERVICE, StandIn.of(android.content.IClipboard.class,
                 clipboard).asBinder());
         // print (docs/print.md): FEATURE_PRINTING means the runtime has the Windows
@@ -237,6 +240,7 @@ public final class Services {
                 android.os.IVibratorManagerService.class, new VibratorManagerService()).asBinder());
         // Devices (docs/devices.md): location over Windows' location service.
         LocationManagerService location = new LocationManagerService(pm, am);
+        SettingsProvider.sLocationEnabled = () -> location.isLocationEnabledForUser(0);
         services.put(Context.LOCATION_SERVICE, StandIn.of(android.location.ILocationManager.class,
                 location).asBinder());
         // CountryDetector: Windows' "Country or region" as the locale source
@@ -287,6 +291,7 @@ public final class Services {
         // their authenticators.
         AccountManagerService accounts = new AccountManagerService(am, pm, persistentAccounts);
         accounts.setSyncRetirement(sync::accountsRemoved);
+        created.accounts = accounts;
         services.put(Context.ACCOUNT_SERVICE, StandIn.of(android.accounts.IAccountManager.class,
                 accounts).asBinder());
         sync.start(accounts::syncableAccounts, accounts::canAccessAccount);

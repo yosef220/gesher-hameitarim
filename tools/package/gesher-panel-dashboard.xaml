@@ -116,10 +116,17 @@
 
         <Grid Grid.Row="1" Margin="24,24,24,8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*" MinWidth="320"/>
                 <ColumnDefinition Width="28"/>
-                <ColumnDefinition Width="272"/>
+                <ColumnDefinition Width="272" MinWidth="240" MaxWidth="460"/>
             </Grid.ColumnDefinitions>
+
+            <!-- הרוחב של עמודת ההגדרות: גוררים את הרווח שבין שני האזורים, או מקשי החצים כשהוא ממוקד.
+                 הרווח עצמו נשאר שקוף, ולכן העיצוב לא משתנה כשלא משתמשים בו. -->
+            <GridSplitter Grid.Column="1" Width="28" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" ShowsPreview="False"
+                          Background="Transparent" Cursor="SizeWE" KeyboardIncrement="24"
+                          AutomationProperties.Name="{DynamicResource Text_cp_panel_resize}"/>
 
             <!-- האפליקציות שלי: הלוח היחיד עם מסגרת, כי הוא גם אזור הגרירה -->
             <Border Name="ApplicationsSection" Grid.Column="0" Background="{StaticResource GesherSurfaceRaisedBrush}"
@@ -255,7 +262,7 @@
             </Border>
 
             <!-- המערכת: עמודה שקטה על המשטח, בלי מסגרת. קו דק מפריד בין נושאים -->
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="0,0,0,8">
+            <ScrollViewer Name="RailScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="0,0,0,8">
                 <!-- מרווח בקצה, כדי שפס הגלילה לא ייגע בטקסט -->
                 <StackPanel Margin="0,0,10,0">
                     <StackPanel Name="ServicesCards">
@@ -327,9 +334,19 @@
 
                     <Border Style="{StaticResource RailDivider}"/>
 
+                    <!-- קישורים בתוך אתרים. Off by default; the explanation is always visible. -->
+                    <TextBlock Text="{DynamicResource Text_cp_web_title}" Style="{StaticResource RailTitle}"/>
+                    <CheckBox Name="WebIntentFallback" Content="{DynamicResource Text_cp_web_intent_fallback}" Margin="0,10,0,0"/>
+                    <TextBlock Text="{DynamicResource Text_cp_web_intent_fallback_hint}" Style="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+                    <Border Style="{StaticResource RailDivider}"/>
+
                     <!-- רשת -->
                     <TextBlock Text="{DynamicResource Text_cp_network_title}" Style="{StaticResource RailTitle}"/>
-                    <Button Name="BtnProxyAll" Content="{DynamicResource Text_cp_btn_proxy_all}" ToolTip="{DynamicResource Text_cp_proxy_desc}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button Name="BtnAccounts" Content="{DynamicResource Text_cp_btn_accounts}" ToolTip="{DynamicResource Text_cp_accounts_desc}" Margin="0,0,8,8"/>
+                        <Button Name="BtnProxyAll" Content="{DynamicResource Text_cp_btn_proxy_all}" ToolTip="{DynamicResource Text_cp_proxy_desc}" Margin="0,0,8,8"/>
+                    </WrapPanel>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

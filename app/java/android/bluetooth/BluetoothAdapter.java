@@ -373,7 +373,7 @@ public final class BluetoothAdapter {
 
     // --- profiles ----------------------------------------------------------------------
 
-    /** A2DP and headset proxies; other profiles are not available. */
+    /** A2DP, headset and LE Audio proxies; other profiles are not available. */
     public boolean getProfileProxy(Context context, BluetoothProfile.ServiceListener listener,
             int profile) {
         if (context == null || listener == null) return false;
@@ -384,6 +384,9 @@ public final class BluetoothAdapter {
                 break;
             case BluetoothProfile.HEADSET:
                 proxy = new BluetoothHeadset(context);
+                break;
+            case BluetoothProfile.LE_AUDIO:
+                proxy = new BluetoothLeAudio(context);
                 break;
             default:
                 Log.i(TAG, "profile " + profile + " is not available");
@@ -411,6 +414,9 @@ public final class BluetoothAdapter {
                 return BluetoothProfile.STATE_CONNECTED;
             }
             if (profile == BluetoothProfile.HEADSET && BluetoothAudioProfile.isHeadset(d)) {
+                return BluetoothProfile.STATE_CONNECTED;
+            }
+            if (profile == BluetoothProfile.LE_AUDIO && BluetoothAudioProfile.isLeAudio(d)) {
                 return BluetoothProfile.STATE_CONNECTED;
             }
         }

@@ -268,6 +268,8 @@ public final class Launcher {
                 return removed ? 0 : 1;
             }
             case "list": return list();
+            case "accounts": return accounts(rest);
+            case "remove-account": return removeAccount(rest);
             case "proxy": return proxy(rest);
             case "spell-checker":
                 ensureDevice(true);
@@ -472,7 +474,7 @@ public final class Launcher {
                 + " true|false]... [--proxy host:port|socks5://host:port|direct|windows]"
                 + " [--window | --hidden-window | --headless [--keep-task]] [--detach | --wait]"
                 + " | proxy [[PACKAGE] host:port|socks5://host:port|direct|windows] | windows PACKAGE separate|shared"
-                + " | special-access PACKAGE [OP allow|deny] | install APK | uninstall PACKAGE | view PACKAGE URL | list | status | start"
+                + " | special-access PACKAGE [OP allow|deny] | accounts | remove-account TYPE NAME | install APK | uninstall PACKAGE | view PACKAGE URL | list | status | start"
                 + " | shutdown | apk-icon APK | spell-checker list|use COMPONENT|automatic|enable|disable|language ID"
                 + " | " + MobileDataCommands.USAGE);
         return 2;
@@ -676,6 +678,45 @@ public final class Launcher {
                     count(full.services), count(full.providers)));
         }
         return 0;
+    }
+
+    /**
+     * {@code accounts}: the accounts of the device, one row each ("account TAB type TAB name TAB
+     * owner package"), for the Control Center as well. Starts the device, as {@code list} does.
+     */
+    private static int accounts(List<String> args) throws Exception {
+        if (!args.isEmpty()) return usage();
+        ensureDevice(true);
+        String[] rows;
+        try {
+            rows = gesher().accounts();
+        } catch (UnsupportedOperationException | IllegalStateException e) {
+            log(e.getMessage());
+            return 4;
+        }
+        log(text(rows.length == 0 ? "accounts_none" : "accounts_count", rows.length));
+        for (String row : rows) System.out.println("account\t" + row);
+        System.out.flush();
+        return 0;
+    }
+
+    /**
+     * {@code remove-account TYPE NAME}: removes one account from the device, as the user's
+     * choice. Only the device's record goes; the account at its provider and the app's own
+     * data stay (account_removed says so).
+     */
+    private static int removeAccount(List<String> args) throws Exception {
+        if (args.size() != 2) return usage();
+        ensureDevice(true);
+        boolean removed;
+        try {
+            removed = gesher().removeAccount(args.get(0), args.get(1));
+        } catch (UnsupportedOperationException | IllegalStateException e) {
+            log(e.getMessage());
+            return 4;
+        }
+        log(text(removed ? "account_removed" : "account_not_found", args.get(1), args.get(0)));
+        return removed ? 0 : 1;
     }
 
     private static int syncShortcuts() throws Exception {

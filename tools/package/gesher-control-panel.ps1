@@ -50,6 +50,7 @@ $script:AppWindowsFile = Join-Path $root 'data/system/app-windows.properties'
 $script:ProxyFile = Join-Path $root 'data/system/proxy.properties'
 # Gesher's camera settings: image_picker_fallback=true.
 $script:CameraFile = Join-Path $root 'data/system/camera.properties'
+$script:WebFile = Join-Path $root 'data/system/webview.properties'
 
 $isHe = ($script:GesherUiLanguage -eq 'he')
 $flowDirection = if ($isHe) { 'RightToLeft' } else { 'LeftToRight' }
@@ -62,6 +63,7 @@ $script:ViewState = @{ Device = $null; Microg = $null; Store = $null; AppsSignat
 $script:LiveState = @{ Stamp = $null; AppsStamp = $null; PendingSince = $null; PendingFirst = $null; Tick = 0; WasVisible = $false; RecoveryAt = $null }
 $script:MetadataMonitor = $null
 $script:UpdatingCameraView = $false
+$script:UpdatingWebView = $false
 
 # Camera image-picker fallback setting (data/system/camera.properties).
 function Get-CameraImagePickerEnabled {
@@ -94,6 +96,41 @@ function Set-CameraImagePickerEnabled([bool] $enabled) {
     $temporary = $script:CameraFile + '.tmp'
     [IO.File]::WriteAllLines($temporary, $lines, [Text.UTF8Encoding]::new($false))
     Move-Item -LiteralPath $temporary -Destination $script:CameraFile -Force
+}
+
+# WebView setting "open the web address an unhandled intent: link carries"
+# (data/system/webview.properties, key intent_browser_fallback; off when absent). The system
+# server answers apps' WebViews from this file (WebSettingsService.java).
+function Get-WebIntentFallbackEnabled {
+    if ([string]::IsNullOrEmpty($script:WebFile) -or -not (Test-Path -LiteralPath $script:WebFile)) { return $false }
+    $enabled = $false
+    try {
+        foreach ($line in Get-Content -LiteralPath $script:WebFile) {
+            if ($line -match '^\s*intent_browser_fallback\s*[=:]\s*(.+?)\s*$') {
+                $enabled = ($Matches[1].Trim().ToLowerInvariant() -eq 'true')
+            }
+        }
+    } catch { return $false }
+    return $enabled
+}
+
+function Set-WebIntentFallbackEnabled([bool] $enabled) {
+    $lines = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $script:WebFile) {
+        foreach ($line in Get-Content -LiteralPath $script:WebFile) {
+            if ($line -match '^\s*intent_browser_fallback\s*[=:]') { continue }
+            $lines.Add($line)
+        }
+    } else {
+        $lines.Add('#Gesher WebView settings')
+    }
+    if ($enabled) { $lines.Add('intent_browser_fallback=true') }
+    $directory = Split-Path -Parent $script:WebFile
+    if (-not (Test-Path -LiteralPath $directory)) { [void](New-Item -ItemType Directory -Path $directory) }
+    # The system server reads the file at any time: write a sibling, then move it into place.
+    $temporary = $script:WebFile + '.tmp'
+    [IO.File]::WriteAllLines($temporary, $lines, [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temporary -Destination $script:WebFile -Force
 }
 
 # Packages whose tasks are windows of their own (AppWindows.java's file).
@@ -446,6 +483,7 @@ function Get-StateStamp {
         Get-FileStamp $script:AppWindowsFile
         Get-FileStamp $script:ProxyFile
         Get-FileStamp $script:CameraFile
+        Get-FileStamp $script:WebFile
     ) -join '|')
 }
 
@@ -481,6 +519,7 @@ function Update-PanelMetadataWatch {
         $script:AppWindowsFile
         $script:ProxyFile
         $(if (-not [string]::IsNullOrEmpty($script:CameraFile)) { $script:CameraFile })
+        $(if (-not [string]::IsNullOrEmpty($script:WebFile)) { $script:WebFile })
     ) + @($script:ViewState.AppFiles)
     $script:MetadataMonitor.SetFiles($root, [string[]]$paths)
 }
@@ -660,11 +699,13 @@ $activityBar = $window.FindName('ActivityBar')
 $servicesCards = $window.FindName('ServicesCards')
 $applicationsSection = $window.FindName('ApplicationsSection')
 $btnProxyAll = $window.FindName('BtnProxyAll')
+$btnAccounts = $window.FindName('BtnAccounts')
 $updateVersionText = $window.FindName('UpdateVersionText')
 $updateStatusText = $window.FindName('UpdateStatusText')
 $automaticUpdateChecks = $window.FindName('AutomaticUpdateChecks')
 $automaticUpdateInstall = $window.FindName('AutomaticUpdateInstall')
 $cameraImagePickerFallback = $window.FindName('CameraImagePickerFallback')
+$webIntentFallback = $window.FindName('WebIntentFallback')
 $btnCheckUpdate = $window.FindName('BtnCheckUpdate')
 $btnInstallUpdate = $window.FindName('BtnInstallUpdate')
 $btnCancelUpdate = $window.FindName('BtnCancelUpdate')
@@ -879,6 +920,7 @@ function Refresh-Dashboard {
     Update-DeviceView (Get-DeviceStatus)
     Update-MicrogView (Get-MicrogStatus)
     if (Get-Command Update-CameraView -ErrorAction SilentlyContinue) { Update-CameraView }
+    if (Get-Command Update-WebView -ErrorAction SilentlyContinue) { Update-WebView }
     $installed = Get-InstalledApps $appReadStamps
     Update-StoreView $installed
     Update-AppsView $installed $appReadStamps
@@ -1065,7 +1107,7 @@ function ConvertFrom-SpecialAccessOutput([string[]] $lines) {
 # the device authenticates it as the host shell. Returns its exit code and output lines.
 # Runs in a background runspace for the dialog (Start-PanelSpecialAccess): never on the UI thread.
 function Invoke-PanelSpecialAccess([string[]] $arguments,
-        [ValidateSet('special-access', 'settings-shown', 'settings-closed')] [string] $command = 'special-access') {
+        [ValidateSet('special-access', 'settings-shown', 'settings-closed', 'accounts', 'remove-account')] [string] $command = 'special-access') {
     $appScript = Join-Path $here 'gesher-app.ps1'
     $system = [Environment]::GetFolderPath('System')
     $info = [System.Diagnostics.ProcessStartInfo]::new((Join-Path $system 'WindowsPowerShell\v1.0\powershell.exe'))
@@ -2055,6 +2097,27 @@ function Set-PanelCameraImagePickerFallback([bool] $enabled) {
 
 $cameraImagePickerFallback.Add_Checked({ Set-PanelCameraImagePickerFallback $true })
 $cameraImagePickerFallback.Add_Unchecked({ Set-PanelCameraImagePickerFallback $false })
+
+function Update-WebView {
+    if ($null -eq $webIntentFallback) { return }
+    $script:UpdatingWebView = $true
+    try { $webIntentFallback.IsChecked = [bool](Get-WebIntentFallbackEnabled) }
+    finally { $script:UpdatingWebView = $false }
+}
+
+function Set-PanelWebIntentFallback([bool] $enabled) {
+    if ($script:UpdatingWebView) { return }
+    try {
+        Set-WebIntentFallbackEnabled $enabled
+        $statusMessage.Text = Get-GesherText 'cp_web_intent_fallback_saved'
+    } catch {
+        Show-ModernMessageDialog -Title (Get-GesherText 'cp_title') -Message (Get-GesherText 'cp_web_intent_fallback_failed' @($_.Exception.Message)) -IsError $true
+        Update-WebView
+    }
+}
+
+$webIntentFallback.Add_Checked({ Set-PanelWebIntentFallback $true })
+$webIntentFallback.Add_Unchecked({ Set-PanelWebIntentFallback $false })
 $btnUpdateNotes.Add_Click({
     try {
         if ($script:UpdateState.Release) { Start-Process -FilePath $script:UpdateState.Release.Url }
@@ -2252,6 +2315,169 @@ $script:OnAppUninstall = {
 
 # The proxy of every app ($pkg empty) or of one app (proxy.<package>, over every app's
 # setting); app processes started from now on use it. True when it was saved.
+# The device's answer (gesher-app accounts): "account<TAB>type<TAB>name<TAB>owner package" rows.
+# Null when the command failed; rows an old device cannot be asked for are no rows.
+function Read-PanelAccountRows($result) {
+    if ($result.ExitCode -ne 0) { return $null }
+    $rows = [System.Collections.Generic.List[object]]::new()
+    foreach ($line in @($result.Lines)) {
+        if ($line -cmatch '^account\t([^\t]+)\t([^\t]+)\t([^\t]*)\s*$') {
+            $rows.Add([PSCustomObject]@{ Type = $Matches[1]; Name = $Matches[2]; Owner = $Matches[3] })
+        }
+    }
+    return ,$rows.ToArray()
+}
+
+# The arguments of gesher-app remove-account go on its command line without quoting: only an
+# account whose type and name hold no shell-special character can be removed from the dialog
+# (every other one is left to the command line, and the dialog says so).
+function Test-PanelAccountRemovable($row) {
+    return $row.Type -cmatch '^[A-Za-z0-9_.\-]{1,128}$' -and $row.Name -cmatch '^[A-Za-z0-9_.+@\-]{1,254}$'
+}
+
+# The accounts of the device, and removing one (the user's choice). Both run in background
+# runspaces, as App info's switches do; a timer of the dialog takes their answers.
+function Show-AccountsDialog {
+    $dialog = New-PanelView 'accounts' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection }
+    $dialog.Title = Get-GesherText 'cp_accounts_title'
+    $dialog.FindName('DialogTitle').Text = Get-GesherText 'cp_accounts_title'
+    $dialog.FindName('DialogMessage').Text = Get-GesherText 'cp_accounts_intro'
+    $dialog.FindName('BtnClose').Content = Get-GesherText 'cp_accounts_close'
+    $statusText = $dialog.FindName('AccountStatus')
+    $listPanel = $dialog.FindName('AccountList')
+    $errorText = $dialog.FindName('AccountError')
+    $dialog.Owner = $window
+    if ($window.Icon) { $dialog.Icon = $window.Icon }
+    # Query: the running background command; Remove: the account it removes, or $null.
+    $state = @{ Query = $null; Remove = $null; Closed = $false }
+
+    $render = {
+        param($rows)
+        $listPanel.Children.Clear()
+        if ($null -eq $rows) {
+            $statusText.Text = Get-GesherText 'cp_accounts_unavailable'
+            $statusText.Visibility = 'Visible'
+            return
+        }
+        if (@($rows).Count -eq 0) {
+            $statusText.Text = Get-GesherText 'cp_accounts_empty'
+            $statusText.Visibility = 'Visible'
+            return
+        }
+        $statusText.Visibility = 'Collapsed'
+        foreach ($row in @($rows)) {
+            $grid = [System.Windows.Controls.Grid]::new()
+            $grid.Margin = [System.Windows.Thickness]::new(0, 0, 0, 12)
+            $grid.ColumnDefinitions.Add([System.Windows.Controls.ColumnDefinition]::new())
+            $grid.ColumnDefinitions[0].Width = [System.Windows.GridLength]::new(1, [System.Windows.GridUnitType]::Star)
+            $grid.ColumnDefinitions.Add([System.Windows.Controls.ColumnDefinition]::new())
+            $grid.ColumnDefinitions[1].Width = [System.Windows.GridLength]::Auto
+            $texts = [System.Windows.Controls.StackPanel]::new()
+            $name = [System.Windows.Controls.TextBlock]::new()
+            $name.Style = $dialog.FindResource('TextBody')
+            $name.Text = $row.Name
+            $name.FontWeight = [System.Windows.FontWeights]::Medium
+            # An account's name and type are Latin identifiers: they keep their own direction.
+            $name.FlowDirection = [System.Windows.FlowDirection]::LeftToRight
+            $name.HorizontalAlignment = [System.Windows.HorizontalAlignment]::Left
+            $name.TextTrimming = [System.Windows.TextTrimming]::CharacterEllipsis
+            $name.ToolTip = $row.Name
+            $detail = [System.Windows.Controls.TextBlock]::new()
+            $detail.Style = $dialog.FindResource('TextCaption')
+            $detail.Text = if ($row.Owner) { "$($row.Type)`n" + (Get-GesherText 'cp_accounts_owner' @($row.Owner)) } else { $row.Type }
+            $detail.TextWrapping = [System.Windows.TextWrapping]::Wrap
+            [void]$texts.Children.Add($name)
+            [void]$texts.Children.Add($detail)
+            [System.Windows.Controls.Grid]::SetColumn($texts, 0)
+            [void]$grid.Children.Add($texts)
+            if (Test-PanelAccountRemovable $row) {
+                $button = [System.Windows.Controls.Button]::new()
+                $button.Content = Get-GesherText 'cp_accounts_remove'
+                $button.Tag = $row
+                $button.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+                $button.Margin = [System.Windows.Thickness]::new(12, 0, 0, 0)
+                $button.Add_Click({
+                    param($sender, $e)
+                    if ($state.Closed -or $state.Query) { return }
+                    $account = $sender.Tag
+                    $confirmed = Show-ModernConfirmDialog `
+                        -Title (Get-GesherText 'cp_accounts_remove_title') `
+                        -SubTitle $account.Type `
+                        -Message (Get-GesherText 'cp_accounts_remove_confirm' @($account.Name)) `
+                        -Detail (Get-GesherText 'cp_accounts_remove_detail') `
+                        -ConfirmText (Get-GesherText 'cp_accounts_remove') `
+                        -CancelText (Get-GesherText 'cp_update_cancel') `
+                        -IsDanger -CancelIsDefault
+                    if (-not $confirmed) { return }
+                    $errorText.Visibility = 'Collapsed'
+                    $state.Remove = $account
+                    try { $state.Query = Start-PanelSpecialAccess @($account.Type, $account.Name) 'remove-account' }
+                    catch {
+                        Write-PanelLog "accounts: $($_.Exception.Message)"
+                        $state.Remove = $null
+                        $errorText.Text = Get-GesherText 'cp_accounts_remove_failed'
+                        $errorText.Visibility = 'Visible'
+                    }
+                })
+                [System.Windows.Controls.Grid]::SetColumn($button, 1)
+                [void]$grid.Children.Add($button)
+            } else {
+                $detail.Text += "`n" + (Get-GesherText 'cp_accounts_cli_only')
+            }
+            [void]$listPanel.Children.Add($grid)
+        }
+    }
+
+    $timer = [System.Windows.Threading.DispatcherTimer]::new()
+    $timer.Interval = [TimeSpan]::FromMilliseconds(100)
+    $timer.Add_Tick({
+        if ($state.Closed -or -not $state.Query -or -not (Test-PanelSpecialAccessDone $state.Query)) { return }
+        try {
+            $result = Receive-PanelSpecialAccess $state.Query
+            $state.Query = $null
+            if ($state.Remove) {
+                $removed = $state.Remove
+                $state.Remove = $null
+                if ($result.ExitCode -eq 0) {
+                    $errorText.Visibility = 'Collapsed'
+                    Write-PanelLog "accounts: removed $($removed.Type)"
+                } else {
+                    $errorText.Text = Get-GesherText 'cp_accounts_remove_failed'
+                    $errorText.Visibility = 'Visible'
+                }
+                # The list as the device has it now, whatever the removal's answer was.
+                $state.Query = Start-PanelSpecialAccess @() 'accounts'
+            } else {
+                & $render (Read-PanelAccountRows $result)
+            }
+        } catch {
+            Write-PanelLog "accounts: $($_.Exception.Message)"
+            $state.Query = $null
+            $statusText.Text = Get-GesherText 'cp_accounts_unavailable'
+            $statusText.Visibility = 'Visible'
+        }
+    })
+    $dialog.Add_Loaded({
+        if ($state.Closed) { return }
+        $statusText.Text = Get-GesherText 'cp_accounts_loading'
+        try { $state.Query = Start-PanelSpecialAccess @() 'accounts' }
+        catch {
+            Write-PanelLog "accounts: $($_.Exception.Message)"
+            $statusText.Text = Get-GesherText 'cp_accounts_unavailable'
+            return
+        }
+        $timer.Start()
+    })
+    $dialog.Add_Closed({
+        $state.Closed = $true
+        $timer.Stop()
+        # A command still running is disposed once it has finished.
+        if ($state.Query) { [void]$script:OrphanSpecialAccessWorkers.Add($state.Query) }
+    })
+    $dialog.FindName('BtnClose').Add_Click({ $dialog.Close() })
+    [void]$dialog.ShowDialog()
+}
+
 function Show-ProxyDialog([string] $pkg = '', [string] $label = $pkg) {
     # גשר המיתרים: הדיאלוג ב-gesher-panel-proxy.xaml, עם הצבעים והסגנונות של שאר מרכז הבקרה
     $dialog = New-PanelView 'proxy' @{ PanelFlowDirection = [System.Windows.FlowDirection]$flowDirection }
@@ -2304,6 +2530,11 @@ $script:OnAppProxy = {
         $statusMessage.Text = Get-GesherText 'cp_proxy_saved'
     }
 }
+
+$btnAccounts.Add_Click({
+    if ($script:IsBusy) { return }
+    Show-AccountsDialog
+})
 
 $btnProxyAll.Add_Click({
     if ($script:IsBusy) { return }

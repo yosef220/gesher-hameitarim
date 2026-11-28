@@ -62,6 +62,10 @@ public final class BluetoothManagerService extends Binder {
     static final UUID ADVANCED_AUDIO = UUID.fromString("0000110d-0000-1000-8000-00805f9b34fb");
     static final UUID HANDSFREE = UUID.fromString("0000111e-0000-1000-8000-00805f9b34fb");
     static final UUID HEADSET = UUID.fromString("00001108-0000-1000-8000-00805f9b34fb");
+    // LE Audio GATT services (Bluetooth SIG assigned numbers): Audio Stream Control (0x184E) and
+    // Published Audio Capabilities (0x1850). A device that offers both is a unicast audio server.
+    static final UUID LE_AUDIO_STREAM_CONTROL = UUID.fromString("0000184e-0000-1000-8000-00805f9b34fb");
+    static final UUID LE_AUDIO_CAPABILITIES = UUID.fromString("00001850-0000-1000-8000-00805f9b34fb");
 
     /** How long a discovery runs (Android's is about 12 s). */
     static final int DISCOVERY_SECONDS = 10;
@@ -552,6 +556,15 @@ public final class BluetoothManagerService extends Binder {
     /** A device Windows plays audio to (A2DP sink). */
     public static boolean isA2dp(WindowsBluetooth.Device d) {
         return d.has(AUDIO_SINK) || d.has(ADVANCED_AUDIO);
+    }
+
+    /**
+     * A device that offers LE Audio: both its stream control and its capabilities service, as
+     * Windows reports the paired device's services. A device Windows lists without them is not
+     * listed as one: nothing here guesses from the device's name or class.
+     */
+    public static boolean isLeAudio(WindowsBluetooth.Device d) {
+        return d.has(LE_AUDIO_STREAM_CONTROL) && d.has(LE_AUDIO_CAPABILITIES);
     }
 
     /** A device with a hands-free or headset service. */

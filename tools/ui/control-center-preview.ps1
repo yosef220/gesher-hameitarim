@@ -143,6 +143,24 @@ foreach ($shot in $shots) {
     } finally { $window.Close() }
 }
 
+# 1ב. העמודה הצדדית נגללת, ובצילום הרגיל נחתכים הסעיפים התחתונים (מצלמה, קישורים בתוך אתרים,
+# רשת עם "חשבונות" ו"פרוקסי"). כאן היא גלולה עד הסוף.
+foreach ($shot in @(
+        @{ Language = 'he'; Theme = 'light' }, @{ Language = 'he'; Theme = 'dark' }, @{ Language = 'en'; Theme = 'light' })) {
+    $window = New-Dashboard $shot.Language $shot.Theme
+    try {
+        Show-Offscreen $window 1000 780
+        Set-SampleState $window $true $true $false
+        $list = $window.FindName('AppsList')
+        $list.ItemsSource = @(Get-SampleApps $shot.Language)
+        Update-Layout $window
+        $rail = $window.FindName('RailScroll')
+        $rail.ScrollToEnd()
+        $window.UpdateLayout()
+        Save-Visual $window ("panel-{0}-{1}-rail-end" -f $shot.Language, $shot.Theme)
+    } finally { $window.Close() }
+}
+
 # 2. מצבים של הרשימה: מערכת כבויה, חיפוש בלי תוצאה, גרירה, ורשימה ריקה
 foreach ($language in 'he', 'en') {
     $window = New-Dashboard $language 'light'
